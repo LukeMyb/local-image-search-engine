@@ -1,0 +1,13 @@
+﻿# 仮想環境
+.venv/
+
+# 画像データと生成ファイル（Gitの肥大化を防ぐため絶対除外）
+data/
+!data/.gitkeep
+
+# Pythonのキャッシュと一時ファイル
+__pycache__/
+*.py[cod]
+*~$
+
+memo.txt
