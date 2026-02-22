@@ -1,13 +1,28 @@
-﻿# 仮想環境
-.venv/
-
-# 画像データと生成ファイル（Gitの肥大化を防ぐため絶対除外）
-data/
-!data/.gitkeep
-
-# Pythonのキャッシュと一時ファイル
+# Python
 __pycache__/
 *.py[cod]
-*~$
+*$py.class
+.venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Project Data (これらは Git で管理しない)
+data/db/*.db
+data/faiss/*.index
+data/thumbnails/*.webp
+
+# Models (数GBの重いファイル)
+models/*.onnx
+models/*.bin
+models/*.pth
+
+# Configuration (ローカルの絶対パスなどが含まれるため)
+config.yaml
 
 memo.txt
