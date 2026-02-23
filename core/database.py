@@ -85,3 +85,35 @@ class ImageDatabase:
     def close(self):
         #安全に接続を閉じる
         self.conn.close()
+
+
+
+# --- ここから単体テスト用コード ---
+if __name__ == "__main__":
+    import time
+    
+    print("=== データベースの単体テストを開始します ===")
+    
+    # 1. データベースの初期化（この瞬間に index.db が作られます）
+    db = ImageDatabase(db_path="data/db/index.db")
+    print("データベースに接続し、テーブルの初期化を完了しました。")
+
+    # 2. ダミーデータの登録テスト
+    # 現在のUNIXタイムスタンプを取得して、ミリ秒のズレをシミュレートします
+    current_time = time.time()
+    dummy_data = [
+        ("C:/dummy/test_image_1.jpg", current_time),
+        ("C:/dummy/test_image_2.jpg", current_time + 0.123)
+    ]
+    db.register_images(dummy_data)
+    print(f"{len(dummy_data)}件のダミー画像を登録しました。")
+
+    # 3. データの取得テスト（辞書型のようにアクセスできるかの確認）
+    unprocessed = db.get_unprocessed_images('is_processed_vector')
+    print("未処理の画像一覧（ベクトル解析待ち）:")
+    for row in unprocessed:
+        print(f" - ID: {row['id']}, Path: {row['file_path']}")
+
+    # 4. 安全に閉じる
+    db.close()
+    print("=== テストが正常に完了しました ===")
