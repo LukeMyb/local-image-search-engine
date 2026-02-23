@@ -49,7 +49,7 @@ class ImageDatabase:
         #指定した処理がまだ終わっていない画像を取得
         #例: target_column = 'is_processed_vector'
         cursor = self.conn.cursor()
-        cursor.execute(f'SELECT id, file_path FROM images WHERE {target_column} = 0')
+        cursor.execute(f'SELECT id, file_path FROM images WHERE {target_column} = 0 ORDER BY id')
         return cursor.fetchall()
 
     def update_thumbnail_status(self, image_id, thumbnail_path):
@@ -85,6 +85,14 @@ class ImageDatabase:
     def close(self):
         #安全に接続を閉じる
         self.conn.close()
+
+    def get_image_by_id(self, image_id):
+        #指定されたIDの画像データを取得します
+        cursor = self.conn.cursor()
+        #FAISSのインデックスは0開始、dbのIDは1開始のため、呼び出し側で調整するかここで調整します
+        cursor.execute("SELECT * FROM images WHERE id = ?", (image_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
 
 
 
