@@ -4,18 +4,23 @@ import numpy as np
 import faiss
 from pathlib import Path
 from PIL import Image
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, models
+import torch
+from transformers import CLIPProcessor, CLIPModel
 from core.database import ImageDatabase
 
 class VectorIndexer:
-    def __init__(self, db: ImageDatabase, model_name="clip-ViT-B-32", index_path="data/faiss/search.index"):
+    def __init__(self, db: ImageDatabase, model_name="laion/CLIP-ViT-L-14-laion2B-s32B-b82K", index_path="data/faiss/search.index"):
         self.db = db
         self.index_path = index_path
         
-        #AIモデル(CLIP)の読み込み
+        #AIモデルの読み込み
         #CPUを使用(RTX 50シリーズは対応してなかったT_T)
         print(f"AIモデル ({model_name}) をロード中...")
-        self.model = SentenceTransformer(model_name, device="cpu")
+        self.model = CLIPModel.from_pretrained(model_name)
+        self.processor = CLIPProcessor.from_pretrained(model_name)
+        self.device = "cpu"
+        self.model.to(self.device)
         print("モデルロード完了")
 
         self._load_or_create_index() #FAISSインデックス(検索エンジン)の準備
@@ -28,7 +33,7 @@ class VectorIndexer:
         else:
             print("新規検索インデックスを作成します。")
             #CLIPの出力次元数(ViT-B-32は512次元)に合わせて作成
-            dimension = 512
+            dimension = 768
             self.index = faiss.IndexFlatIP(dimension)  #内積(コサイン類似度)で検索
 
     def process_all(self, batch_size=32): #バッチはまとめて一気に処理するその束の数
@@ -73,12 +78,19 @@ class VectorIndexer:
                 if not batch_images:
                     continue
                 
-                #---AI処理のコア部分---
-                embeddings = self.model.encode(batch_images, convert_to_numpy=True) #画像を一括でベクトル変換
-                faiss.normalize_L2(embeddings) #正規化
-                self.index.add(embeddings) #FAISSインデックスに追加
+                #AI処理のコア部分
+                inputs = self.processor(images=batch_images, return_tensors="pt", padding=True)
+                with torch.no_grad():
+                    # 画像の特徴（ベクトル）を直接抽出
+                    image_features = self.model.get_image_features(**inputs)
+
+                if not torch.is_tensor(image_features):
+                    # 戻り値がオブジェクトの場合、最初の要素（またはpooler_output）を取得
+                    image_features = image_features[0] if isinstance(image_features, (list, tuple)) else image_features.pooler_output
                 
-                faiss.write_index(self.index, self.index_path) #ディスクに保存(こまめに保存してデータ消失を防ぐ)
+                embeddings = image_features.detach().cpu().numpy()
+                faiss.normalize_L2(embeddings)
+                self.index.add(embeddings)
                 
                 #dbのフラグを「完了」に更新
                 for pid in batch_ids:
@@ -96,6 +108,11 @@ class VectorIndexer:
                 print(f"  ...{processed_count}/{total_count}枚 完了(速度: {speed:.1f}枚/秒)")
 
         print("ベクトル化処理が完了しました")
+
+        # --- ここを追加：インデックスをファイルに保存 ---
+        os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
+        faiss.write_index(self.index, self.index_path)
+        print(f"インデックスを保存しました: {self.index_path}")
 
 # --- 単体テスト ---
 if __name__ == "__main__":
