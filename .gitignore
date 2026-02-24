@@ -13,6 +13,7 @@ Thumbs.db
 .vscode/
 
 # Project Data (これらは Git で管理しない)
+data/
 data/db/*.db
 data/faiss/*.index
 data/thumbnails/*.webp
