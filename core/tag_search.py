@@ -6,7 +6,7 @@ import re
 import os
 from huggingface_hub import hf_hub_download
 from transformers import CLIPProcessor, CLIPModel
-from deep_translator import GoogleTranslator
+import translators as ts
 from core.database import ImageDatabase
 
 class TagSearch:
@@ -16,8 +16,6 @@ class TagSearch:
         # GPUが使えるなら使い、なければCPU
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"  [System] Device: {self.device}")
-
-        self.translator = GoogleTranslator(source='ja', target='en')
         
         # 1. モデルロード
         model_id = "openai/clip-vit-base-patch32"
@@ -75,47 +73,75 @@ class TagSearch:
         vec = vec / vec.norm(p=2, dim=-1, keepdim=True)
         return vec.cpu().numpy().astype('float32')
 
+    def _check_alias_or_list(self, word):
+        """
+        単語がAlias辞書にあるか、あるいは直接タグリストにあるかを確認する
+        戻り値: (変換後のタグ名, ヒットしたかどうか)
+        """
+        # 正規化
+        key = word.strip().lower().replace(' ', '_')
+        
+        # 1. Alias辞書を最優先
+        if key in self.alias_map:
+            actual_tag = self.alias_map[key]
+            # 変換先がタグリストに存在するか確認
+            if actual_tag in self.tag_list:
+                return actual_tag, True
+        
+        # 2. 直接タグリストにあるか確認
+        if key in self.tag_list:
+            return key, True
+            
+        return key, False
+
     def find_similar_tags_with_score(self, word, top_k=25): 
-        # 入力を正規化（小文字、スペース→アンダースコア）
-        search_key = word.strip().lower().replace(' ', '_')
-        
-        # 1. Alias辞書チェック
-        english_word = search_key
-        alias_hit = False
-        
-        if search_key in self.alias_map:
-            english_word = self.alias_map[search_key]
-            print(f"  ├─ [Alias]: {search_key} -> {english_word}")
-            alias_hit = True
-        else:
-            # 2. 翻訳 (辞書にない場合のみ)
-            try:
-                # 既に英単語ならそのまま
-                search_key.encode('ascii')
-                english_word = search_key
-            except:
-                english_word = self.translator.translate(word).lower()
-            print(f"  ├─ [Translate]: {word} -> {english_word}")
+        # --- Step 1: 初期入力でチェック ---
+        english_word, found = self._check_alias_or_list(word) #foundはAlias辞書もしくはタグリストに検索ワードが存在するか
+        if found:
+            print(f"  ├─ [Direct/Alias Hit]: {word} -> {english_word}")
+            return english_word, {english_word: 1.0}
+
+        # --- Step 2: Google翻訳 ---
+        try:
+            translated_g = ts.translate_text(word, translator='google', to_language='en')
+            # 翻訳結果を再度Alias辞書・リストで確認
+            english_word, found = self._check_alias_or_list(translated_g)
+            if found:
+                print(f"  ├─ [Google -> Alias/List]: {word} -> {english_word}")
+                return english_word, {english_word: 1.0}
+        except Exception as e:
+            print(f"  [!] Google Translate Error: {e}")
+
+        # --- Step 3: Bing翻訳 ---
+        translated_b = ""
+        try:
+            translated_b = ts.translate_text(word, translator='bing', to_language='en')
+            #まずは辞書・リストにあるか確認
+            english_word, found = self._check_alias_or_list(translated_b)
+            if found:
+                print(f"  ├─ [Bing -> Alias/List]: {word} -> {english_word}")
+                return english_word, {english_word: 1.0}
+        except Exception as e:
+            print(f"  [!] Bing Translate Error: {e}")
+
+        # --- Step 4: CLIPベクトル検索 (最終手段) ---
+        #Bing翻訳の結果があればそれを使用し、なければGoogle翻訳や元の単語をフォールバックにする
+        final_query = translated_b if translated_b else (translated_g if 'translated_g' in locals() else word)
+        print(f"  ├─ [Vector Search]: Using query '{final_query}'")
 
         found_tags_map = {} 
 
-        # 【高速化】辞書ヒット & 有効タグなら即リターン (AI計算スキップ)
-        if alias_hit and english_word in self.tag_list:
-            found_tags_map[english_word] = 1.0
-            # 他にも部分一致するタグがあれば拾う (例: "school" -> "school_swimsuit")
-            # 完全一致だけだと漏れる可能性があるため、軽いループだけ回す
-            # ただし、CLIPは回さない
-            return english_word, found_tags_map
-
-        # 3. ベクトル比較 (CLIP) - 辞書になかった、またはタグリストにない場合のみ
-        query_vec = self.query_to_vector(english_word)
+        # ベクトル比較 (CLIP)
+        # english_word ではなく、決定した final_query をベクトル化する
+        query_vec = self.query_to_vector(final_query)
         distances, indices = self.tag_index.search(query_vec, top_k)
         
-        # 辞書で見つけた単語そのものは、確実に候補に入れる
-        if english_word in self.tag_list:
-            found_tags_map[english_word] = 1.0
+        #クエリ自体がもしタグリストにあるなら、スコア1.0で追加
+        norm_final = final_query.lower().replace(' ', '_')
+        if norm_final in self.tag_list:
+            found_tags_map[norm_final] = 1.0
 
-        query_has_size = self.has_size_modifier(english_word)
+        query_has_size = self.has_size_modifier(final_query)
 
         for i, idx in enumerate(indices[0]):
             score = float(distances[0][i])
@@ -127,7 +153,7 @@ class TagSearch:
             if score > 0.90:
                 found_tags_map[tag_name] = max(found_tags_map.get(tag_name, 0), score)
         
-        return english_word, found_tags_map
+        return final_query, found_tags_map
 
     def get_size_modifiers(self):
         return ["small", "flat", "tiny", "little", "mini", "short", "low",
