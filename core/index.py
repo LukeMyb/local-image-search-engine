@@ -99,7 +99,7 @@ class ThumbnailGenerator:
 # --- ここから単体テスト用コード ---
 if __name__ == "__main__":
     # スキャン設定
-    TEST_DIR = r"C:\Users\Admin\Desktop\images" # ※あなたのパスのままにしてください
+    TEST_DIR = r"data\images" #画像のディレクトリパス
 
     print("=== インデックス構築プロセスを開始します ===")
     db = ImageDatabase()
