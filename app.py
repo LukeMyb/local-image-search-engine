@@ -6,45 +6,42 @@ async def main(page: ft.Page):
     page.title = "Step 2.8 - Sync Update"
     page.theme_mode = "dark"
 
-    # 1. 最初に表示する部品
+    #最初に表示する部品
     status_text = ft.Text("Loading: 準備中...", color="yellow", size=20)
-    
-    # 2. 画面に「Loading」を出す
+
+    #画面に「Loading」を出す
     page.add(status_text)
     
-    # 【修正】await を取って普通の関数として呼ぶ
     page.update() 
     
-    # 3. ここは await のまま（Pythonが一時停止してブラウザが描画する時間を稼ぐ）
+    #Pythonが一時停止してブラウザが描画する時間を稼ぐ
     await asyncio.sleep(0.1)
 
     print("AIモデルを読み込んでいます...")
     # 4. 重いロード作業
     searcher = TagSearch() 
 
-    # 5. ロードが終わった後の部品
-    search_input = ft.TextField(hint_text="タグを入力して検索テスト", width=400)
-    result_text = ft.Text("")
+    #ロードが終わった後の部品
+    search_input = ft.TextField(hint_text="タグを入力して検索", width=400)
 
-    # ボタンが押された時の動作
+    #ボタンが押された時の動作
     async def on_search(e):
         query = search_input.value
         results = searcher.search(query)
-        result_text.value = f"ヒット: {len(results)}件"
-        page.update() # ここも await なし
+        status_text.value = f"ヒット: {len(results)}件"
+        page.update()
 
     search_btn = ft.FilledButton("検索", on_click=on_search)
 
-    # UIを更新
+    #UIを更新
     status_text.value = "Ready! ロード完了。"
     status_text.color = "green"
     
     page.add(
         ft.Row([search_input, search_btn]),
-        result_text
     )
     
-    page.update() # ここも await なし
+    page.update()
 
 if __name__ == "__main__":
     ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=8000)
