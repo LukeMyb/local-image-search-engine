@@ -24,6 +24,90 @@ async def main(page: ft.Page):
     #Loading
     status_text = ft.Text("Loading...", color="green", size=20)
 
+    #画像を詳細表示
+    detail_image = ft.Image(
+        src="",
+        fit="contain", #画面に収まるように表示
+        repeat="noRepeat",
+        width=None,
+        height=None,
+        expand=True,
+    )
+
+    # ビューアを閉じる関数
+    def close_viewer(e):
+        detail_view.visible = False
+        page.update()
+
+    # ビューア本体（全画面オーバーレイ）
+    detail_view = ft.Container(
+        visible=False, # 最初は隠しておく
+        bgcolor="#000000", # 背景は真っ黒
+        alignment=ft.Alignment(0, 0),
+        expand=True,
+        # Stackを使って「画像」の上に「閉じるボタン」を重ねる
+        content=ft.Stack(
+            [
+                # 画像部分（クリックで閉じるようにする）
+                ft.Container(
+                    content=detail_image,
+                    alignment=ft.Alignment(0, 0),
+                    expand=True,
+                ),
+                
+                # 右上の閉じるボタン
+                ft.SafeArea(
+                    ft.Container(
+                        content=ft.IconButton(
+                            icon=ft.Icons.CLOSE, 
+                            icon_color="white", 
+                            icon_size=30,
+                            on_click=close_viewer,
+                            bgcolor="#8A000000", # ボタン背景を半透明に
+                        ),
+                        alignment=ft.Alignment(1, -1),
+                        padding=20,
+                    )
+                )
+            ],
+            expand=True,
+        )
+    )
+
+    # アプリの最前面レイヤーにビューアを追加
+    page.overlay.append(detail_view)
+
+    # --- [追加] 画像クリック時の処理 ---
+    async def on_image_click(e):
+        # クリックされた画像の情報(row)を取得
+        row = e.control.data
+        if not row: return
+
+        # 元画像のパスを解決
+        # ※重要: assets_dir="data" なので、Webパスは "/フォルダ/ファイル名" になります
+        # データベースの "path" が "data/images/photo.jpg" の場合、
+        # ここでは "images/photo.jpg" のように assets_dir からの相対パスにする必要があります。
+        
+        raw_path = row.get('file_path', '') # DBに入っているパス
+        filename = os.path.basename(raw_path)
+        
+        # 【設定箇所】元画像が dataフォルダ内のどこにあるかに合わせて調整してください
+        # 例: data/images/画像.jpg なら -> f"/images/{filename}"
+        # 例: data/画像.jpg (直下) なら -> f"/{filename}"
+        high_res_src = f"/images/{filename}" 
+        
+        # もし元画像パスが不明なら、とりあえずサムネイルを表示する救済措置
+        if not raw_path:
+             high_res_src = f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
+
+        # ビューアの画像を更新して表示
+        detail_image.src = high_res_src
+        detail_view.visible = True
+        page.update()
+
+
+
+
     #検索窓
     search_input = ft.TextField(
         hint_text="タグを入力して検索", 
@@ -157,7 +241,7 @@ async def main(page: ft.Page):
         page.update()
 
         #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
-        results = searcher.search(query, limit=50)
+        results = searcher.search(query, limit=5000)
 
         #グリッドをクリア
         images_grid.controls.clear()
@@ -184,9 +268,9 @@ async def main(page: ft.Page):
                             repeat="noRepeat",
                             border_radius=ft.border_radius.all(8), # 角丸
                         ),
-                        # クリック時のデータを持たせる
-                        #data=row,
-                        #on_click=on_image_click, 
+                        #クリック時のデータを持たせる
+                        data=row,
+                        on_click=on_image_click, 
                     )
                     images_grid.controls.append(img_container)
 
