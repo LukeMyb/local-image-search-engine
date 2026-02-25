@@ -56,6 +56,39 @@ async def main(page: ft.Page):
         detail_view.visible = False
         detail_view.update()
 
+    #閉じるボタンのラッパー（アニメーション用）
+    close_btn_wrapper = ft.Container(
+        content=ft.IconButton(
+            icon=ft.Icons.CLOSE, 
+            icon_color="white", 
+            icon_size=30,
+            on_click=lambda e: asyncio.create_task(close_viewer(e)),
+            bgcolor="#8A000000", #ボタン背景を半透明に
+        ),
+        #親要素(SafeArea)の右上に配置
+        alignment=ft.Alignment(1, -1),
+        padding=20,
+        
+        #初期位置は画面外（上）へ飛ばしておく
+        #y=-2 は「自分の高さの2倍分、上に移動」という意味です
+        offset=ft.Offset(0, -2),
+        
+        #位置のアニメーション設定 (滑らかに移動)
+        animate_offset=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+    )
+
+    #UI（閉じるボタン）の出し入れを切り替える関数
+    def toggle_ui(e):
+        #現在の位置を確認して切り替え
+        if close_btn_wrapper.offset.y == 0:
+            #表示中なら -> 上に隠す (y=-2)
+            close_btn_wrapper.offset = ft.Offset(0, -2)
+        else:
+            #隠れてるなら -> 定位置に戻す (y=0) ＝ ニュッと出す
+            close_btn_wrapper.offset = ft.Offset(0, 0)
+        
+        close_btn_wrapper.update()
+
     # ビューア本体（全画面オーバーレイ）
     detail_view = ft.Container(
         visible=False, # 最初は隠しておく
@@ -63,29 +96,20 @@ async def main(page: ft.Page):
         bgcolor="#000000", #背景は透明→黒(初期値は黒)
         alignment=ft.Alignment(0, 0),
         expand=True,
+        on_click=toggle_ui,
         # Stackを使って「画像」の上に「閉じるボタン」を重ねる
         content=ft.Stack(
             [
-                # 画像部分（クリックで閉じるようにする）
+                #画像部分（クリックで閉じるようにする）
                 ft.Container(
                     content=detail_image,
                     alignment=ft.Alignment(0, 0),
                     expand=True,
                 ),
                 
-                # 右上の閉じるボタン
+                #右上の閉じるボタン
                 ft.SafeArea(
-                    ft.Container(
-                        content=ft.IconButton(
-                            icon=ft.Icons.CLOSE, 
-                            icon_color="white", 
-                            icon_size=30,
-                            on_click=close_viewer,
-                            bgcolor="#8A000000", # ボタン背景を半透明に
-                        ),
-                        alignment=ft.Alignment(1, -1),
-                        padding=20,
-                    )
+                    close_btn_wrapper
                 )
             ],
             expand=True,
@@ -114,6 +138,7 @@ async def main(page: ft.Page):
         detail_image.scale = 0
         detail_image.opacity = 0
         detail_view.opacity = 0
+        close_btn_wrapper.offset = ft.Offset(0, -2) #閉じるボタンも「隠れた状態」にリセットしておく
         detail_view.visible = True
         page.update()
 
