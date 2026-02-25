@@ -39,10 +39,55 @@ async def main(page: ft.Page):
     images_grid = ft.GridView(
         expand=True,
         runs_count=5,            #最低5列は確保（お好みで max_extent=150 などに変更可）
-        max_extent=200,          #タイルの最大幅
+        max_extent=180,          #タイルの最大幅
         child_aspect_ratio=1.0,  #正方形 (1:1)
         spacing=5,               #タイル間の隙間
         run_spacing=5,
+    )
+
+    #ズームスライダー
+    zoom_slider = ft.Slider(
+        min=60,
+        max=180,
+        value=180,
+        label="{value}",
+        expand=True,
+    )
+
+    #スライダーを動かした時
+    def on_slider_change(e):
+        images_grid.max_extent = e.control.value
+        images_grid.update()
+
+    zoom_slider.on_change = on_slider_change
+
+    #ピンチ操作開始時のサイズを一時保存
+    base_scale_size = 180
+
+    def on_scale_start(e):
+        nonlocal base_scale_size
+        #操作開始時点の現在のサイズを記録
+        base_scale_size = images_grid.max_extent
+
+    def on_scale_update(e):
+        #e.scale: 指を広げた倍率 (1.0が基準、2.0なら2倍、0.5なら半分)
+        new_size = base_scale_size * e.scale
+        
+        #制限 (小さすぎたり大きすぎたりしないように)
+        if new_size < 60: new_size = 60
+        if new_size > 180: new_size = 180
+        
+        #グリッドに適用して更新
+        images_grid.max_extent = new_size
+        images_grid.update()
+
+    #グリッドをGestureDetectorで包む
+    #グリッドの上でのタッチ操作を検知できるように
+    gallery_area = ft.GestureDetector(
+        content=images_grid,
+        on_scale_start=on_scale_start,
+        on_scale_update=on_scale_update,
+        expand=True, # 画面いっぱいに広げる
     )
 
     #ヘッダー部分(検索窓とステータスメッセージ)
@@ -53,13 +98,24 @@ async def main(page: ft.Page):
         ]
     )
 
+    #スライダー行
+    slider_row = ft.Row(
+        [
+            ft.Icon("photo_size_select_small", size=16),
+            zoom_slider,
+            ft.Icon("photo_size_select_actual", size=16),
+        ],
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+
     #レイアウト
     page.add(
         ft.Column(
             [
                 status_text,
                 header,
-                images_grid,
+                slider_row, #スライダーを表示
+                gallery_area,
             ],
             expand=True, #画面下まで広げる
         )
