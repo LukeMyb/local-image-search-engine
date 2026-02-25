@@ -16,6 +16,8 @@ async def initialize_engine(page: ft.Page, status_text: ft.Text):
     return searcher
 
 async def main(page: ft.Page):
+    ANIM_DURATION = 100 #アニメーションの設定（ミリ秒）
+
     #ページ全体の設定
     page.title = "Local image searcher"
     page.theme_mode = "dark"
@@ -32,16 +34,23 @@ async def main(page: ft.Page):
         width=None,
         height=None,
         expand=True,
+
+        scale=0,            #最初は大きさ0
+        animate_scale=ANIM_DURATION, #ANIM_DURATIONミリ秒かけて拡大
+        opacity=0,          #最初は透明
+        animate_opacity=ANIM_DURATION,
     )
 
     #ビュアーを閉じる関数
     async def close_viewer(e):
-        #透明にする
+        #小さくしながら透明にする
+        detail_image.scale = 0
+        detail_image.opacity = 0
         detail_view.opacity = 0
-        detail_view.update()
+        page.update()
         
         #アニメーションが終わるまで待つ
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(ANIM_DURATION / 1000)
         
         #完全に非表示にする
         detail_view.visible = False
@@ -50,9 +59,8 @@ async def main(page: ft.Page):
     # ビューア本体（全画面オーバーレイ）
     detail_view = ft.Container(
         visible=False, # 最初は隠しておく
-        opacity=0,          #最初は透明
-        animate_opacity=300, #300ミリ秒かけて変化させる
-        bgcolor="#000000", # 背景は真っ黒
+        animate_opacity=ANIM_DURATION, #ANIM_DURATIONミリ秒かけて変化させる
+        bgcolor="#000000", #背景は透明→黒(初期値は黒)
         alignment=ft.Alignment(0, 0),
         expand=True,
         # Stackを使って「画像」の上に「閉じるボタン」を重ねる
@@ -101,17 +109,19 @@ async def main(page: ft.Page):
         if not raw_path:
              high_res_src = f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
 
-        #ビュアーの画像を更新して表示
+        #準備：画像URLをセットし、最初は「透明・最小」にする
         detail_image.src = high_res_src
-
-        #まず「透明な状態」で存在させる
-        detail_view.visible = True
+        detail_image.scale = 0
+        detail_image.opacity = 0
         detail_view.opacity = 0
-        detail_view.update()
-        
-        #透明度を1にしてフェードイン開始
+        detail_view.visible = True
+        page.update()
+
+        #実行：拡大とフェードインを同時に開始
+        detail_image.scale = 1
+        detail_image.opacity = 1
         detail_view.opacity = 1
-        detail_view.update()
+        page.update()
 
     #検索窓
     search_input = ft.TextField(
@@ -246,7 +256,7 @@ async def main(page: ft.Page):
         page.update()
 
         #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
-        results = searcher.search(query, limit=5000)
+        results = searcher.search(query, limit=50)
 
         #グリッドをクリア
         images_grid.controls.clear()
