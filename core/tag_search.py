@@ -132,7 +132,6 @@ class TagSearch:
         found_tags_map = {} 
 
         # ベクトル比較 (CLIP)
-        # english_word ではなく、決定した final_query をベクトル化する
         query_vec = self.query_to_vector(final_query)
         distances, indices = self.tag_index.search(query_vec, top_k)
         
@@ -229,7 +228,7 @@ class TagSearch:
         if not and_conditions: return []
 
         # 件数制限を少し緩めて、スコアリング後に絞る
-        full_sql = f"SELECT id, file_path, tags_combined, file_mtime FROM images WHERE {' AND '.join(and_conditions)} LIMIT ?"
+        full_sql = f"SELECT id, file_path, tags_combined, file_mtime, thumbnail_path FROM images WHERE {' AND '.join(and_conditions)} LIMIT ?"
         params.append(limit * 10) # 候補を多めに取ってからソート
         
         cursor = self.db.conn.cursor()
