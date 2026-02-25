@@ -21,9 +21,6 @@ async def main(page: ft.Page):
     page.theme_mode = "dark"
     page.padding = 10 #余白
 
-    #スマホ表示時のスクロール等の挙動をネイティブに近づける
-    page.scroll = "adaptive"
-
     #Loading
     status_text = ft.Text("Loading...", color="green", size=20)
 
@@ -131,6 +128,7 @@ async def main(page: ft.Page):
             ft.Icon("photo_size_select_actual", size=16),
         ],
         alignment=ft.MainAxisAlignment.CENTER,
+        height=30,
     )
 
     #レイアウト
@@ -139,10 +137,11 @@ async def main(page: ft.Page):
             [
                 status_text,
                 header,
-                slider_row, #スライダーを表示
                 gallery_area,
+                slider_row, #スライダーを表示
             ],
             expand=True, #画面下まで広げる
+            spacing=4,
         )
     )
 
