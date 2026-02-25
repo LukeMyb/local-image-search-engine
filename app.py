@@ -19,7 +19,7 @@ async def main(page: ft.Page):
     #ページ全体の設定
     page.title = "Local image searcher"
     page.theme_mode = "dark"
-    page.padding = 10 #余白
+    page.padding = 6 #余白
 
     #Loading
     status_text = ft.Text("Loading...", color="green", size=20)
