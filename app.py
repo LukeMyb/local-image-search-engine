@@ -56,9 +56,13 @@ async def main(page: ft.Page):
 
     #スライダーを動かした時
     def on_slider_change(e):
-        images_grid.max_extent = e.control.value
+        nonlocal base_scale_size
+        val = float(e.control.value)
+        
+        images_grid.max_extent = val
+        base_scale_size = val #次のピンチ操作のために基準値を更新
+        
         images_grid.update()
-
     zoom_slider.on_change = on_slider_change
 
     #ピンチ操作開始時のサイズを一時保存
@@ -67,7 +71,7 @@ async def main(page: ft.Page):
     def on_scale_start(e):
         nonlocal base_scale_size
         #操作開始時点の現在のサイズを記録
-        base_scale_size = images_grid.max_extent
+        base_scale_size = zoom_slider.value
 
     def on_scale_update(e):
         #e.scale: 指を広げた倍率 (1.0が基準、2.0なら2倍、0.5なら半分)
@@ -79,7 +83,9 @@ async def main(page: ft.Page):
         
         #グリッドに適用して更新
         images_grid.max_extent = new_size
+        zoom_slider.value = new_size
         images_grid.update()
+        zoom_slider.update()
 
     #グリッドをGestureDetectorで包む
     #グリッドの上でのタッチ操作を検知できるように
