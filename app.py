@@ -34,14 +34,24 @@ async def main(page: ft.Page):
         expand=True,
     )
 
-    # ビューアを閉じる関数
-    def close_viewer(e):
+    #ビュアーを閉じる関数
+    async def close_viewer(e):
+        #透明にする
+        detail_view.opacity = 0
+        detail_view.update()
+        
+        #アニメーションが終わるまで待つ
+        await asyncio.sleep(0.3)
+        
+        #完全に非表示にする
         detail_view.visible = False
-        page.update()
+        detail_view.update()
 
     # ビューア本体（全画面オーバーレイ）
     detail_view = ft.Container(
         visible=False, # 最初は隠しておく
+        opacity=0,          #最初は透明
+        animate_opacity=300, #300ミリ秒かけて変化させる
         bgcolor="#000000", # 背景は真っ黒
         alignment=ft.Alignment(0, 0),
         expand=True,
@@ -77,36 +87,31 @@ async def main(page: ft.Page):
     # アプリの最前面レイヤーにビューアを追加
     page.overlay.append(detail_view)
 
-    # --- [追加] 画像クリック時の処理 ---
+    #画像クリック時の処理
     async def on_image_click(e):
-        # クリックされた画像の情報(row)を取得
+        #クリックされた画像の情報(row)を取得
         row = e.control.data
         if not row: return
 
-        # 元画像のパスを解決
-        # ※重要: assets_dir="data" なので、Webパスは "/フォルダ/ファイル名" になります
-        # データベースの "path" が "data/images/photo.jpg" の場合、
-        # ここでは "images/photo.jpg" のように assets_dir からの相対パスにする必要があります。
-        
-        raw_path = row.get('file_path', '') # DBに入っているパス
+        raw_path = row.get('file_path', '') #DBに入っているパス
         filename = os.path.basename(raw_path)
-        
-        # 【設定箇所】元画像が dataフォルダ内のどこにあるかに合わせて調整してください
-        # 例: data/images/画像.jpg なら -> f"/images/{filename}"
-        # 例: data/画像.jpg (直下) なら -> f"/{filename}"
         high_res_src = f"/images/{filename}" 
         
-        # もし元画像パスが不明なら、とりあえずサムネイルを表示する救済措置
+        #もし元画像パスが不明なら、とりあえずサムネイルを表示する救済措置
         if not raw_path:
              high_res_src = f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
 
-        # ビューアの画像を更新して表示
+        #ビュアーの画像を更新して表示
         detail_image.src = high_res_src
+
+        #まず「透明な状態」で存在させる
         detail_view.visible = True
-        page.update()
-
-
-
+        detail_view.opacity = 0
+        detail_view.update()
+        
+        #透明度を1にしてフェードイン開始
+        detail_view.opacity = 1
+        detail_view.update()
 
     #検索窓
     search_input = ft.TextField(
