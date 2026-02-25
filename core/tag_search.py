@@ -225,7 +225,7 @@ class TagSearch:
 if __name__ == "__main__":
     searcher = TagSearch()
     # テスト: 辞書にある単語と、ない単語を混ぜる
-    q = "" 
+    q = "黒髪" 
     results = searcher.search(q, limit=5)
     
     print(f"\n【Final Result】")
