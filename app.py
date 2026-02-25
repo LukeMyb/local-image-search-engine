@@ -38,8 +38,7 @@ async def main(page: ft.Page):
     #runs_countではなくmax_extentを使うことで、PC/スマホ両方で適切な列数に
     images_grid = ft.GridView(
         expand=True,
-        runs_count=5,            #最低5列は確保（お好みで max_extent=150 などに変更可）
-        max_extent=180,          #タイルの最大幅
+        runs_count=3,            #最低5列は確保（お好みで max_extent=150 などに変更可）
         child_aspect_ratio=1.0,  #正方形 (1:1)
         spacing=5,               #タイル間の隙間
         run_spacing=5,
@@ -47,45 +46,64 @@ async def main(page: ft.Page):
 
     #ズームスライダー
     zoom_slider = ft.Slider(
-        min=60,
-        max=180,
-        value=180,
+        min=3,
+        max=6,
+        divisions=3,
         label="{value}",
         expand=True,
     )
 
+    #ピンチ操作基準用の変数
+    base_columns = 3
+
     #スライダーを動かした時
     def on_slider_change(e):
-        nonlocal base_scale_size
-        val = float(e.control.value)
+        nonlocal base_columns
+        val = int(e.control.value)
         
-        images_grid.max_extent = val
-        base_scale_size = val #次のピンチ操作のために基準値を更新
-        
+        images_grid.runs_count = val
+        base_columns = val #次のピンチ操作のために基準値を更新
+
         images_grid.update()
     zoom_slider.on_change = on_slider_change
 
-    #ピンチ操作開始時のサイズを一時保存
-    base_scale_size = 180
-
     def on_scale_start(e):
-        nonlocal base_scale_size
-        #操作開始時点の現在のサイズを記録
-        base_scale_size = zoom_slider.value
+        nonlocal base_columns
+        base_columns = images_grid.runs_count #現在のグリッドの状態を基準にする
 
     def on_scale_update(e):
-        #e.scale: 指を広げた倍率 (1.0が基準、2.0なら2倍、0.5なら半分)
-        new_size = base_scale_size * e.scale
+        #画像を拡大(scale > 1)したい = 列数を減らしたい -> 割り算
+        #画像を縮小(scale < 1)したい = 列数を増やしたい -> 割り算
+        new_cols = base_columns / e.scale
         
         #制限 (小さすぎたり大きすぎたりしないように)
-        if new_size < 60: new_size = 60
-        if new_size > 180: new_size = 180
+        if new_cols < 3: new_cols = 3
+        if new_cols > 6: new_cols = 6
+
+        #int(切り捨て) ではなく round(四捨五入) を使う
+        #これで 3.5 以上なら 4列 になるので直感と合う
+        int_cols = int(round(new_cols))
         
-        #グリッドに適用して更新
-        images_grid.max_extent = new_size
-        zoom_slider.value = new_size
-        images_grid.update()
+        #列数が変わったタイミングだけ画面更新（軽量化）
+        if images_grid.runs_count != int_cols:
+            images_grid.runs_count = int_cols
+            images_grid.update()
+
+        #スライダーの位置は滑らかに追従させる
+        zoom_slider.value = new_cols 
         zoom_slider.update()
+
+    #ピンチ終了時の処理を追加
+    #指を離した瞬間にスライダーを「整数」の位置にピタッと吸着させる
+    def on_scale_end(e):
+        nonlocal base_columns
+        # 現在のグリッドの列数（整数）にスライダーを合わせる
+        final_cols = images_grid.runs_count
+        zoom_slider.value = final_cols
+        zoom_slider.update()
+        
+        # 次の操作のために基準値を更新
+        base_columns = final_cols
 
     #グリッドをGestureDetectorで包む
     #グリッドの上でのタッチ操作を検知できるように
@@ -93,6 +111,7 @@ async def main(page: ft.Page):
         content=images_grid,
         on_scale_start=on_scale_start,
         on_scale_update=on_scale_update,
+        on_scale_end=on_scale_end,
         expand=True, # 画面いっぱいに広げる
     )
 
