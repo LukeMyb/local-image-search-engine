@@ -38,6 +38,7 @@ async def main(page: ft.Page):
             src=dummy_src,
             fit="contain",
             expand=True,
+            scale=1,
             # 位置のアニメーション設定
             offset=ft.Offset(initial_offset_x, 0),
             animate_offset=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
@@ -259,8 +260,51 @@ async def main(page: ft.Page):
         page_counter.value = f"{current} / {total}"
         page_counter.update()
 
+    # ダブルタップされたときの処理
+    def on_double_tap_down(e):
+        # すでに拡大されているかチェック
+        if img_curr.scale != 1:
+            # 拡大中なら → 等倍に戻す（リセット）
+            img_curr.scale = 1
+            img_curr.offset = ft.Offset(0, 0)
+            # 戻る時は滑らかに
+            img_curr.animate_offset = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        else:
+            # 等倍なら → 3倍にズーム！
+            img_curr.scale = 3
+            # ズーム中は指に吸い付くように動かしたいので、アニメーションを切る
+            img_curr.animate_offset = None
+            
+            # 拡大した瞬間にUI（ボタンなど）が邪魔なら隠す
+            if close_btn_wrapper.offset.y == 0:
+                 toggle_ui(None)
+                 
+        img_curr.update()
+
+    # 指を動かしたとき（パン操作）の処理
+    def on_pan_update(e):
+        # 拡大している時だけ、画像を動かせるようにする
+        if img_curr.scale > 1:
+            # 現在の位置を取得
+            curr_x = img_curr.offset.x
+            curr_y = img_curr.offset.y
+            
+            # 指の移動量(px)を、Fletの座標単位(画面に対する比率)に変換
+            # ※page.width / height で割ることで適切な移動量になります
+            dx = e.local_delta.x / page.width
+            dy = e.local_delta.y / page.height
+            
+            # 新しい位置をセット（グリグリ動かす）
+            img_curr.offset = ft.Offset(curr_x + dx, curr_y + dy)
+            img_curr.update()
+
     # タップされた位置に応じて処理を振り分ける関数
     def handle_tap(e):
+        #拡大中は移動操作を無効にする（誤操作防止）
+        if img_curr.scale > 1:
+            toggle_ui(None) # UIの出し入れだけ許可する
+            return
+
         #画面の横幅を取得
         width = page.width
         #左右 20% ずつをタップエリアとして定義
@@ -278,6 +322,10 @@ async def main(page: ft.Page):
 
     #スワイプ操作を検知する関数
     def on_pan_end(e):
+        #拡大中はページめくりを禁止
+        if img_curr.scale > 1:
+            return
+
         #左右の移動速度(絶対値)が上下の移動速度より大きい場合 -> 横スワイプ（画像切り替え）
         if abs(e.velocity.x) > abs(e.velocity.y):
             #velocity_x がプラスなら右スワイプ（前の画像）、マイナスなら左スワイプ（次の画像）
@@ -307,6 +355,11 @@ async def main(page: ft.Page):
                 ft.GestureDetector(
                     on_tap_down=handle_tap, #タップ位置によって操作切り替え
                     on_pan_end=on_pan_end, #スワイプで画像切り替え
+
+                    #ダブルタップとドラッグ移動
+                    on_double_tap_down=on_double_tap_down,
+                    on_pan_update=on_pan_update,
+
                     content=ft.Stack([
                         ft.Container(content=img_prev, alignment=ft.Alignment(0,0), expand=True),
                         ft.Container(content=img_curr, alignment=ft.Alignment(0,0), expand=True),
