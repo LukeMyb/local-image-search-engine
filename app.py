@@ -226,17 +226,22 @@ async def main(page: ft.Page):
 
     #スワイプ操作を検知する関数
     def on_pan_end(e):
-        nonlocal current_index
-        
-        #velocity_x がプラスなら右スワイプ（前の画像）、マイナスなら左スワイプ（次の画像）
-        #感度調整: 速度が小さい場合(誤操作)は無視する
-        if e.velocity.x > 100: 
-            #前の画像へ (Previous)
-            asyncio.create_task(slide_prev())
-                
-        elif e.velocity.x < -100:
-            #次の画像へ (Next)
-            asyncio.create_task(slide_next())
+        #左右の移動速度(絶対値)が上下の移動速度より大きい場合 -> 横スワイプ（画像切り替え）
+        if abs(e.velocity.x) > abs(e.velocity.y):
+            #velocity_x がプラスなら右スワイプ（前の画像）、マイナスなら左スワイプ（次の画像）
+            #感度調整: 速度が小さい場合(誤操作)は無視する
+            if e.velocity.x > 100: 
+                #前の画像へ (Previous)
+                asyncio.create_task(slide_prev())
+                    
+            elif e.velocity.x < -100:
+                #次の画像へ (Next)
+                asyncio.create_task(slide_next())
+
+        else: #上下の動きの方が大きい場合
+            #velocity.y がプラスなら下スワイプ
+            if e.velocity.y > 400: #感度は400くらいが誤爆しにくくてお勧め
+                asyncio.create_task(close_viewer(None))
 
     # ビューア本体（全画面オーバーレイ）
     detail_view = ft.Container(
