@@ -311,6 +311,7 @@ async def main(page: ft.Page):
     def on_viewer_scale_end(e):
         # アニメーション設定を元に戻す（ダブルタップ時のため）
         img_curr.animate_scale = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        img_curr.animate_offset = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
         
         # もし指を離した時に等倍(1.0)に戻っていたら、位置ズレもリセットする
         # 指を離した時に 1.0倍 未満なら 1.0 に戻す（バウンスバック）
