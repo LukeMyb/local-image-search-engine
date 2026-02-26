@@ -19,6 +19,7 @@ async def main(page: ft.Page):
     ANIM_DURATION = 100 #アニメーションの設定（ミリ秒）
     current_results = [] #検索結果のリスト
     current_index = 0 #現在表示中の画像のインデックス
+    is_animating = False
 
     #ページ全体の設定
     page.title = "Local image searcher"
@@ -30,26 +31,156 @@ async def main(page: ft.Page):
 
     #ダミー画像
     dummy_src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
-    #画像を詳細表示
-    detail_image = ft.Image(
-        src=dummy_src,
-        fit="contain", #画面に収まるように表示
-        repeat="noRepeat",
-        width=None,
-        height=None,
-        expand=True,
 
-        scale=0,            #最初は大きさ0
-        animate_scale=ANIM_DURATION, #ANIM_DURATIONミリ秒かけて拡大
-        opacity=0,          #最初は透明
-        animate_opacity=ANIM_DURATION,
-    )
+    # 共通の画像設定を作成する関数
+    def create_viewer_image(initial_offset_x):
+        return ft.Image(
+            src=dummy_src,
+            fit="contain",
+            expand=True,
+            # 位置のアニメーション設定
+            offset=ft.Offset(initial_offset_x, 0),
+            animate_offset=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+            # 閉じる時のアニメーション用
+            animate_scale=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        )
+
+    img_prev = create_viewer_image(-1) # 左に配置
+    img_curr = create_viewer_image(0)  # 中央に配置
+    img_next = create_viewer_image(1)  # 右に配置
+
+    # 2. 画像パスを取得するヘルパー関数
+    def get_image_src(index):
+        if 0 <= index < len(current_results):
+            row = current_results[index]
+            raw_path = row.get('file_path', '')
+            filename = os.path.basename(raw_path)
+            if raw_path:
+                return f"/images/{filename}"
+            else:
+                return f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
+        return dummy_src
+    
+    # 3. 3枚の画像をセットして位置をリセットする関数（重要）
+    def reset_images_position(index):
+        # アニメーションを一時的に無効化（瞬間移動させるため）
+        img_prev.animate_offset = None
+        img_curr.animate_offset = None
+        img_next.animate_offset = None
+
+        # 3枚の画像の中身を更新（プリロード）
+        img_prev.src = get_image_src(index - 1)
+        img_curr.src = get_image_src(index)
+        img_next.src = get_image_src(index + 1)
+
+        # 位置を定位置（左・中・右）に戻す
+        img_prev.offset = ft.Offset(-1, 0)
+        img_curr.offset = ft.Offset(0, 0)
+        img_next.offset = ft.Offset(1, 0)
+        
+        # 拡大率などもリセット
+        img_curr.scale = 1
+        img_curr.opacity = 1
+
+        img_prev.update()
+        img_curr.update()
+        img_next.update()
+
+        # アニメーション設定を復元
+        anim = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        img_prev.animate_offset = anim
+        img_curr.animate_offset = anim
+        img_next.animate_offset = anim
+
+    # 4. スライド移動のアニメーション処理
+    async def slide_next():
+        nonlocal current_index, img_prev, img_curr, img_next, is_animating
+
+        if is_animating or current_index >= len(current_results) - 1: return
+
+        is_animating = True #ロック開始
+
+        # アニメーション開始：中→左、右→中
+        img_curr.offset = ft.Offset(-1, 0)
+        img_next.offset = ft.Offset(0, 0)
+        img_curr.update()
+        img_next.update()
+
+        # 移動完了を待つ
+        await asyncio.sleep(ANIM_DURATION / 1000)
+
+        current_index += 1 #インデックスを戻す
+
+        recycle_img = img_prev
+        # アニメーションを切って右端へ瞬間移動
+        recycle_img.animate_offset = None
+        recycle_img.offset = ft.Offset(1, 0)
+        # 中身を「次の次」の画像に更新 (先読み)
+        recycle_img.src = get_image_src(current_index + 1)
+        # 念のため状態リセット
+        recycle_img.scale = 1
+        recycle_img.opacity = 1
+        recycle_img.update()
+
+        # アニメーション設定を戻す
+        recycle_img.animate_offset = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+
+        # 元Curr -> 新Prev (左へ行ったやつ)
+        # 元Next -> 新Curr (中央に来たやつ)
+        # 元Prev -> 新Next (右へ回したやつ)
+        img_prev = img_curr
+        img_curr = img_next
+        img_next = recycle_img
+
+        is_animating = False #ロック解除
+
+    async def slide_prev():
+        nonlocal current_index, img_prev, img_curr, img_next, is_animating
+        
+        if is_animating or current_index <= 0: return
+
+        is_animating = True #ロック開始
+
+        # アニメーション開始：中→右、左→中
+        img_curr.offset = ft.Offset(1, 0)
+        img_prev.offset = ft.Offset(0, 0)
+        img_curr.update()
+        img_prev.update()
+
+        # 移動完了を待つ
+        await asyncio.sleep(ANIM_DURATION / 1000)
+
+        current_index -= 1 #インデックスを戻す
+
+        recycle_img = img_next
+        # アニメーションを切って左端へ瞬間移動
+        recycle_img.animate_offset = None
+        recycle_img.offset = ft.Offset(-1, 0)
+
+        # 中身を「前の前」の画像に更新 (先読み)
+        recycle_img.src = get_image_src(current_index - 1)
+        recycle_img.scale = 1
+        recycle_img.opacity = 1
+        recycle_img.update()
+
+        # アニメーション設定を戻す
+        recycle_img.animate_offset = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+
+        # 元Next -> [リサイクル] -> 新Prev
+        # 元Curr -> 新Next (右へ行ったやつ)
+        # 元Prev -> 新Curr (中央に来たやつ)
+        img_next = img_curr
+        img_curr = img_prev
+        img_prev = recycle_img
+
+        is_animating = False #ロック解除
 
     #ビュアーを閉じる関数
     async def close_viewer(e):
         #小さくしながら透明にする
-        detail_image.scale = 0
-        detail_image.opacity = 0
+        img_curr.scale = 0
+        img_curr.opacity = 0
         detail_view.opacity = 0
         page.update()
         
@@ -93,24 +224,6 @@ async def main(page: ft.Page):
         
         close_btn_wrapper.update()
 
-    #指定したインデックスの画像を表示する関数
-    def load_image_by_index(index):
-        if index < 0 or index >= len(current_results):
-            return #範囲外なら何もしない
-
-        row = current_results[index]
-        
-        # パス解決ロジック (on_image_clickから移植・共通化)
-        raw_path = row.get('file_path', '')
-        filename = os.path.basename(raw_path)
-        high_res_src = f"/images/{filename}" 
-        
-        if not raw_path:
-             high_res_src = f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
-        
-        detail_image.src = high_res_src
-        detail_image.update()
-
     #スワイプ操作を検知する関数
     def on_pan_end(e):
         nonlocal current_index
@@ -119,17 +232,11 @@ async def main(page: ft.Page):
         #感度調整: 速度が小さい場合(誤操作)は無視する
         if e.velocity.x > 100: 
             #前の画像へ (Previous)
-            new_index = current_index - 1
-            if new_index >= 0:
-                current_index = new_index
-                load_image_by_index(current_index)
+            asyncio.create_task(slide_prev())
                 
         elif e.velocity.x < -100:
             #次の画像へ (Next)
-            new_index = current_index + 1
-            if new_index < len(current_results):
-                current_index = new_index
-                load_image_by_index(current_index)
+            asyncio.create_task(slide_next())
 
     # ビューア本体（全画面オーバーレイ）
     detail_view = ft.Container(
@@ -145,17 +252,13 @@ async def main(page: ft.Page):
             # Stackを使って「画像」の上に「閉じるボタン」を重ねる
             content=ft.Stack(
                 [
-                    #画像部分（クリックで閉じるようにする）
-                    ft.Container(
-                        content=detail_image,
-                        alignment=ft.Alignment(0, 0),
-                        expand=True,
-                    ),
-                    
+                    # 3枚の画像を配置
+                    ft.Container(content=img_prev, alignment=ft.Alignment(0,0), expand=True),
+                    ft.Container(content=img_curr, alignment=ft.Alignment(0,0), expand=True),
+                    ft.Container(content=img_next, alignment=ft.Alignment(0,0), expand=True),
+
                     #右上の閉じるボタン
-                    ft.SafeArea(
-                        close_btn_wrapper
-                    )
+                    ft.SafeArea(close_btn_wrapper)
                 ],
                 expand=True,
             )
@@ -167,7 +270,9 @@ async def main(page: ft.Page):
 
     #画像クリック時の処理
     async def on_image_click(e):
-        nonlocal current_index
+        nonlocal current_index, is_animating
+
+        is_animating = False #フラグをリセット
 
         #クリックされた画像の情報(row)を取得
         row = e.control.data
@@ -179,19 +284,21 @@ async def main(page: ft.Page):
         except ValueError:
             current_index = 0
 
-        load_image_by_index(current_index)
+        reset_images_position(current_index)
 
         #準備：画像URLをセットし、最初は「透明・最小」にする
-        detail_image.scale = 0
-        detail_image.opacity = 0
+        img_curr.scale = 0
+        img_curr.opacity = 0
         detail_view.opacity = 0
         close_btn_wrapper.offset = ft.Offset(0, -2) #閉じるボタンも「隠れた状態」にリセットしておく
         detail_view.visible = True
         page.update()
 
         #実行：拡大とフェードインを同時に開始
-        detail_image.scale = 1
-        detail_image.opacity = 1
+        # 少し待たないとアニメーションが飛ぶことがあるので0.05秒待機
+        await asyncio.sleep(0.05)
+        img_curr.scale = 1
+        img_curr.opacity = 1
         detail_view.opacity = 1
         page.update()
 
