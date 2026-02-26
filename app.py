@@ -285,8 +285,8 @@ async def main(page: ft.Page):
         # 新しい倍率 = 開始時の倍率 × 指の開き具合
         new_scale = viewer_base_scale * e.scale
         
-        # 制限: 1.0倍(等倍) 〜 5.0倍 まで
-        if new_scale < 1.0: new_scale = 1.0
+        # 制限: 下限を 1.0 ではなく、0.5 くらいまで許容する（バネのような効果のため）
+        if new_scale < 0.5: new_scale = 0.5
         if new_scale > 5.0: new_scale = 5.0
         
         img_curr.scale = new_scale
@@ -316,11 +316,10 @@ async def main(page: ft.Page):
         # 指を離した時に 1.0倍 未満なら 1.0 に戻す（バウンスバック）
         if img_curr.scale < 1.0:
             img_curr.scale = 1.0
-        # 位置ズレもリセット（拡大したまま閉じたり戻ったりすると変になるため）
-        if img_curr.scale == 1.0:
+            # 位置ズレもリセット（拡大したまま閉じたり戻ったりすると変になるため）
             img_curr.offset = ft.Offset(0, 0)
-            
-        img_curr.update()
+            img_curr.update()
+            return
 
         #スワイプ判定
         # 拡大中（scale > 1.0）は、指を離してもページめくりしない
