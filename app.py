@@ -260,6 +260,88 @@ async def main(page: ft.Page):
         page_counter.value = f"{current} / {total}"
         page_counter.update()
 
+    viewer_last_focal_x = 0
+    viewer_last_focal_y = 0
+
+    # ビューアでのピンチ操作開始
+    def on_viewer_scale_start(e):
+        nonlocal viewer_base_scale, viewer_last_focal_x, viewer_last_focal_y
+        # 現在の倍率を基準点として記録
+        viewer_base_scale = img_curr.scale
+
+        #操作開始時の指の中心座標を記録
+        viewer_last_focal_x = e.local_focal_point.x
+        viewer_last_focal_y = e.local_focal_point.y
+
+        # 指の動きにリアルタイムで追従させるため、アニメーションを一時的に切る
+        img_curr.animate_scale = None
+        img_curr.animate_offset = None
+        img_curr.update()
+
+    # ビューアでのピンチ操作中
+    def on_viewer_scale_update(e):
+        nonlocal viewer_last_focal_x, viewer_last_focal_y
+
+        # 新しい倍率 = 開始時の倍率 × 指の開き具合
+        new_scale = viewer_base_scale * e.scale
+        
+        # 制限: 1.0倍(等倍) 〜 5.0倍 まで
+        if new_scale < 1.0: new_scale = 1.0
+        if new_scale > 5.0: new_scale = 5.0
+        
+        img_curr.scale = new_scale
+
+        # 拡大している時だけ移動できるようにする
+        if img_curr.scale > 1.0:
+            # 前回の座標との「差分」を計算して移動させる
+            dx = (e.local_focal_point.x - viewer_last_focal_x) / page.width
+            dy = (e.local_focal_point.y - viewer_last_focal_y) / page.height
+            
+            curr_x = img_curr.offset.x
+            curr_y = img_curr.offset.y
+            img_curr.offset = ft.Offset(curr_x + dx, curr_y + dy)
+        
+        # 次のフレームのために現在の座標を保存
+        viewer_last_focal_x = e.local_focal_point.x
+        viewer_last_focal_y = e.local_focal_point.y
+
+        img_curr.update()
+
+    # ビューアでのピンチ操作終了
+    def on_viewer_scale_end(e):
+        # アニメーション設定を元に戻す（ダブルタップ時のため）
+        img_curr.animate_scale = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        
+        # もし指を離した時に等倍(1.0)に戻っていたら、位置ズレもリセットする
+        # 指を離した時に 1.0倍 未満なら 1.0 に戻す（バウンスバック）
+        if img_curr.scale < 1.0:
+            img_curr.scale = 1.0
+        # 位置ズレもリセット（拡大したまま閉じたり戻ったりすると変になるため）
+        if img_curr.scale == 1.0:
+            img_curr.offset = ft.Offset(0, 0)
+            
+        img_curr.update()
+
+        #スワイプ判定
+        # 拡大中（scale > 1.0）は、指を離してもページめくりしない
+        if img_curr.scale > 1.0:
+            return
+
+        # ScaleEndEvent にも velocity (速度) 情報が含まれています
+        vx = e.velocity.x
+        vy = e.velocity.y
+
+        # 左右の移動速度(絶対値)が上下より大きい -> 横スワイプ
+        if abs(vx) > abs(vy):
+            if vx > 100: 
+                asyncio.create_task(slide_prev())
+            elif vx < -100:
+                asyncio.create_task(slide_next())
+        else: 
+            # 下スワイプで閉じる
+            if vy > 400: 
+                asyncio.create_task(close_viewer(None))
+
     # ダブルタップされたときの処理
     def on_double_tap_down(e):
         # すでに拡大されているかチェック
@@ -270,8 +352,8 @@ async def main(page: ft.Page):
             # 戻る時は滑らかに
             img_curr.animate_offset = ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
         else:
-            # 等倍なら → 3倍にズーム！
-            img_curr.scale = 3
+            # 等倍なら → 2倍にズーム
+            img_curr.scale = 2
             # ズーム中は指に吸い付くように動かしたいので、アニメーションを切る
             img_curr.animate_offset = None
             
@@ -280,23 +362,6 @@ async def main(page: ft.Page):
                  toggle_ui(None)
                  
         img_curr.update()
-
-    # 指を動かしたとき（パン操作）の処理
-    def on_pan_update(e):
-        # 拡大している時だけ、画像を動かせるようにする
-        if img_curr.scale > 1:
-            # 現在の位置を取得
-            curr_x = img_curr.offset.x
-            curr_y = img_curr.offset.y
-            
-            # 指の移動量(px)を、Fletの座標単位(画面に対する比率)に変換
-            # ※page.width / height で割ることで適切な移動量になります
-            dx = e.local_delta.x / page.width
-            dy = e.local_delta.y / page.height
-            
-            # 新しい位置をセット（グリグリ動かす）
-            img_curr.offset = ft.Offset(curr_x + dx, curr_y + dy)
-            img_curr.update()
 
     # タップされた位置に応じて処理を振り分ける関数
     def handle_tap(e):
@@ -320,29 +385,6 @@ async def main(page: ft.Page):
             #中央付近なら「UIの出し入れ」
             toggle_ui(None)
 
-    #スワイプ操作を検知する関数
-    def on_pan_end(e):
-        #拡大中はページめくりを禁止
-        if img_curr.scale > 1:
-            return
-
-        #左右の移動速度(絶対値)が上下の移動速度より大きい場合 -> 横スワイプ（画像切り替え）
-        if abs(e.velocity.x) > abs(e.velocity.y):
-            #velocity_x がプラスなら右スワイプ（前の画像）、マイナスなら左スワイプ（次の画像）
-            #感度調整: 速度が小さい場合(誤操作)は無視する
-            if e.velocity.x > 100: 
-                #前の画像へ (Previous)
-                asyncio.create_task(slide_prev())
-                    
-            elif e.velocity.x < -100:
-                #次の画像へ (Next)
-                asyncio.create_task(slide_next())
-
-        else: #上下の動きの方が大きい場合
-            #velocity.y がプラスなら下スワイプ
-            if e.velocity.y > 400: #感度は400くらいが誤爆しにくくてお勧め
-                asyncio.create_task(close_viewer(None))
-
     detail_view = ft.Container(
         visible=False, # 最初は隠しておく
         animate_opacity=ANIM_DURATION, #ANIM_DURATIONミリ秒かけて変化させる
@@ -354,11 +396,14 @@ async def main(page: ft.Page):
                 #レイヤー1: 画像操作用のジェスチャー（背景全体）
                 ft.GestureDetector(
                     on_tap_down=handle_tap, #タップ位置によって操作切り替え
-                    on_pan_end=on_pan_end, #スワイプで画像切り替え
 
                     #ダブルタップとドラッグ移動
                     on_double_tap_down=on_double_tap_down,
-                    on_pan_update=on_pan_update,
+
+                    #ビューア用のピンチ操作
+                    on_scale_start=on_viewer_scale_start,
+                    on_scale_update=on_viewer_scale_update,
+                    on_scale_end=on_viewer_scale_end,
 
                     content=ft.Stack([
                         ft.Container(content=img_prev, alignment=ft.Alignment(0,0), expand=True),
@@ -443,8 +488,8 @@ async def main(page: ft.Page):
         expand=True,
     )
 
-    #ピンチ操作基準用の変数
-    base_columns = 3
+    base_columns = 3 #ピンチ操作基準用の変数
+    viewer_base_scale = 1.0 #ピンチ操作基準用の変数（ビューア用）
 
     #スライダーを動かした時
     def on_slider_change(e):
