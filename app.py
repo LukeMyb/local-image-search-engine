@@ -224,6 +224,23 @@ async def main(page: ft.Page):
         
         close_btn_wrapper.update()
 
+    # タップされた位置に応じて処理を振り分ける関数
+    def handle_tap(e):
+        #画面の横幅を取得
+        width = page.width
+        #左右 20% ずつをタップエリアとして定義
+        edge_zone = page.width * 0.2
+
+        if e.local_position.x < edge_zone:
+            #左端なら「前へ」
+            asyncio.create_task(slide_prev())
+        elif e.local_position.x > width - edge_zone:
+            #右端なら「次へ」
+            asyncio.create_task(slide_next())
+        else:
+            #中央付近なら「UIの出し入れ」
+            toggle_ui(None)
+
     #スワイプ操作を検知する関数
     def on_pan_end(e):
         #左右の移動速度(絶対値)が上下の移動速度より大きい場合 -> 横スワイプ（画像切り替え）
@@ -251,8 +268,8 @@ async def main(page: ft.Page):
         alignment=ft.Alignment(0, 0),
         expand=True,
         content=ft.GestureDetector(
-            on_tap=toggle_ui,       #タップでUI出し入れ
-            on_pan_end=on_pan_end,  #スワイプで画像切り替え
+            on_tap_down=handle_tap, #タップ位置によって操作切り替え
+            on_pan_end=on_pan_end, #スワイプで画像切り替え
 
             # Stackを使って「画像」の上に「閉じるボタン」を重ねる
             content=ft.Stack(
