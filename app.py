@@ -17,6 +17,8 @@ async def initialize_engine(page: ft.Page, status_text: ft.Text):
 
 async def main(page: ft.Page):
     ANIM_DURATION = 100 #アニメーションの設定（ミリ秒）
+    current_results = [] #検索結果のリスト
+    current_index = 0 #現在表示中の画像のインデックス
 
     #ページ全体の設定
     page.title = "Local image searcher"
@@ -26,9 +28,11 @@ async def main(page: ft.Page):
     #Loading
     status_text = ft.Text("Loading...", color="green", size=20)
 
+    #ダミー画像
+    dummy_src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
     #画像を詳細表示
     detail_image = ft.Image(
-        src="",
+        src=dummy_src,
         fit="contain", #画面に収まるように表示
         repeat="noRepeat",
         width=None,
@@ -89,6 +93,44 @@ async def main(page: ft.Page):
         
         close_btn_wrapper.update()
 
+    #指定したインデックスの画像を表示する関数
+    def load_image_by_index(index):
+        if index < 0 or index >= len(current_results):
+            return #範囲外なら何もしない
+
+        row = current_results[index]
+        
+        # パス解決ロジック (on_image_clickから移植・共通化)
+        raw_path = row.get('file_path', '')
+        filename = os.path.basename(raw_path)
+        high_res_src = f"/images/{filename}" 
+        
+        if not raw_path:
+             high_res_src = f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
+        
+        detail_image.src = high_res_src
+        detail_image.update()
+
+    #スワイプ操作を検知する関数
+    def on_pan_end(e):
+        nonlocal current_index
+        
+        #velocity_x がプラスなら右スワイプ（前の画像）、マイナスなら左スワイプ（次の画像）
+        #感度調整: 速度が小さい場合(誤操作)は無視する
+        if e.velocity.x > 100: 
+            #前の画像へ (Previous)
+            new_index = current_index - 1
+            if new_index >= 0:
+                current_index = new_index
+                load_image_by_index(current_index)
+                
+        elif e.velocity.x < -100:
+            #次の画像へ (Next)
+            new_index = current_index + 1
+            if new_index < len(current_results):
+                current_index = new_index
+                load_image_by_index(current_index)
+
     # ビューア本体（全画面オーバーレイ）
     detail_view = ft.Container(
         visible=False, # 最初は隠しておく
@@ -96,23 +138,27 @@ async def main(page: ft.Page):
         bgcolor="#000000", #背景は透明→黒(初期値は黒)
         alignment=ft.Alignment(0, 0),
         expand=True,
-        on_click=toggle_ui,
-        # Stackを使って「画像」の上に「閉じるボタン」を重ねる
-        content=ft.Stack(
-            [
-                #画像部分（クリックで閉じるようにする）
-                ft.Container(
-                    content=detail_image,
-                    alignment=ft.Alignment(0, 0),
-                    expand=True,
-                ),
-                
-                #右上の閉じるボタン
-                ft.SafeArea(
-                    close_btn_wrapper
-                )
-            ],
-            expand=True,
+        content=ft.GestureDetector(
+            on_tap=toggle_ui,       #タップでUI出し入れ
+            on_pan_end=on_pan_end,  #スワイプで画像切り替え
+
+            # Stackを使って「画像」の上に「閉じるボタン」を重ねる
+            content=ft.Stack(
+                [
+                    #画像部分（クリックで閉じるようにする）
+                    ft.Container(
+                        content=detail_image,
+                        alignment=ft.Alignment(0, 0),
+                        expand=True,
+                    ),
+                    
+                    #右上の閉じるボタン
+                    ft.SafeArea(
+                        close_btn_wrapper
+                    )
+                ],
+                expand=True,
+            )
         )
     )
 
@@ -121,20 +167,21 @@ async def main(page: ft.Page):
 
     #画像クリック時の処理
     async def on_image_click(e):
+        nonlocal current_index
+
         #クリックされた画像の情報(row)を取得
         row = e.control.data
         if not row: return
 
-        raw_path = row.get('file_path', '') #DBに入っているパス
-        filename = os.path.basename(raw_path)
-        high_res_src = f"/images/{filename}" 
-        
-        #もし元画像パスが不明なら、とりあえずサムネイルを表示する救済措置
-        if not raw_path:
-             high_res_src = f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
+        #クリックされた画像がリストの何番目かを探して記憶する
+        try:
+            current_index = current_results.index(row)
+        except ValueError:
+            current_index = 0
+
+        load_image_by_index(current_index)
 
         #準備：画像URLをセットし、最初は「透明・最小」にする
-        detail_image.src = high_res_src
         detail_image.scale = 0
         detail_image.opacity = 0
         detail_view.opacity = 0
@@ -273,6 +320,8 @@ async def main(page: ft.Page):
     searcher = await initialize_engine(page, status_text)
 
     async def on_search(e):
+        nonlocal current_results
+        
         query = search_input.value
         if not query: return #検索窓が空なら何もしない
 
@@ -282,6 +331,8 @@ async def main(page: ft.Page):
 
         #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
         results = searcher.search(query, limit=50)
+
+        current_results = results #検索結果をグローバル変数に保存しておく
 
         #グリッドをクリア
         images_grid.controls.clear()
