@@ -297,9 +297,29 @@ async def main(page: ft.Page):
             dx = (e.local_focal_point.x - viewer_last_focal_x) / page.width
             dy = (e.local_focal_point.y - viewer_last_focal_y) / page.height
             
-            curr_x = img_curr.offset.x
-            curr_y = img_curr.offset.y
-            img_curr.offset = ft.Offset(curr_x + dx, curr_y + dy)
+            # とりあえず計算上の新しい位置
+            raw_x = img_curr.offset.x + dx
+            raw_y = img_curr.offset.y + dy
+            
+            #移動限界の計算
+            # 例: scale=3倍なら、(3-1)/2 = 1.0 (画面1枚分) まで左右に動ける
+            limit = (new_scale - 1) / 2
+
+            # limitを超えた分には 0.4 を掛けて、動きを鈍くする
+            resistance = 0.4
+            
+            # X軸の抵抗処理
+            if raw_x > limit:
+                raw_x = limit + (raw_x - limit) * resistance
+            elif raw_x < -limit:
+                raw_x = -limit + (raw_x + limit) * resistance
+            # Y軸の抵抗処理
+            if raw_y > limit:
+                raw_y = limit + (raw_y - limit) * resistance
+            elif raw_y < -limit:
+                raw_y = -limit + (raw_y + limit) * resistance
+            
+            img_curr.offset = ft.Offset(raw_x, raw_y)
         
         # 次のフレームのために現在の座標を保存
         viewer_last_focal_x = e.local_focal_point.x
@@ -322,9 +342,38 @@ async def main(page: ft.Page):
             img_curr.update()
             return
 
-        #スワイプ判定
-        # 拡大中（scale > 1.0）は、指を離してもページめくりしない
+        #拡大中に端からはみ出していた場合のバウンスバック
         if img_curr.scale > 1.0:
+            # 現在の正しい限界値を計算
+            limit = (img_curr.scale - 1) / 2
+            
+            curr_x = img_curr.offset.x
+            curr_y = img_curr.offset.y
+            needs_reset = False # リセットが必要かどうかのフラグ
+
+            # X軸のはみ出しチェック
+            if curr_x > limit:
+                curr_x = limit
+                needs_reset = True
+            elif curr_x < -limit:
+                curr_x = -limit
+                needs_reset = True
+            # Y軸のはみ出しチェック
+            if curr_y > limit:
+                curr_y = limit
+                needs_reset = True
+            elif curr_y < -limit:
+                curr_y = -limit
+                needs_reset = True
+
+            # もしはみ出していたら、定位置に戻して終了 (return)
+            if needs_reset:
+                img_curr.offset = ft.Offset(curr_x, curr_y)
+                img_curr.update()
+                return
+            
+            # はみ出していなければ、ここで return してスワイプ判定に行かせない
+            # (拡大中はスワイプページめくりをさせない仕様の場合)
             return
 
         # ScaleEndEvent にも velocity (速度) 情報が含まれています
