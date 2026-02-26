@@ -111,6 +111,7 @@ async def main(page: ft.Page):
         await asyncio.sleep(ANIM_DURATION / 1000)
 
         current_index += 1 #インデックスを戻す
+        update_indicator()
 
         recycle_img = img_prev
         # アニメーションを切って右端へ瞬間移動
@@ -152,6 +153,7 @@ async def main(page: ft.Page):
         await asyncio.sleep(ANIM_DURATION / 1000)
 
         current_index -= 1 #インデックスを戻す
+        update_indicator()
 
         recycle_img = img_next
         # アニメーションを切って左端へ瞬間移動
@@ -200,9 +202,8 @@ async def main(page: ft.Page):
             on_click=lambda e: asyncio.create_task(close_viewer(e)),
             bgcolor="#8A000000", #ボタン背景を半透明に
         ),
-        #親要素(SafeArea)の右上に配置
-        alignment=ft.Alignment(1, -1),
-        padding=20,
+        top=35,   # 画面上端からの距離（SafeAreaの代わり）
+        right=20, # 右端からの距離
         
         #初期位置は画面外（上）へ飛ばしておく
         #y=-2 は「自分の高さの2倍分、上に移動」という意味です
@@ -216,13 +217,47 @@ async def main(page: ft.Page):
     def toggle_ui(e):
         #現在の位置を確認して切り替え
         if close_btn_wrapper.offset.y == 0:
-            #表示中なら -> 上に隠す (y=-2)
-            close_btn_wrapper.offset = ft.Offset(0, -2)
+            close_btn_wrapper.offset = ft.Offset(0, -2) #表示中なら -> 上に隠す (y=-2)
+            indicator_container.offset = ft.Offset(0, 2) #下へ隠す
+            indicator_container.opacity = 0
         else:
-            #隠れてるなら -> 定位置に戻す (y=0) ＝ ニュッと出す
-            close_btn_wrapper.offset = ft.Offset(0, 0)
+            close_btn_wrapper.offset = ft.Offset(0, 0) #隠れてるなら -> 定位置に戻す (y=0) ＝ ニュッと出す
+            indicator_container.offset = ft.Offset(0, 0)
+            indicator_container.opacity = 1
         
         close_btn_wrapper.update()
+        indicator_container.update()
+
+    #ページ番号を表示するテキスト
+    page_counter = ft.Text(
+        "0 / 0",
+        color="white",
+        size=16,
+        weight=ft.FontWeight.BOLD,
+    )
+
+    #テキストを画面下部に配置するためのラッパー
+    indicator_container = ft.Container(
+        bottom=40, # 下から40pxの位置に固定
+        left=0,    # 左右を0にして
+        right=0,   # widthを広げずに中央寄せにする準備
+
+        # 内部のテキストだけを中央に寄せる
+        content=ft.Row([page_counter], alignment=ft.MainAxisAlignment.CENTER),
+
+        # 閉じるボタンと同じアニメーション設定
+        offset=ft.Offset(0, 2), # 初期状態は画面外（下）
+        animate_offset=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        opacity=0,
+        animate_opacity=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+    )
+
+    #現在のインデックスと総件数を計算して反映
+    def update_indicator():
+        total = len(current_results)
+        current = current_index + 1 if total > 0 else 0
+        page_counter.value = f"{current} / {total}"
+        page_counter.update()
 
     # タップされた位置に応じて処理を振り分ける関数
     def handle_tap(e):
@@ -260,30 +295,29 @@ async def main(page: ft.Page):
             if e.velocity.y > 400: #感度は400くらいが誤爆しにくくてお勧め
                 asyncio.create_task(close_viewer(None))
 
-    # ビューア本体（全画面オーバーレイ）
     detail_view = ft.Container(
         visible=False, # 最初は隠しておく
         animate_opacity=ANIM_DURATION, #ANIM_DURATIONミリ秒かけて変化させる
         bgcolor="#000000", #背景は透明→黒(初期値は黒)
         alignment=ft.Alignment(0, 0),
         expand=True,
-        content=ft.GestureDetector(
-            on_tap_down=handle_tap, #タップ位置によって操作切り替え
-            on_pan_end=on_pan_end, #スワイプで画像切り替え
-
-            # Stackを使って「画像」の上に「閉じるボタン」を重ねる
-            content=ft.Stack(
-                [
-                    # 3枚の画像を配置
-                    ft.Container(content=img_prev, alignment=ft.Alignment(0,0), expand=True),
-                    ft.Container(content=img_curr, alignment=ft.Alignment(0,0), expand=True),
-                    ft.Container(content=img_next, alignment=ft.Alignment(0,0), expand=True),
-
-                    #右上の閉じるボタン
-                    ft.SafeArea(close_btn_wrapper)
-                ],
-                expand=True,
-            )
+        content=ft.Stack(
+            [
+                #レイヤー1: 画像操作用のジェスチャー（背景全体）
+                ft.GestureDetector(
+                    on_tap_down=handle_tap, #タップ位置によって操作切り替え
+                    on_pan_end=on_pan_end, #スワイプで画像切り替え
+                    content=ft.Stack([
+                        ft.Container(content=img_prev, alignment=ft.Alignment(0,0), expand=True),
+                        ft.Container(content=img_curr, alignment=ft.Alignment(0,0), expand=True),
+                        ft.Container(content=img_next, alignment=ft.Alignment(0,0), expand=True),
+                    ]),
+                    expand=True,
+                ),
+                close_btn_wrapper,
+                indicator_container,
+            ],
+            expand=True,
         )
     )
 
@@ -307,12 +341,18 @@ async def main(page: ft.Page):
             current_index = 0
 
         reset_images_position(current_index)
+        update_indicator()
 
         #準備：画像URLをセットし、最初は「透明・最小」にする
         img_curr.scale = 0
         img_curr.opacity = 0
         detail_view.opacity = 0
-        close_btn_wrapper.offset = ft.Offset(0, -2) #閉じるボタンも「隠れた状態」にリセットしておく
+
+        # 閉じるボタンとインディケータを画面外へ
+        close_btn_wrapper.offset = ft.Offset(0, -2)
+        indicator_container.offset = ft.Offset(0, 2)
+        indicator_container.opacity = 0
+
         detail_view.visible = True
         page.update()
 
