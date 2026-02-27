@@ -4,6 +4,7 @@ import os
 from core.tag_search import TagSearch
 from ui.search_bar import SearchBar
 from ui.viewer import ImageViewer
+from ui.gallery import ImageGallery
 
 async def initialize_engine(page: ft.Page, status_text: ft.Text):
     await asyncio.sleep(0.1) #ブラウザへの描画時間を確保
@@ -37,16 +38,9 @@ async def main(page: ft.Page):
 
         #openメソッドを呼び出す
         await viewer.open(current_results, row)
-    
-    #画像を表示するグリッドビュー
-    #runs_countではなくmax_extentを使うことで、PC/スマホ両方で適切な列数に
-    images_grid = ft.GridView(
-        expand=True,
-        runs_count=3,            #最低5列は確保（お好みで max_extent=150 などに変更可）
-        child_aspect_ratio=1.0,  #正方形 (1:1)
-        spacing=5,               #タイル間の隙間
-        run_spacing=5,
-    )
+
+    #ギャラリーの初期化
+    gallery = ImageGallery(on_image_click_callback=on_image_click)
 
     async def on_search(query):
         nonlocal current_results
@@ -60,123 +54,17 @@ async def main(page: ft.Page):
 
         current_results = results #検索結果をグローバル変数に保存しておく
 
-        #グリッドをクリア
-        images_grid.controls.clear()
-
         if not results:
             status_text.value = "見つかりませんでした。"
+            gallery.update_gallery([]) #ギャラリーを空にする
         else:
             status_text.value = f"Hit: {len(results)} {conversion_log}"
-
-            for row in results:
-                #DBには絶対パスや相対パスが入っている可能性があるため、ファイル名だけ抽出
-                #例: "data/thumbnails/123.webp" -> "123.webp"
-                if row['thumbnail_path']:
-                    filename = os.path.basename(row['thumbnail_path'])
-                    
-                    #assets_dir="data" なので、Webからは "/thumbnails/filename" でアクセス
-                    web_image_src = f"/thumbnails/{filename}"
-                    
-                    #画像コンテナ（将来的にクリックイベントを仕込む場所）
-                    img_container = ft.Container(
-                        content=ft.Image(
-                            src=web_image_src,
-                            fit="cover",
-                            repeat="noRepeat",
-                            border_radius=ft.border_radius.all(8), # 角丸
-                        ),
-                        #クリック時のデータを持たせる
-                        data=row,
-                        on_click=on_image_click, 
-                    )
-                    images_grid.controls.append(img_container)
+            gallery.update_gallery(results) #ギャラリーに画像を描画させる
 
         page.update()
 
     #検索窓の初期化
     search_bar = SearchBar(on_search_callback=on_search)
-
-    #ズームスライダー
-    zoom_slider = ft.Slider(
-        min=3,
-        max=6,
-        divisions=3,
-        label="{value}",
-        expand=True,
-    )
-
-    base_columns = 3 #ピンチ操作基準用の変数
-    viewer_base_scale = 1.0 #ピンチ操作基準用の変数（ビューア用）
-
-    #スライダーを動かした時
-    def on_slider_change(e):
-        nonlocal base_columns
-        val = int(e.control.value)
-        
-        images_grid.runs_count = val
-        base_columns = val #次のピンチ操作のために基準値を更新
-
-        images_grid.update()
-    zoom_slider.on_change = on_slider_change
-
-    def on_scale_start(e):
-        nonlocal base_columns
-        base_columns = images_grid.runs_count #現在のグリッドの状態を基準にする
-
-    def on_scale_update(e):
-        #画像を拡大(scale > 1)したい = 列数を減らしたい -> 割り算
-        #画像を縮小(scale < 1)したい = 列数を増やしたい -> 割り算
-        new_cols = base_columns / e.scale
-        
-        #制限 (小さすぎたり大きすぎたりしないように)
-        if new_cols < 3: new_cols = 3
-        if new_cols > 6: new_cols = 6
-
-        #int(切り捨て) ではなく round(四捨五入) を使う
-        #これで 3.5 以上なら 4列 になるので直感と合う
-        int_cols = int(round(new_cols))
-        
-        #列数が変わったタイミングだけ画面更新（軽量化）
-        if images_grid.runs_count != int_cols:
-            images_grid.runs_count = int_cols
-            images_grid.update()
-
-        #スライダーの位置は滑らかに追従させる
-        zoom_slider.value = new_cols 
-        zoom_slider.update()
-
-    #ピンチ終了時の処理を追加
-    #指を離した瞬間にスライダーを「整数」の位置にピタッと吸着させる
-    def on_scale_end(e):
-        nonlocal base_columns
-        # 現在のグリッドの列数（整数）にスライダーを合わせる
-        final_cols = images_grid.runs_count
-        zoom_slider.value = final_cols
-        zoom_slider.update()
-        
-        # 次の操作のために基準値を更新
-        base_columns = final_cols
-
-    #グリッドをGestureDetectorで包む
-    #グリッドの上でのタッチ操作を検知できるように
-    gallery_area = ft.GestureDetector(
-        content=images_grid,
-        on_scale_start=on_scale_start,
-        on_scale_update=on_scale_update,
-        on_scale_end=on_scale_end,
-        expand=True, # 画面いっぱいに広げる
-    )
-
-    #スライダー行
-    slider_row = ft.Row(
-        [
-            ft.Icon("photo_size_select_small", size=16),
-            zoom_slider,
-            ft.Icon("photo_size_select_actual", size=16),
-        ],
-        alignment=ft.MainAxisAlignment.CENTER,
-        height=30,
-    )
 
     #レイアウト
     page.add(
@@ -184,8 +72,7 @@ async def main(page: ft.Page):
             [
                 status_text,
                 search_bar.view,
-                gallery_area,
-                slider_row, #スライダーを表示
+                gallery.view,
             ],
             expand=True, #画面下まで広げる
             spacing=4,
