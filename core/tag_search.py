@@ -95,11 +95,14 @@ class TagSearch:
         return key, False
 
     def find_similar_tags_with_score(self, word, top_k=25): 
+        log_msg = ""
+
         # --- Step 1: 初期入力でチェック ---
         english_word, found = self._check_alias_or_list(word) #foundはAlias辞書もしくはタグリストに検索ワードが存在するか
         if found:
+            log_msg = f"[Direct/Alias Hit]: {word} -> {english_word}"
             print(f"  ├─ [Direct/Alias Hit]: {word} -> {english_word}")
-            return english_word, {english_word: 1.0}
+            return english_word, {english_word: 1.0}, log_msg
 
         # --- Step 2: Google翻訳 ---
         try:
@@ -107,8 +110,9 @@ class TagSearch:
             # 翻訳結果を再度Alias辞書・リストで確認
             english_word, found = self._check_alias_or_list(translated_g)
             if found:
+                log_msg = f"[Google -> Alias/List]: {word} -> {english_word}"
                 print(f"  ├─ [Google -> Alias/List]: {word} -> {english_word}")
-                return english_word, {english_word: 1.0}
+                return english_word, {english_word: 1.0}, log_msg
         except Exception as e:
             print(f"  [!] Google Translate Error: {e}")
 
@@ -119,14 +123,16 @@ class TagSearch:
             #まずは辞書・リストにあるか確認
             english_word, found = self._check_alias_or_list(translated_b)
             if found:
+                log_msg = f"[Bing -> Alias/List]: {word} -> {english_word}"
                 print(f"  ├─ [Bing -> Alias/List]: {word} -> {english_word}")
-                return english_word, {english_word: 1.0}
+                return english_word, {english_word: 1.0}, log_msg
         except Exception as e:
             print(f"  [!] Bing Translate Error: {e}")
 
         # --- Step 4: CLIPベクトル検索 (最終手段) ---
         #Bing翻訳の結果があればそれを使用し、なければGoogle翻訳や元の単語をフォールバックにする
         final_query = translated_b if translated_b else (translated_g if 'translated_g' in locals() else word)
+        log_msg = f"[Vector Search]: {word} -> '{final_query}'"
         print(f"  ├─ [Vector Search]: Using query '{final_query}'")
 
         found_tags_map = {} 
@@ -152,7 +158,7 @@ class TagSearch:
             if score > 0.90:
                 found_tags_map[tag_name] = max(found_tags_map.get(tag_name, 0), score)
         
-        return final_query, found_tags_map
+        return final_query, found_tags_map, log_msg
 
     def get_size_modifiers(self):
         return ["small", "flat", "tiny", "little", "mini", "short", "low",
@@ -202,15 +208,19 @@ class TagSearch:
     def search(self, user_query, limit=100):
         words = re.split(r'[ \u3000,]+', user_query)
         words = [w for w in words if w]
-        if not words: return []
+        if not words: return [], ""
 
         print(f"\n{'='*60}")
         print(f" Query: '{user_query}'")
         print(f"{'='*60}")
         
         search_groups = [] 
+        conversion_logs = []
+
         for word in words:
-            final_tag, similar_tags_map = self.find_similar_tags_with_score(word)
+            final_tag, similar_tags_map, log_msg = self.find_similar_tags_with_score(word)
+            conversion_logs.append(log_msg)
+
             search_groups.append(similar_tags_map)
             print(f"  Target: '{final_tag}' -> Candidates: {len(similar_tags_map)}")
 
@@ -225,7 +235,7 @@ class TagSearch:
             if or_parts:
                 and_conditions.append(f"({' OR '.join(or_parts)})")
 
-        if not and_conditions: return []
+        if not and_conditions: return [], ""
 
         # 件数制限を少し緩めて、スコアリング後に絞る
         full_sql = f"SELECT id, file_path, tags_combined, file_mtime, thumbnail_path FROM images WHERE {' AND '.join(and_conditions)} LIMIT ?"
@@ -245,7 +255,10 @@ class TagSearch:
             scored_results.append(row)
             
         scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
-        return scored_results[:limit]
+
+        #複数単語のログを文字列として結合し、検索結果と一緒に返す
+        final_log = " | ".join(conversion_logs)
+        return scored_results[:limit], final_log
 
 if __name__ == "__main__":
     searcher = TagSearch()

@@ -720,7 +720,7 @@ async def main(page: ft.Page):
         page.update()
 
         #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
-        results = searcher.search(query, limit=50)
+        results, conversion_log = searcher.search(query, limit=50)
 
         current_results = results #検索結果をグローバル変数に保存しておく
 
@@ -730,7 +730,7 @@ async def main(page: ft.Page):
         if not results:
             status_text.value = "見つかりませんでした。"
         else:
-            status_text.value = f"ヒット: {len(results)}件"
+            status_text.value = f"Hit: {len(results)} {conversion_log}"
 
             for row in results:
                 #DBには絶対パスや相対パスが入っている可能性があるため、ファイル名だけ抽出
