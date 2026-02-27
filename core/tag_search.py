@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import re
 import os
+import torch_directml #DirectML用のプラグイン
 from huggingface_hub import hf_hub_download
 from transformers import CLIPProcessor, CLIPModel
 import translators as ts
@@ -13,13 +14,14 @@ class TagSearch:
     def __init__(self, db_path="data/db/index.db", tag_index_path="data/tag_vector_index.bin"):
         self.db = ImageDatabase(db_path)
         
-        # GPUが使えるなら使い、なければCPU
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"  [System] Device: {self.device}")
+        #CUDA/CPUの判定を削除し、DirectMLを強制的に割り当てる
+        self.device = torch_directml.device()
+        print(f"  [System] Device: {self.device} (DirectML)")
         
         #モデルロード
         model_id = "openai/clip-vit-base-patch32"
-        self.model = CLIPModel.from_pretrained(model_id).to(self.device)
+        #脆弱性エラーを回避するため、安全な safetensors 形式で読み込むように指定
+        self.model = CLIPModel.from_pretrained(model_id, use_safetensors=True).to(self.device)
         self.processor = CLIPProcessor.from_pretrained(model_id)
         
         #タグインデックスロード
