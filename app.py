@@ -58,7 +58,7 @@ async def main(page: ft.Page):
             status_text.value = "見つかりませんでした。"
             gallery.update_gallery([]) #ギャラリーを空にする
         else:
-            status_text.value = f"Hit: {len(results)} {conversion_log}"
+            status_text.value = f"{len(results)}hit {conversion_log}"
             gallery.update_gallery(results) #ギャラリーに画像を描画させる
 
         page.update()

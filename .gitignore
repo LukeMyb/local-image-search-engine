@@ -14,9 +14,6 @@ Thumbs.db
 
 # Project Data (これらは Git で管理しない)
 data/
-data/db/*.db
-data/faiss/*.index
-data/thumbnails/*.webp
 
 # Models (数GBの重いファイル)
 models/*.onnx
