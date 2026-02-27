@@ -99,8 +99,8 @@ if __name__ == "__main__":
     #自動起動を無効化 (ダミー関数で上書き)
     webbrowser.open = lambda *args, **kwargs: None
     
-    ft.app(
-        target=main, 
+    ft.run(
+        main, 
         view=ft.AppView.WEB_BROWSER, 
         port=8000, 
         assets_dir="data", 
