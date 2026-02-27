@@ -102,6 +102,8 @@ async def main(page: ft.Page):
 
         is_animating = True #ロック開始
 
+        toggle_detail_panel(False) #ページをめくったらパネルを隠す
+
         # アニメーション開始：中→左、右→中
         img_curr.offset = ft.Offset(-1, 0)
         img_next.offset = ft.Offset(0, 0)
@@ -143,6 +145,8 @@ async def main(page: ft.Page):
         if is_animating or current_index <= 0: return
 
         is_animating = True #ロック開始
+
+        toggle_detail_panel(False) #ページをめくったらパネルを隠す
 
         # アニメーション開始：中→右、左→中
         img_curr.offset = ft.Offset(1, 0)
@@ -260,9 +264,63 @@ async def main(page: ft.Page):
         page_counter.value = f"{current} / {total}"
         page_counter.update()
 
+    #詳細パネル用の変数とUI構築
+
+    is_detail_open = False
+
+    detail_filename_text = ft.Text(size=16, weight=ft.FontWeight.BOLD, color="white")
+    detail_path_text = ft.Text(size=12, color="white70")
+    detail_tags_text = ft.Text(size=14, color="white", selectable=True)
+
+    detail_info_panel = ft.Container(
+        content=ft.Column(
+            [
+                detail_filename_text,
+                detail_path_text,
+                ft.Divider(color="white24"),
+                ft.Text("タグ一覧", size=12, color="white54"),
+                detail_tags_text,
+            ],
+            scroll=ft.ScrollMode.AUTO, # タグが多い場合はスクロール可能に
+        ),
+        bgcolor="#EE000000", # 背景を濃いめの半透明黒に
+        padding=20,
+        border_radius=ft.border_radius.only(top_left=16, top_right=16),
+        bottom=0, left=0, right=0, # 画面下部に固定
+        height=300, # パネルの高さ（適宜調整）
+        offset=ft.Offset(0, 1), # 初期状態は画面外（下）に100%隠しておく
+        animate_offset=ft.Animation(ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+    )
+
+    def update_detail_panel(index):
+        if 0 <= index < len(current_results):
+            row = current_results[index]
+            detail_filename_text.value = os.path.basename(row.get('file_path', ''))
+            detail_path_text.value = row.get('file_path', '')
+            
+            # タグを見やすくカンマ＋スペースに整形
+            raw_tags = row.get('tags_combined', '')
+            detail_tags_text.value = raw_tags.replace(',', ', ') if raw_tags else 'タグなし'
+            
+            detail_info_panel.update()
+
+    def toggle_detail_panel(show=None):
+        nonlocal is_detail_open
+        if show is None:
+            is_detail_open = not is_detail_open
+        else:
+            is_detail_open = show
+
+        if is_detail_open:
+            update_detail_panel(current_index)
+            detail_info_panel.offset = ft.Offset(0, 0) # ニュッと出す
+        else:
+            detail_info_panel.offset = ft.Offset(0, 1) # 下に隠す
+
+        detail_info_panel.update()
+
     viewer_last_focal_x = 0
     viewer_last_focal_y = 0
-
     # ビューアでのピンチ操作開始
     def on_viewer_scale_start(e):
         nonlocal viewer_base_scale, viewer_last_focal_x, viewer_last_focal_y
@@ -387,9 +445,14 @@ async def main(page: ft.Page):
             elif vx < -100:
                 asyncio.create_task(slide_next())
         else: 
-            # 下スワイプで閉じる
-            if vy > 400: 
-                asyncio.create_task(close_viewer(None))
+            if vy > 400: #下スワイプ
+                if is_detail_open:
+                    toggle_detail_panel(False) #パネルが開いていたら閉じる
+                else:
+                    asyncio.create_task(close_viewer(None)) #パネルが閉じていたらビューアを閉じる
+            elif vy < -400: #上スワイプ
+                if not is_detail_open:
+                    toggle_detail_panel(True) #パネルを開く
 
     # ダブルタップされたときの処理
     def on_double_tap_down(e):
@@ -414,6 +477,11 @@ async def main(page: ft.Page):
 
     # タップされた位置に応じて処理を振り分ける関数
     def handle_tap(e):
+        # 詳細パネルが開いている時は、どこをタップしてもパネルを閉じる処理を優先
+        if is_detail_open:
+            toggle_detail_panel(False)
+            return
+
         #拡大中は移動操作を無効にする（誤操作防止）
         if img_curr.scale > 1:
             toggle_ui(None) # UIの出し入れだけ許可する
@@ -463,6 +531,7 @@ async def main(page: ft.Page):
                 ),
                 close_btn_wrapper,
                 indicator_container,
+                detail_info_panel,
             ],
             expand=True,
         )
@@ -499,6 +568,11 @@ async def main(page: ft.Page):
         close_btn_wrapper.offset = ft.Offset(0, -2)
         indicator_container.offset = ft.Offset(0, 2)
         indicator_container.opacity = 0
+
+        #新しく画像を開くときは詳細パネルの状態をリセット
+        nonlocal is_detail_open
+        is_detail_open = False
+        detail_info_panel.offset = ft.Offset(0, 1)
 
         detail_view.visible = True
         page.update()
