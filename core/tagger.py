@@ -52,8 +52,8 @@ class Tagger:
         self.tag_names = self.tags_df["name"].tolist()
         self.tag_categories = self.tags_df["category"].tolist() # 0:General, 4:Character, 9:Rating
         
-        #GPUがあるなら 'CUDAExecutionProvider' を先頭に
-        self.session = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
+        #'CPUExecutionProvider' から 'DmlExecutionProvider' (DirectML) に変更
+        self.session = ort.InferenceSession(model_path, providers=['DmlExecutionProvider', 'CPUExecutionProvider'])
         self.input_name = self.session.get_inputs()[0].name
 
     def preprocess_image(self, image_path):

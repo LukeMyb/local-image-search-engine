@@ -2,18 +2,19 @@ import pandas as pd
 import numpy as np
 import faiss
 import torch
+import torch_directml #DirectML用のプラグイン
 from huggingface_hub import hf_hub_download
 from transformers import CLIPProcessor, CLIPModel
 
 class TagVectorizer:
     def __init__(self, index_path="data/tag_vector_index.bin", model_name="wd-v1-4-moat-tagger-v2"):
         self.index_path = index_path
-        self.device = "cpu" # タグ数千個ならCPUで十分高速
-        
+
+        self.device = torch_directml.device()
         print("=== モデルとタグリストをロード中 ===")
         # CLIPモデル
         model_id = "openai/clip-vit-base-patch32"
-        self.model = CLIPModel.from_pretrained(model_id).to(self.device)
+        self.model = CLIPModel.from_pretrained(model_id, use_safetensors=True).to(self.device)
         self.processor = CLIPProcessor.from_pretrained(model_id)
         
         # WD14のタグリスト取得
@@ -41,7 +42,7 @@ class TagVectorizer:
             with torch.no_grad():
                 output = self.model.get_text_features(**inputs)
             
-            # 【修正】出力がTensorでない場合の安全対策
+            # 出力がTensorでない場合の安全対策
             if isinstance(output, torch.Tensor):
                 text_features = output
             else:
