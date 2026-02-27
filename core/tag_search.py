@@ -17,21 +17,24 @@ class TagSearch:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"  [System] Device: {self.device}")
         
-        # 1. モデルロード
+        #モデルロード
         model_id = "openai/clip-vit-base-patch32"
         self.model = CLIPModel.from_pretrained(model_id).to(self.device)
         self.processor = CLIPProcessor.from_pretrained(model_id)
         
-        # 2. タグインデックスロード
+        #タグインデックスロード
         self.tag_index = faiss.read_index(tag_index_path)
         
-        # 3. タグ名リストロード
+        #タグ名リストロード
         repo_id = "SmilingWolf/wd-v1-4-moat-tagger-v2"
         csv_path = hf_hub_download(repo_id, "selected_tags.csv")
         self.tag_list = pd.read_csv(csv_path)["name"].tolist()
 
-        # 4. 辞書ロード (10万語 + 手動修正)
+        #辞書ロード (10万語 + 手動修正)
         self.alias_map = self._load_all_aliases()
+
+        #DB内タグのオンメモリ集計 (追加)
+        self._build_tag_counts()
 
     def _load_all_aliases(self):
         """10万語辞書と手動辞書を統合してロード"""
@@ -55,6 +58,65 @@ class TagSearch:
                 except Exception as e:
                     print(f"    [!] Failed to load {path}: {e}")
         return combined
+    
+    def _build_tag_counts(self):
+        """DB内の全画像から存在するタグとその件数を集計してメモリに保持する"""
+        self.tag_counts = {}
+        cursor = self.db.conn.cursor()
+        cursor.execute("SELECT tags_combined FROM images")
+        
+        for row in cursor.fetchall():
+            tags_str = row[0]
+            if not tags_str: continue
+            
+            # コンマ区切りのタグを処理してカウント
+            tags = [t.strip().lower() for t in tags_str.split(',')]
+            for t in tags:
+                self.tag_counts[t] = self.tag_counts.get(t, 0) + 1
+                
+        print(f"  [System] Cached {len(self.tag_counts)} unique tags from DB.")
+
+    def get_suggestions(self, query_text, limit=10):
+        """入力された文字列からヒットするサジェスト候補を返す"""
+        if not query_text: return []
+        
+        prefix = query_text.lower().strip()
+        candidates = []
+        
+        # 1. 実際のタグ（DBに存在するタグ）からの検索
+        for tag, count in self.tag_counts.items():
+            # アンダースコアをスペースとみなしてもマッチするようにする
+            norm_tag = tag.replace('_', ' ')
+            if prefix in norm_tag or prefix in tag:
+                candidates.append({
+                    "display": f"{tag} ({count}件)", # UI表示用
+                    "query": tag,                    # クリック時に検索窓に入れる文字
+                    "count": count
+                })
+                
+        # 2. 俗語（Alias辞書）からの検索
+        for alias, actual in self.alias_map.items():
+            norm_alias = alias.replace('_', ' ')
+            norm_actual = actual.replace('_', ' ')
+            
+            # aliasに入力文字が含まれていて、かつ変換先の実際のタグがDBに存在する場合のみ
+            if (prefix in norm_alias or prefix in alias) and norm_actual in self.tag_counts:
+                count = self.tag_counts[norm_actual]
+                candidates.append({
+                    "display": f"{alias} -> {actual} ({count}件)", 
+                    "query": alias, 
+                    "count": count
+                })
+                
+        # 重複を消して、ヒット件数が多い順にソート
+        unique_candidates = {}
+        for c in candidates:
+            key = c["display"]
+            if key not in unique_candidates or unique_candidates[key]["count"] < c["count"]:
+                unique_candidates[key] = c
+                
+        sorted_results = sorted(unique_candidates.values(), key=lambda x: x["count"], reverse=True)
+        return sorted_results[:limit]
 
     def query_to_vector(self, text):
         inputs = self.processor(text=[text], return_tensors="pt", padding=True).to(self.device)

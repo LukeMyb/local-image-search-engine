@@ -1,6 +1,7 @@
 import flet as ft
 import asyncio
 import os
+import webbrowser
 from core.tag_search import TagSearch
 from ui.search_bar import SearchBar
 from ui.viewer import ImageViewer
@@ -63,8 +64,20 @@ async def main(page: ft.Page):
 
         page.update()
 
+    #サジェスト候補を取得する
+    def on_suggest(query):
+        # AIモデル(searcher)がまだロードされていない起動直後は空を返す
+        if searcher is None:
+            return []
+        
+        # tag_search.pyに処理を丸投げする
+        return searcher.get_suggestions(query)
+
     #検索窓の初期化
-    search_bar = SearchBar(on_search_callback=on_search)
+    search_bar = SearchBar(
+        on_search_callback=on_search, 
+        on_suggest_callback=on_suggest
+    )
 
     #レイアウト
     page.add(
@@ -83,6 +96,9 @@ async def main(page: ft.Page):
     searcher = await initialize_engine(page, status_text)
 
 if __name__ == "__main__":
+    #自動起動を無効化 (ダミー関数で上書き)
+    webbrowser.open = lambda *args, **kwargs: None
+    
     ft.app(
         target=main, 
         view=ft.AppView.WEB_BROWSER, 
