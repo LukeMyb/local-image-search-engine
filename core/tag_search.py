@@ -82,27 +82,31 @@ class TagSearch:
         """入力された文字列からヒットするサジェスト候補を返す"""
         if not query_text: return []
         
+        # 入力文字列（スペースとアンダースコア両方対応できるようにする）
         prefix = query_text.lower().strip()
+        prefix_under = prefix.replace(' ', '_')
+
         candidates = []
         
         # 1. 実際のタグ（DBに存在するタグ）からの検索
         for tag, count in self.tag_counts.items():
-            # アンダースコアをスペースとみなしてもマッチするようにする
-            norm_tag = tag.replace('_', ' ')
-            if prefix in norm_tag or prefix in tag:
+            # DB内のタグ（スペース区切りの場合がある）をアンダースコア区切りに変換
+            underscored_tag = tag.replace(' ', '_')
+            
+            # 入力文字列がスペースでもアンダースコアでもヒットするように判定
+            if prefix in tag or prefix_under in underscored_tag:
                 candidates.append({
-                    "display": f"{tag} ({count}件)", # UI表示用
-                    "query": tag,                    # クリック時に検索窓に入れる文字
+                    "display": f"{underscored_tag} ({count}件)", # UI表示用(アンダースコア付き)
+                    "query": underscored_tag,                    # クリック時入力(アンダースコア付き)
                     "count": count
                 })
                 
         # 2. 俗語（Alias辞書）からの検索
         for alias, actual in self.alias_map.items():
-            norm_alias = alias.replace('_', ' ')
             norm_actual = actual.replace('_', ' ')
             
-            # aliasに入力文字が含まれていて、かつ変換先の実際のタグがDBに存在する場合のみ
-            if (prefix in norm_alias or prefix in alias) and norm_actual in self.tag_counts:
+            # alias_map はすでにアンダースコア区切りになっている
+            if (prefix_under in alias) and norm_actual in self.tag_counts:
                 count = self.tag_counts[norm_actual]
                 candidates.append({
                     "display": f"{alias} -> {actual} ({count}件)", 
