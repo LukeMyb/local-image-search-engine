@@ -1,0 +1,547 @@
+import flet as ft
+import asyncio
+import os
+
+class ImageViewer:
+    def __init__(self, page: ft.Page):
+        self.page = page
+        
+        self.ANIM_DURATION = 100 #アニメーションの設定（ミリ秒）
+        self.current_results = [] #検索結果のリスト
+        self.current_index = 0 #現在表示中の画像のインデックス
+        self.is_animating = False
+
+        #ダミー画像
+        self.dummy_src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+
+        self.viewer_base_scale = 1.0 #ピンチ操作基準用の変数（ビューア用）
+        self.viewer_last_focal_x = 0
+        self.viewer_last_focal_y = 0
+        self.is_detail_open = False
+
+        self._build_ui()
+
+    def _build_ui(self):
+        self.img_prev = self._create_viewer_image(-1) # 左に配置
+        self.img_curr = self._create_viewer_image(0)  # 中央に配置
+        self.img_next = self._create_viewer_image(1)  # 右に配置
+
+        #ページ番号を表示するテキスト
+        self.page_counter = ft.Text(
+            "0 / 0",
+            color="white",
+            size=16,
+            weight=ft.FontWeight.BOLD,
+        )
+
+        #テキストを画面下部に配置するためのラッパー
+        self.indicator_container = ft.Container(
+            bottom=40, # 下から40pxの位置に固定
+            left=0,    # 左右を0にして
+            right=0,   # widthを広げずに中央寄せにする準備
+            # 内部のテキストだけを中央に寄せる
+            content=ft.Row([self.page_counter], alignment=ft.MainAxisAlignment.CENTER),
+            # 閉じるボタンと同じアニメーション設定
+            offset=ft.Offset(0, 2), # 初期状態は画面外（下）
+            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+            opacity=0,
+            animate_opacity=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        )
+
+        #閉じるボタンのラッパー（アニメーション用）
+        self.close_btn_wrapper = ft.Container(
+            content=ft.IconButton(
+                icon=ft.Icons.CLOSE, 
+                icon_color="white", 
+                icon_size=30,
+                on_click=lambda e: asyncio.create_task(self.close_viewer(e)),
+                bgcolor="#8A000000", #ボタン背景を半透明に
+            ),
+            top=35,   # 画面上端からの距離（SafeAreaの代わり）
+            right=20, # 右端からの距離
+            #初期位置は画面外（上）へ飛ばしておく
+            #y=-2 は「自分の高さの2倍分、上に移動」という意味です
+            offset=ft.Offset(0, -2),
+            #位置のアニメーション設定 (滑らかに移動)
+            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        )
+
+        #詳細パネル用の変数とUI構築
+        self.detail_filename_text = ft.Text(size=16, weight=ft.FontWeight.BOLD, color="white")
+        self.detail_path_text = ft.Text(size=12, color="white70")
+        self.detail_tags_text = ft.Text(size=14, color="white", selectable=True)
+
+        self.detail_info_panel = ft.Container(
+            content=ft.Column(
+                [
+                    self.detail_filename_text,
+                    self.detail_path_text,
+                    ft.Divider(color="white24"),
+                    ft.Text("タグ一覧", size=12, color="white54"),
+                    self.detail_tags_text,
+                ],
+                scroll=ft.ScrollMode.AUTO, # タグが多い場合はスクロール可能に
+            ),
+            bgcolor="#EE000000", # 背景を濃いめの半透明黒に
+            padding=20,
+            border_radius=ft.border_radius.only(top_left=16, top_right=16),
+            bottom=0, left=0, right=0, # 画面下部に固定
+            height=300, # パネルの高さ（適宜調整）
+            offset=ft.Offset(0, 1), # 初期状態は画面外（下）に100%隠しておく
+            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        )
+
+        self.detail_view = ft.Container(
+            visible=False, # 最初は隠しておく
+            animate_opacity=self.ANIM_DURATION, #ANIM_DURATIONミリ秒かけて変化させる
+            bgcolor="#000000", #背景は透明→黒(初期値は黒)
+            alignment=ft.Alignment(0, 0),
+            expand=True,
+            content=ft.Stack(
+                [
+                    #レイヤー1: 画像操作用のジェスチャー（背景全体）
+                    ft.GestureDetector(
+                        on_tap_down=self.handle_tap, #タップ位置によって操作切り替え
+                        #ダブルタップとドラッグ移動
+                        on_double_tap_down=self.on_double_tap_down,
+                        #ビューア用のピンチ操作
+                        on_scale_start=self.on_viewer_scale_start,
+                        on_scale_update=self.on_viewer_scale_update,
+                        on_scale_end=self.on_viewer_scale_end,
+                        content=ft.Stack([
+                            ft.Container(content=self.img_prev, alignment=ft.Alignment(0,0), expand=True),
+                            ft.Container(content=self.img_curr, alignment=ft.Alignment(0,0), expand=True),
+                            ft.Container(content=self.img_next, alignment=ft.Alignment(0,0), expand=True),
+                        ]),
+                        expand=True,
+                    ),
+                    self.close_btn_wrapper,
+                    self.indicator_container,
+                    self.detail_info_panel,
+                ],
+                expand=True,
+            )
+        )
+        # アプリの最前面レイヤーにビューアを追加
+        self.page.overlay.append(self.detail_view)
+
+    # 共通の画像設定を作成する関数
+    def _create_viewer_image(self, initial_offset_x):
+        return ft.Image(
+            src=self.dummy_src,
+            fit="contain",
+            expand=True,
+            scale=1,
+            # 位置のアニメーション設定
+            offset=ft.Offset(initial_offset_x, 0),
+            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+            # 閉じる時のアニメーション用
+            animate_scale=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+            animate_opacity=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        )
+
+    # 2. 画像パスを取得するヘルパー関数
+    def get_image_src(self, index):
+        if 0 <= index < len(self.current_results):
+            row = self.current_results[index]
+            raw_path = row.get('file_path', '')
+            filename = os.path.basename(raw_path)
+            if raw_path:
+                return f"/images/{filename}"
+            else:
+                return f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
+        return self.dummy_src
+
+    # 3. 3枚の画像をセットして位置をリセットする関数（重要）
+    def reset_images_position(self, index):
+        # アニメーションを一時的に無効化（瞬間移動させるため）
+        self.img_prev.animate_offset = None
+        self.img_curr.animate_offset = None
+        self.img_next.animate_offset = None
+
+        # 3枚の画像の中身を更新（プリロード）
+        self.img_prev.src = self.get_image_src(index - 1)
+        self.img_curr.src = self.get_image_src(index)
+        self.img_next.src = self.get_image_src(index + 1)
+
+        # 位置を定位置（左・中・右）に戻す
+        self.img_prev.offset = ft.Offset(-1, 0)
+        self.img_curr.offset = ft.Offset(0, 0)
+        self.img_next.offset = ft.Offset(1, 0)
+        
+        # 拡大率などもリセット
+        self.img_curr.scale = 1
+        self.img_curr.opacity = 1
+
+        self.img_prev.update()
+        self.img_curr.update()
+        self.img_next.update()
+
+        # アニメーション設定を復元
+        anim = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        self.img_prev.animate_offset = anim
+        self.img_curr.animate_offset = anim
+        self.img_next.animate_offset = anim
+
+    # 4. スライド移動のアニメーション処理
+    async def slide_next(self):
+        if self.is_animating or self.current_index >= len(self.current_results) - 1: return
+
+        self.is_animating = True #ロック開始
+        self.toggle_detail_panel(False) #ページをめくったらパネルを隠す
+
+        # アニメーション開始：中→左、右→中
+        self.img_curr.offset = ft.Offset(-1, 0)
+        self.img_next.offset = ft.Offset(0, 0)
+        self.img_curr.update()
+        self.img_next.update()
+
+        # 移動完了を待つ
+        await asyncio.sleep(self.ANIM_DURATION / 1000)
+
+        self.current_index += 1 #インデックスを戻す
+        self.update_indicator()
+
+        recycle_img = self.img_prev
+        # アニメーションを切って右端へ瞬間移動
+        recycle_img.animate_offset = None
+        recycle_img.offset = ft.Offset(1, 0)
+        # 中身を「次の次」の画像に更新 (先読み)
+        recycle_img.src = self.get_image_src(self.current_index + 1)
+        # 念のため状態リセット
+        recycle_img.scale = 1
+        recycle_img.opacity = 1
+        recycle_img.update()
+
+        # アニメーション設定を戻す
+        recycle_img.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+
+        # 元Curr -> 新Prev (左へ行ったやつ)
+        # 元Next -> 新Curr (中央に来たやつ)
+        # 元Prev -> 新Next (右へ回したやつ)
+        self.img_prev = self.img_curr
+        self.img_curr = self.img_next
+        self.img_next = recycle_img
+
+        self.is_animating = False #ロック解除
+
+    async def slide_prev(self):
+        if self.is_animating or self.current_index <= 0: return
+
+        self.is_animating = True #ロック開始
+        self.toggle_detail_panel(False) #ページをめくったらパネルを隠す
+
+        # アニメーション開始：中→右、左→中
+        self.img_curr.offset = ft.Offset(1, 0)
+        self.img_prev.offset = ft.Offset(0, 0)
+        self.img_curr.update()
+        self.img_prev.update()
+
+        # 移動完了を待つ
+        await asyncio.sleep(self.ANIM_DURATION / 1000)
+
+        self.current_index -= 1 #インデックスを戻す
+        self.update_indicator()
+
+        recycle_img = self.img_next
+        # アニメーションを切って左端へ瞬間移動
+        recycle_img.animate_offset = None
+        recycle_img.offset = ft.Offset(-1, 0)
+
+        # 中身を「前の前」の画像に更新 (先読み)
+        recycle_img.src = self.get_image_src(self.current_index - 1)
+        recycle_img.scale = 1
+        recycle_img.opacity = 1
+        recycle_img.update()
+
+        # アニメーション設定を戻す
+        recycle_img.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+
+        # 元Next -> [リサイクル] -> 新Prev
+        # 元Curr -> 新Next (右へ行ったやつ)
+        # 元Prev -> 新Curr (中央に来たやつ)
+        self.img_next = self.img_curr
+        self.img_curr = self.img_prev
+        self.img_prev = recycle_img
+
+        self.is_animating = False #ロック解除
+
+    #ビュアーを閉じる関数
+    async def close_viewer(self, e):
+        #小さくしながら透明にする
+        self.img_curr.scale = 0
+        self.img_curr.opacity = 0
+        self.detail_view.opacity = 0
+        self.page.update()
+        
+        #アニメーションが終わるまで待つ
+        await asyncio.sleep(self.ANIM_DURATION / 1000)
+        
+        #完全に非表示にする
+        self.detail_view.visible = False
+        self.detail_view.update()
+
+    #UI（閉じるボタン）の出し入れを切り替える関数
+    def toggle_ui(self, e):
+        #現在の位置を確認して切り替え
+        if self.close_btn_wrapper.offset.y == 0:
+            self.close_btn_wrapper.offset = ft.Offset(0, -2) #表示中なら -> 上に隠す (y=-2)
+            self.indicator_container.offset = ft.Offset(0, 2) #下へ隠す
+            self.indicator_container.opacity = 0
+        else:
+            self.close_btn_wrapper.offset = ft.Offset(0, 0) #隠れてるなら -> 定位置に戻す (y=0) ＝ ニュッと出す
+            self.indicator_container.offset = ft.Offset(0, 0)
+            self.indicator_container.opacity = 1
+        
+        self.close_btn_wrapper.update()
+        self.indicator_container.update()
+
+    #現在のインデックスと総件数を計算して反映
+    def update_indicator(self):
+        total = len(self.current_results)
+        current = self.current_index + 1 if total > 0 else 0
+        self.page_counter.value = f"{current} / {total}"
+        self.page_counter.update()
+
+    def update_detail_panel(self, index):
+        if 0 <= index < len(self.current_results):
+            row = self.current_results[index]
+            self.detail_filename_text.value = os.path.basename(row.get('file_path', ''))
+            self.detail_path_text.value = row.get('file_path', '')
+            
+            # タグを見やすくカンマ＋スペースに整形
+            raw_tags = row.get('tags_combined', '')
+            self.detail_tags_text.value = raw_tags.replace(',', ', ') if raw_tags else 'タグなし'
+            
+            self.detail_info_panel.update()
+
+    def toggle_detail_panel(self, show=None):
+        if show is None:
+            self.is_detail_open = not self.is_detail_open
+        else:
+            self.is_detail_open = show
+
+        if self.is_detail_open:
+            self.update_detail_panel(self.current_index)
+            self.detail_info_panel.offset = ft.Offset(0, 0) # ニュッと出す
+        else:
+            self.detail_info_panel.offset = ft.Offset(0, 1) # 下に隠す
+
+        self.detail_info_panel.update()
+
+    # ビューアでのピンチ操作開始
+    def on_viewer_scale_start(self, e):
+        # 現在の倍率を基準点として記録
+        self.viewer_base_scale = self.img_curr.scale
+
+        #操作開始時の指の中心座標を記録
+        self.viewer_last_focal_x = e.local_focal_point.x
+        self.viewer_last_focal_y = e.local_focal_point.y
+
+        # 指の動きにリアルタイムで追従させるため、アニメーションを一時的に切る
+        self.img_curr.animate_scale = None
+        self.img_curr.animate_offset = None
+        self.img_curr.update()
+
+    # ビューアでのピンチ操作中
+    def on_viewer_scale_update(self, e):
+        # 新しい倍率 = 開始時の倍率 × 指の開き具合
+        new_scale = self.viewer_base_scale * e.scale
+        
+        # 制限: 下限を 1.0 ではなく、0.5 くらいまで許容する（バネのような効果のため）
+        if new_scale < 0.5: new_scale = 0.5
+        if new_scale > 5.0: new_scale = 5.0
+        
+        self.img_curr.scale = new_scale
+
+        # 拡大している時だけ移動できるようにする
+        if self.img_curr.scale > 1.0:
+            # 前回の座標との「差分」を計算して移動させる
+            dx = (e.local_focal_point.x - self.viewer_last_focal_x) / self.page.width
+            dy = (e.local_focal_point.y - self.viewer_last_focal_y) / self.page.height
+            
+            # とりあえず計算上の新しい位置
+            raw_x = self.img_curr.offset.x + dx
+            raw_y = self.img_curr.offset.y + dy
+            
+            #移動限界の計算
+            # 例: scale=3倍なら、(3-1)/2 = 1.0 (画面1枚分) まで左右に動ける
+            limit = (new_scale - 1) / 2
+
+            # limitを超えた分には 0.4 を掛けて、動きを鈍くする
+            resistance = 0.4
+            
+            # X軸の抵抗処理
+            if raw_x > limit:
+                raw_x = limit + (raw_x - limit) * resistance
+            elif raw_x < -limit:
+                raw_x = -limit + (raw_x + limit) * resistance
+            # Y軸の抵抗処理
+            if raw_y > limit:
+                raw_y = limit + (raw_y - limit) * resistance
+            elif raw_y < -limit:
+                raw_y = -limit + (raw_y + limit) * resistance
+            
+            self.img_curr.offset = ft.Offset(raw_x, raw_y)
+        
+        # 次のフレームのために現在の座標を保存
+        self.viewer_last_focal_x = e.local_focal_point.x
+        self.viewer_last_focal_y = e.local_focal_point.y
+
+        self.img_curr.update()
+
+    # ビューアでのピンチ操作終了
+    def on_viewer_scale_end(self, e):
+        # アニメーション設定を元に戻す（ダブルタップ時のため）
+        self.img_curr.animate_scale = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        self.img_curr.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        
+        # もし指を離した時に等倍(1.0)に戻っていたら、位置ズレもリセットする
+        # 指を離した時に 1.0倍 未満なら 1.0 に戻す（バウンスバック）
+        if self.img_curr.scale < 1.0:
+            self.img_curr.scale = 1.0
+            # 位置ズレもリセット（拡大したまま閉じたり戻ったりすると変になるため）
+            self.img_curr.offset = ft.Offset(0, 0)
+            self.img_curr.update()
+            return
+
+        #拡大中に端からはみ出していた場合のバウンスバック
+        if self.img_curr.scale > 1.0:
+            # 現在の正しい限界値を計算
+            limit = (self.img_curr.scale - 1) / 2
+            
+            curr_x = self.img_curr.offset.x
+            curr_y = self.img_curr.offset.y
+            needs_reset = False # リセットが必要かどうかのフラグ
+
+            # X軸のはみ出しチェック
+            if curr_x > limit:
+                curr_x = limit
+                needs_reset = True
+            elif curr_x < -limit:
+                curr_x = -limit
+                needs_reset = True
+            # Y軸のはみ出しチェック
+            if curr_y > limit:
+                curr_y = limit
+                needs_reset = True
+            elif curr_y < -limit:
+                curr_y = -limit
+                needs_reset = True
+
+            # もしはみ出していたら、定位置に戻して終了 (return)
+            if needs_reset:
+                self.img_curr.offset = ft.Offset(curr_x, curr_y)
+                self.img_curr.update()
+                return
+            
+            # はみ出していなければ、ここで return してスワイプ判定に行かせない
+            # (拡大中はスワイプページめくりをさせない仕様の場合)
+            return
+
+        # ScaleEndEvent にも velocity (速度) 情報が含まれています
+        vx = e.velocity.x
+        vy = e.velocity.y
+
+        # 左右の移動速度(絶対値)が上下より大きい -> 横スワイプ
+        if abs(vx) > abs(vy):
+            if vx > 100: 
+                asyncio.create_task(self.slide_prev())
+            elif vx < -100:
+                asyncio.create_task(self.slide_next())
+        else: 
+            if vy > 400: #下スワイプ
+                if self.is_detail_open:
+                    self.toggle_detail_panel(False) #パネルが開いていたら閉じる
+                else:
+                    asyncio.create_task(self.close_viewer(None)) #パネルが閉じていたらビューアを閉じる
+            elif vy < -400: #上スワイプ
+                if not self.is_detail_open:
+                    self.toggle_detail_panel(True) #パネルを開く
+
+    # ダブルタップされたときの処理
+    def on_double_tap_down(self, e):
+        # すでに拡大されているかチェック
+        if self.img_curr.scale != 1:
+            # 拡大中なら → 等倍に戻す（リセット）
+            self.img_curr.scale = 1
+            self.img_curr.offset = ft.Offset(0, 0)
+            # 戻る時は滑らかに
+            self.img_curr.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        else:
+            # 等倍なら → 2倍にズーム
+            self.img_curr.scale = 2
+            # ズーム中は指に吸い付くように動かしたいので、アニメーションを切る
+            self.img_curr.animate_offset = None
+            
+            # 拡大した瞬間にUI（ボタンなど）が邪魔なら隠す
+            if self.close_btn_wrapper.offset.y == 0:
+                 self.toggle_ui(None)
+                 
+        self.img_curr.update()
+
+    # タップされた位置に応じて処理を振り分ける関数
+    def handle_tap(self, e):
+        # 詳細パネルが開いている時は、どこをタップしてもパネルを閉じる処理を優先
+        if self.is_detail_open:
+            self.toggle_detail_panel(False)
+            return
+
+        #拡大中は移動操作を無効にする（誤操作防止）
+        if self.img_curr.scale > 1:
+            self.toggle_ui(None) # UIの出し入れだけ許可する
+            return
+
+        #画面の横幅を取得
+        width = self.page.width
+        #左右 20% ずつをタップエリアとして定義
+        edge_zone = width * 0.2
+
+        if e.local_position.x < edge_zone:
+            #左端なら「前へ」
+            asyncio.create_task(self.slide_prev())
+        elif e.local_position.x > width - edge_zone:
+            #右端なら「次へ」
+            asyncio.create_task(self.slide_next())
+        else:
+            #中央付近なら「UIの出し入れ」
+            self.toggle_ui(None)
+
+    # アプリ側から呼び出すエントリポイント
+    async def open(self, results, clicked_row):
+        self.is_animating = False #フラグをリセット
+        self.current_results = results
+        
+        #クリックされた画像がリストの何番目かを探して記憶する
+        try:
+            self.current_index = self.current_results.index(clicked_row)
+        except ValueError:
+            self.current_index = 0
+
+        self.reset_images_position(self.current_index)
+        self.update_indicator()
+
+        #準備：画像URLをセットし、最初は「透明・最小」にする
+        self.img_curr.scale = 0
+        self.img_curr.opacity = 0
+        self.detail_view.opacity = 0
+
+        # 閉じるボタンとインディケータを画面外へ
+        self.close_btn_wrapper.offset = ft.Offset(0, -2)
+        self.indicator_container.offset = ft.Offset(0, 2)
+        self.indicator_container.opacity = 0
+
+        #新しく画像を開くときは詳細パネルの状態をリセット
+        self.is_detail_open = False
+        self.detail_info_panel.offset = ft.Offset(0, 1)
+
+        self.detail_view.visible = True
+        self.page.update()
+
+        #実行：拡大とフェードインを同時に開始
+        # 少し待たないとアニメーションが飛ぶことがあるので0.05秒待機
+        await asyncio.sleep(0.05)
+        self.img_curr.scale = 1
+        self.img_curr.opacity = 1
+        self.detail_view.opacity = 1
+        self.page.update()
