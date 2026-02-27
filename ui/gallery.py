@@ -136,8 +136,14 @@ class ImageGallery:
 
     # app.pyから検索結果を受け取って画面を描画する関数
     def update_gallery(self, results, current_page=1, total_pages=1):
-        #グリッドをクリア
-        self.images_grid.controls.clear()
+        #既存のGridViewを破棄し、スクロールの記憶を持たない全く新しいGridViewを作成する
+        new_grid = ft.GridView(
+            expand=True,
+            runs_count=self.images_grid.runs_count, # ユーザーが設定した現在の列数は引き継ぐ
+            child_aspect_ratio=1.0,
+            spacing=5,
+            run_spacing=5,
+        )
 
         for row in results:
             #DBには絶対パスや相対パスが入っている可能性があるため、ファイル名だけ抽出
@@ -160,8 +166,16 @@ class ImageGallery:
                     data=row,
                     on_click=self.on_image_click_callback, 
                 )
-                self.images_grid.controls.append(img_container)
+                new_grid.controls.append(img_container)
+        
+        #GestureDetectorの中身を新しいGridViewに丸ごと差し替える
+        self.images_grid = new_grid
+        self.gallery_area.content = self.images_grid
         
         self.page_text.value = f"{current_page} / {max(1, total_pages)}"
         self.prev_btn.disabled = (current_page <= 1)
         self.next_btn.disabled = (current_page >= total_pages)
+
+        #全体を再描画
+        self.gallery_area.update()
+        self.pagination_row.update()
