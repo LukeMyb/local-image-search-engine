@@ -19,7 +19,11 @@ async def initialize_engine(page: ft.Page, status_text: ft.Text):
     return searcher
 
 async def main(page: ft.Page):
-    current_results = [] #検索結果のリスト
+    all_results = [] #全検索結果のリスト
+    current_results = [] #現在表示中の検索結果のリスト
+    
+    current_page = 1
+    items_per_page = 100 # 100枚ずつの表示に変更
 
     #ページ全体の設定
     page.title = "Local image searcher"
@@ -40,27 +44,52 @@ async def main(page: ft.Page):
         #openメソッドを呼び出す
         await viewer.open(current_results, row)
 
+    def render_current_page():
+        nonlocal current_results
+        
+        start_idx = (current_page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        
+        current_results = all_results[start_idx:end_idx]
+        total_pages = max(1, (len(all_results) + items_per_page - 1) // items_per_page)
+        
+        gallery.update_gallery(current_results, current_page, total_pages)
+
+    def on_page_change(delta):
+        nonlocal current_page
+        total_pages = max(1, (len(all_results) + items_per_page - 1) // items_per_page)
+        
+        new_page = current_page + delta
+        if 1 <= new_page <= total_pages:
+            current_page = new_page
+            render_current_page()
+            page.update()
+
     #ギャラリーの初期化
-    gallery = ImageGallery(on_image_click_callback=on_image_click)
+    gallery = ImageGallery(
+        on_image_click_callback=on_image_click,
+        on_page_change_callback=on_page_change
+    )
 
     async def on_search(query):
-        nonlocal current_results
+        nonlocal all_results, current_page
 
         #ステータスメッセージの更新
         status_text.value = "検索中..."
         page.update()
 
         #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
-        results, conversion_log = searcher.search(query, limit=50)
+        results, conversion_log = searcher.search(query)
 
-        current_results = results #検索結果をグローバル変数に保存しておく
+        all_results = results #検索結果をグローバル変数に保存しておく
+        current_page = 1
 
-        if not results:
+        if not all_results:
             status_text.value = "見つかりませんでした。"
-            gallery.update_gallery([]) #ギャラリーを空にする
+            gallery.update_gallery([], 1, 1) 
         else:
-            status_text.value = f"{len(results)}hit {conversion_log}"
-            gallery.update_gallery(results) #ギャラリーに画像を描画させる
+            status_text.value = f"{len(all_results)}hit {conversion_log}"
+            render_current_page()
 
         page.update()
 

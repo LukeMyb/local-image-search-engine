@@ -31,6 +31,52 @@ class ImageDatabase:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_thumb ON images(is_thumbnail_created)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_vector ON images(is_processed_vector)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_tag ON images(is_processed_tag)')
+
+        # ---------------------------------------------------------
+        # 以下、FTS5（全文検索）用の仮想テーブルと自動同期ロジックの追加
+        # ---------------------------------------------------------
+        
+        # 1. 検索専用の仮想テーブル（インデックス）を作成
+        # tokenize="unicode61" を指定することで、記号やスペース区切りの単語を正確に分割して索引化できる
+        cursor.execute('''
+            CREATE VIRTUAL TABLE IF NOT EXISTS images_fts USING fts5(
+                id UNINDEXED, -- 画像ID（検索対象ではないが、大元のデータと紐付けるために必要）
+                tags_combined, -- 検索対象となるタグ文字列
+                tokenize="unicode61"
+            )
+        ''')
+
+        # 2. 既存データの自動移行（初回のみ実行される）
+        # imagesテーブルにはタグがあるのに、FTS5テーブルにはまだ入っていないデータを一括で流し込む
+        cursor.execute('''
+            INSERT INTO images_fts (id, tags_combined)
+            SELECT id, tags_combined FROM images 
+            WHERE tags_combined IS NOT NULL 
+              AND tags_combined != ''
+              AND id NOT IN (SELECT id FROM images_fts)
+        ''')
+
+        # 3. 今後、新しいタグが保存された時の自動同期トリガー
+        # tagger.pyがタグを保存（UPDATE）した瞬間に、この処理が自動で発火する
+        cursor.execute('''
+            CREATE TRIGGER IF NOT EXISTS trg_images_update_tags
+            AFTER UPDATE OF tags_combined ON images
+            WHEN NEW.tags_combined IS NOT NULL AND NEW.tags_combined != ''
+            BEGIN
+                -- 一旦古いデータを消してから新しいデータを入れる（重複防止）
+                DELETE FROM images_fts WHERE id = OLD.id;
+                INSERT INTO images_fts(id, tags_combined) VALUES (NEW.id, NEW.tags_combined);
+            END;
+        ''')
+        
+        # 4. 画像の削除時にFTS5からも消すトリガー（整合性を保つため）
+        cursor.execute('''
+            CREATE TRIGGER IF NOT EXISTS trg_images_delete
+            AFTER DELETE ON images
+            BEGIN
+                DELETE FROM images_fts WHERE id = OLD.id;
+            END;
+        ''')
         
         self.conn.commit()
 

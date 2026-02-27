@@ -2,9 +2,10 @@ import flet as ft
 import os
 
 class ImageGallery:
-    def __init__(self, on_image_click_callback):
+    def __init__(self, on_image_click_callback, on_page_change_callback=None):
         # 画像がクリックされたときに上位(app.py)のビューアを開くためのコールバック
         self.on_image_click_callback = on_image_click_callback
+        self.on_page_change_callback = on_page_change_callback
         
         self.base_columns = 3 #ピンチ操作基準用の変数
         self._build_ui()
@@ -51,15 +52,42 @@ class ImageGallery:
             height=30,
         )
 
+        self.prev_btn = ft.IconButton(
+            icon=ft.Icons.NAVIGATE_BEFORE, 
+            on_click=self.on_prev_click,
+            disabled=True
+        )
+        self.next_btn = ft.IconButton(
+            icon=ft.Icons.NAVIGATE_NEXT, 
+            on_click=self.on_next_click,
+            disabled=True
+        )
+        self.page_text = ft.Text("1 / 1", size=16)
+        
+        self.pagination_row = ft.Row(
+            [self.prev_btn, self.page_text, self.next_btn],
+            alignment=ft.MainAxisAlignment.CENTER,
+            height=40,
+        )
+
         # app.pyに渡すために、ギャラリー部分とスライダー部分を縦にまとめたもの
         self.view = ft.Column(
             [
                 self.gallery_area,
+                self.pagination_row,
                 self.slider_row, #スライダーを表示
             ],
             expand=True,
             spacing=0,
         )
+
+    def on_prev_click(self, e):
+        if self.on_page_change_callback:
+            self.on_page_change_callback(-1)
+
+    def on_next_click(self, e):
+        if self.on_page_change_callback:
+            self.on_page_change_callback(1)
 
     #スライダーを動かした時
     def on_slider_change(self, e):
@@ -107,7 +135,7 @@ class ImageGallery:
         self.base_columns = final_cols
 
     # app.pyから検索結果を受け取って画面を描画する関数
-    def update_gallery(self, results):
+    def update_gallery(self, results, current_page=1, total_pages=1):
         #グリッドをクリア
         self.images_grid.controls.clear()
 
@@ -126,7 +154,7 @@ class ImageGallery:
                         src=web_image_src,
                         fit="cover",
                         repeat="noRepeat",
-                        border_radius=ft.border_radius.all(8), # 角丸
+                        border_radius=ft.border_radius.all(8),
                     ),
                     #クリック時のデータを持たせる
                     data=row,
@@ -134,4 +162,6 @@ class ImageGallery:
                 )
                 self.images_grid.controls.append(img_container)
         
-        self.images_grid.update()
+        self.page_text.value = f"{current_page} / {max(1, total_pages)}"
+        self.prev_btn.disabled = (current_page <= 1)
+        self.next_btn.disabled = (current_page >= total_pages)

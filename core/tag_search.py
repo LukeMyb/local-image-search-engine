@@ -241,35 +241,22 @@ class TagSearch:
         if any(w in q for w in small) and any(w in t for w in big): return True
         return False
 
-    def calculate_image_score_with_details(self, image_tags_str, search_groups):
+    def calculate_image_score_with_details(self, image_tags_str, fast_lookup):
         total_score = 0.0
         matched_details = []
         if not image_tags_str: return 0.0, []
         
         # タグの正規化（小文字、スペース統一）
-        img_tags = [t.strip().lower().replace('_', ' ') for t in image_tags_str.split(',')]
+        img_tags = {t.strip().lower().replace('_', ' ') for t in image_tags_str.split(',')}
         
-        for group_map in search_groups:
-            best_match_score = 0.0
-            best_tag = None
-            for tag, score in group_map.items():
-                # 検索タグも正規化
-                norm_search_tag = tag.lower().replace('_', ' ')
-                
-                # 完全一致だけでなく、部分一致も考慮すべきだが
-                # ここでは確実性を重視して完全一致検索
-                if norm_search_tag in img_tags:
-                    if score > best_match_score:
-                        best_match_score = score
-                        best_tag = tag
-            
-            if best_tag:
-                total_score += best_match_score
-                matched_details.append((best_tag, best_match_score))
+        for norm_search_tag, score in fast_lookup.items():
+            if norm_search_tag in img_tags:
+                total_score += score
+                matched_details.append((norm_search_tag, score))
                 
         return total_score, matched_details
 
-    def search(self, user_query, limit=100):
+    def search(self, user_query):
         words = re.split(r'[ \u3000,]+', user_query)
         words = [w for w in words if w]
         if not words: return [], ""
@@ -288,32 +275,48 @@ class TagSearch:
             search_groups.append(similar_tags_map)
             print(f"  Target: '{final_tag}' -> Candidates: {len(similar_tags_map)}")
 
-        and_conditions = []
-        params = []
+        match_groups = []
+
+        fast_lookup = {}
+        for group_map in search_groups:
+            for tag, score in group_map.items():
+                norm_tag = tag.lower().replace('_', ' ')
+                # 重複した場合はスコアが高い方を残す
+                if norm_tag not in fast_lookup or score > fast_lookup.get(norm_tag, 0):
+                    fast_lookup[norm_tag] = score
+
         for group_map in search_groups:
             or_parts = []
             for tag in group_map.keys():
-                or_parts.append("tags_combined LIKE ?")
-                # SQLのLIKE検索用にスペース区切りに変換
-                params.append(f"%{tag.replace('_', ' ')}%")
+                # FTS5のMATCH構文用にフレーズをダブルクォーテーションで囲む
+                norm_tag = tag.replace('_', ' ')
+                or_parts.append(f'"{norm_tag}"')
             if or_parts:
-                and_conditions.append(f"({' OR '.join(or_parts)})")
+                match_groups.append(f"({' OR '.join(or_parts)})")
 
-        if not and_conditions: return [], ""
+        if not match_groups: return [], ""
 
-        # 件数制限を少し緩めて、スコアリング後に絞る
-        full_sql = f"SELECT id, file_path, tags_combined, file_mtime, thumbnail_path FROM images WHERE {' AND '.join(and_conditions)} LIMIT ?"
-        params.append(limit * 10) # 候補を多めに取ってからソート
+        # 複数の検索ワード(グループ)をANDで結合
+        match_query = " AND ".join(match_groups)
+
+        # LIMIT句と params.append を完全に削除し、全件取得する
+        # 仮想テーブル(images_fts)をMATCH検索し、元のテーブル(images)と結合してデータを取得
+        full_sql = '''
+            SELECT i.id, i.file_path, i.tags_combined, i.file_mtime, i.thumbnail_path 
+            FROM images i
+            INNER JOIN images_fts f ON i.id = f.id
+            WHERE images_fts MATCH ?
+        '''
         
         cursor = self.db.conn.cursor()
-        cursor.execute(full_sql, params)
+        cursor.execute(full_sql, (match_query,))
         raw_results = [dict(row) for row in cursor.fetchall()]
         
         print(f"  -> DB Hits: {len(raw_results)} (Scoring...)")
 
         scored_results = []
         for row in raw_results:
-            score, matches = self.calculate_image_score_with_details(row['tags_combined'], search_groups)
+            score, matches = self.calculate_image_score_with_details(row['tags_combined'], fast_lookup)
             row['match_score'] = score
             row['matched_tags'] = matches
             scored_results.append(row)
@@ -322,17 +325,18 @@ class TagSearch:
 
         #複数単語のログを文字列として結合し、検索結果と一緒に返す
         final_log = " | ".join(conversion_logs)
-        return scored_results[:limit], final_log
+        return scored_results, final_log
 
 if __name__ == "__main__":
     searcher = TagSearch()
     # テスト: 辞書にある単語と、ない単語を混ぜる
     q = "黒髪" 
-    results = searcher.search(q, limit=5)
+    results, log = searcher.search(q)
     
     print(f"\n【Final Result】")
     print("-" * 60)
-    for i, row in enumerate(results):
+    # テスト時は上位5件だけ表示するようにスライス
+    for i, row in enumerate(results[:5]):
         print(f"Rank {i+1} [Score: {row['match_score']:.2f}]")
         print(f"  Path: {row['file_path']}")
         match_info = ", ".join([f"{t}({s:.2f})" for t, s in row['matched_tags']])
