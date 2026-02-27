@@ -145,11 +145,25 @@ class ImageViewer:
         if 0 <= index < len(self.current_results):
             row = self.current_results[index]
             raw_path = row.get('file_path', '')
-            filename = os.path.basename(raw_path)
+            
             if raw_path:
-                return f"/images/{filename}"
+                # Windowsのパス区切り（\）をスラッシュ（/）に統一
+                normalized_path = raw_path.replace('\\', '/')
+                
+                # パスの中から '/images/' 以降の部分を抽出
+                if '/images/' in normalized_path:
+                    # 例: ".../data/images/180APPLE/abc.JPG" -> "180APPLE/abc.JPG"
+                    rel_path = normalized_path.split('/images/')[-1]
+                else:
+                    # 万が一パスに '/images/' が含まれていない場合はファイル名のみを使用
+                    rel_path = os.path.basename(raw_path)
+                    
+                return f"/images/{rel_path}"
             else:
-                return f"/thumbnails/{os.path.basename(row.get('thumbnail_path'))}"
+                # thumbnail_pathの取得処理も少し安全に修正
+                thumbnail_path = row.get('thumbnail_path')
+                if thumbnail_path:
+                    return f"/thumbnails/{os.path.basename(thumbnail_path)}"
         return self.dummy_src
 
     # 3. 3枚の画像をセットして位置をリセットする関数（重要）
