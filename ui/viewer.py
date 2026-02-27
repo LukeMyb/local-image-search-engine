@@ -22,9 +22,15 @@ class ImageViewer:
         self._build_ui()
 
     def _build_ui(self):
-        self.img_prev = self._create_viewer_image(-1) # 左に配置
-        self.img_curr = self._create_viewer_image(0)  # 中央に配置
-        self.img_next = self._create_viewer_image(1)  # 右に配置
+        # 画像本体（中身）を作成
+        self.img_prev = self._create_inner_image()
+        self.img_curr = self._create_inner_image()
+        self.img_next = self._create_inner_image()
+
+        # 画像を包む「ページ（黒背景コンテナ）」を作成し、これにOffset（位置）を持たせる
+        self.page_prev = self._create_page_container(self.img_prev, -1)
+        self.page_curr = self._create_page_container(self.img_curr, 0)
+        self.page_next = self._create_page_container(self.img_next, 1)
 
         #ページ番号を表示するテキスト
         self.page_counter = ft.Text(
@@ -109,10 +115,10 @@ class ImageViewer:
                         on_scale_update=self.on_viewer_scale_update,
                         on_scale_end=self.on_viewer_scale_end,
                         content=ft.Stack([
-                            ft.Container(content=self.img_prev, alignment=ft.Alignment(0,0), expand=True),
-                            ft.Container(content=self.img_curr, alignment=ft.Alignment(0,0), expand=True),
-                            ft.Container(content=self.img_next, alignment=ft.Alignment(0,0), expand=True),
-                        ]),
+                            self.page_prev,
+                            self.page_curr,
+                            self.page_next,
+                        ], clip_behavior=ft.ClipBehavior.HARD_EDGE), #画面外のはみ出しを強制カット
                         expand=True,
                     ),
                     self.close_btn_wrapper,
@@ -125,19 +131,28 @@ class ImageViewer:
         # アプリの最前面レイヤーにビューアを追加
         self.page.overlay.append(self.detail_view)
 
-    # 共通の画像設定を作成する関数
-    def _create_viewer_image(self, initial_offset_x):
+    # ページを包むコンテナを作成する関数
+    def _create_page_container(self, content_img, initial_x):
+        return ft.Container(
+            content=content_img,
+            alignment=ft.Alignment(0, 0),
+            top=0, left=0, right=0, bottom=0,
+            bgcolor="black", # これが「壁」になり、後ろの画像を隠す
+            offset=ft.Offset(initial_x, 0),
+            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        )
+
+    # 画像単体の設定
+    def _create_inner_image(self):
         return ft.Image(
             src=self.dummy_src,
             fit="contain",
             expand=True,
             scale=1,
-            # 位置のアニメーション設定
-            offset=ft.Offset(initial_offset_x, 0),
-            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
-            # 閉じる時のアニメーション用
+            offset=ft.Offset(0, 0), # ズーム時の移動用
             animate_scale=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
             animate_opacity=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
         )
 
     # 2. 画像パスを取得するヘルパー関数
@@ -169,9 +184,9 @@ class ImageViewer:
     # 3. 3枚の画像をセットして位置をリセットする関数（重要）
     def reset_images_position(self, index):
         # アニメーションを一時的に無効化（瞬間移動させるため）
-        self.img_prev.animate_offset = None
-        self.img_curr.animate_offset = None
-        self.img_next.animate_offset = None
+        self.page_prev.animate_offset = None
+        self.page_curr.animate_offset = None
+        self.page_next.animate_offset = None
 
         # 3枚の画像の中身を更新（プリロード）
         self.img_prev.src = self.get_image_src(index - 1)
@@ -179,23 +194,24 @@ class ImageViewer:
         self.img_next.src = self.get_image_src(index + 1)
 
         # 位置を定位置（左・中・右）に戻す
-        self.img_prev.offset = ft.Offset(-1, 0)
-        self.img_curr.offset = ft.Offset(0, 0)
-        self.img_next.offset = ft.Offset(1, 0)
+        self.page_prev.offset = ft.Offset(-1, 0)
+        self.page_curr.offset = ft.Offset(0, 0)
+        self.page_next.offset = ft.Offset(1, 0)
         
         # 拡大率などもリセット
         self.img_curr.scale = 1
+        self.img_curr.offset = ft.Offset(0, 0)
         self.img_curr.opacity = 1
 
-        self.img_prev.update()
-        self.img_curr.update()
-        self.img_next.update()
+        self.page_prev.update()
+        self.page_curr.update()
+        self.page_next.update()
 
         # アニメーション設定を復元
         anim = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
-        self.img_prev.animate_offset = anim
-        self.img_curr.animate_offset = anim
-        self.img_next.animate_offset = anim
+        self.page_prev.animate_offset = anim
+        self.page_curr.animate_offset = anim
+        self.page_next.animate_offset = anim
 
     # 4. スライド移動のアニメーション処理
     async def slide_next(self):
@@ -205,10 +221,10 @@ class ImageViewer:
         self.toggle_detail_panel(False) #ページをめくったらパネルを隠す
 
         # アニメーション開始：中→左、右→中
-        self.img_curr.offset = ft.Offset(-1, 0)
-        self.img_next.offset = ft.Offset(0, 0)
-        self.img_curr.update()
-        self.img_next.update()
+        self.page_curr.offset = ft.Offset(-1, 0)
+        self.page_next.offset = ft.Offset(0, 0)
+        self.page_curr.update()
+        self.page_next.update()
 
         # 移動完了を待つ
         await asyncio.sleep(self.ANIM_DURATION / 1000)
@@ -216,23 +232,23 @@ class ImageViewer:
         self.current_index += 1 #インデックスを戻す
         self.update_indicator()
 
+        recycle_page = self.page_prev
         recycle_img = self.img_prev
-        # アニメーションを切って右端へ瞬間移動
-        recycle_img.animate_offset = None
-        recycle_img.offset = ft.Offset(1, 0)
-        # 中身を「次の次」の画像に更新 (先読み)
+        
+        recycle_page.animate_offset = None
+        recycle_page.offset = ft.Offset(1, 0)
         recycle_img.src = self.get_image_src(self.current_index + 1)
-        # 念のため状態リセット
         recycle_img.scale = 1
-        recycle_img.opacity = 1
-        recycle_img.update()
+        recycle_img.offset = ft.Offset(0, 0)
+        recycle_page.update()
 
-        # アニメーション設定を戻す
-        recycle_img.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        #アニメーションの設定を戻す
+        recycle_page.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
 
-        # 元Curr -> 新Prev (左へ行ったやつ)
-        # 元Next -> 新Curr (中央に来たやつ)
-        # 元Prev -> 新Next (右へ回したやつ)
+        self.page_prev = self.page_curr
+        self.page_curr = self.page_next
+        self.page_next = recycle_page
+        
         self.img_prev = self.img_curr
         self.img_curr = self.img_next
         self.img_next = recycle_img
@@ -246,10 +262,10 @@ class ImageViewer:
         self.toggle_detail_panel(False) #ページをめくったらパネルを隠す
 
         # アニメーション開始：中→右、左→中
-        self.img_curr.offset = ft.Offset(1, 0)
-        self.img_prev.offset = ft.Offset(0, 0)
-        self.img_curr.update()
-        self.img_prev.update()
+        self.page_curr.offset = ft.Offset(1, 0)
+        self.page_prev.offset = ft.Offset(0, 0)
+        self.page_curr.update()
+        self.page_prev.update()
 
         # 移動完了を待つ
         await asyncio.sleep(self.ANIM_DURATION / 1000)
@@ -257,23 +273,22 @@ class ImageViewer:
         self.current_index -= 1 #インデックスを戻す
         self.update_indicator()
 
+        recycle_page = self.page_next
         recycle_img = self.img_next
-        # アニメーションを切って左端へ瞬間移動
-        recycle_img.animate_offset = None
-        recycle_img.offset = ft.Offset(-1, 0)
 
-        # 中身を「前の前」の画像に更新 (先読み)
+        recycle_page.animate_offset = None
+        recycle_page.offset = ft.Offset(-1, 0)
         recycle_img.src = self.get_image_src(self.current_index - 1)
         recycle_img.scale = 1
-        recycle_img.opacity = 1
-        recycle_img.update()
+        recycle_img.offset = ft.Offset(0, 0)
+        recycle_page.update()
 
-        # アニメーション設定を戻す
-        recycle_img.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
+        recycle_page.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
 
-        # 元Next -> [リサイクル] -> 新Prev
-        # 元Curr -> 新Next (右へ行ったやつ)
-        # 元Prev -> 新Curr (中央に来たやつ)
+        self.page_next = self.page_curr
+        self.page_curr = self.page_prev
+        self.page_prev = recycle_page
+        
         self.img_next = self.img_curr
         self.img_curr = self.img_prev
         self.img_prev = recycle_img
