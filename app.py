@@ -2,6 +2,7 @@ import flet as ft
 import asyncio
 import os
 from core.tag_search import TagSearch
+from ui.search_bar import SearchBar
 from ui.viewer import ImageViewer
 
 async def initialize_engine(page: ft.Page, status_text: ft.Text):
@@ -36,13 +37,6 @@ async def main(page: ft.Page):
 
         #openメソッドを呼び出す
         await viewer.open(current_results, row)
-
-    #検索窓
-    search_input = ft.TextField(
-        hint_text="タグを入力して検索", 
-        expand=True, 
-        on_submit=lambda e: asyncio.create_task(on_search(e)) #エンターキーで検索
-    )
     
     #画像を表示するグリッドビュー
     #runs_countではなくmax_extentを使うことで、PC/スマホ両方で適切な列数に
@@ -53,6 +47,54 @@ async def main(page: ft.Page):
         spacing=5,               #タイル間の隙間
         run_spacing=5,
     )
+
+    async def on_search(query):
+        nonlocal current_results
+
+        #ステータスメッセージの更新
+        status_text.value = "検索中..."
+        page.update()
+
+        #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
+        results, conversion_log = searcher.search(query, limit=50)
+
+        current_results = results #検索結果をグローバル変数に保存しておく
+
+        #グリッドをクリア
+        images_grid.controls.clear()
+
+        if not results:
+            status_text.value = "見つかりませんでした。"
+        else:
+            status_text.value = f"Hit: {len(results)} {conversion_log}"
+
+            for row in results:
+                #DBには絶対パスや相対パスが入っている可能性があるため、ファイル名だけ抽出
+                #例: "data/thumbnails/123.webp" -> "123.webp"
+                if row['thumbnail_path']:
+                    filename = os.path.basename(row['thumbnail_path'])
+                    
+                    #assets_dir="data" なので、Webからは "/thumbnails/filename" でアクセス
+                    web_image_src = f"/thumbnails/{filename}"
+                    
+                    #画像コンテナ（将来的にクリックイベントを仕込む場所）
+                    img_container = ft.Container(
+                        content=ft.Image(
+                            src=web_image_src,
+                            fit="cover",
+                            repeat="noRepeat",
+                            border_radius=ft.border_radius.all(8), # 角丸
+                        ),
+                        #クリック時のデータを持たせる
+                        data=row,
+                        on_click=on_image_click, 
+                    )
+                    images_grid.controls.append(img_container)
+
+        page.update()
+
+    #検索窓の初期化
+    search_bar = SearchBar(on_search_callback=on_search)
 
     #ズームスライダー
     zoom_slider = ft.Slider(
@@ -125,14 +167,6 @@ async def main(page: ft.Page):
         expand=True, # 画面いっぱいに広げる
     )
 
-    #ヘッダー部分(検索窓とステータスメッセージ)
-    header = ft.Row(
-        [
-            search_input,
-            ft.IconButton(icon=ft.Icons.SEARCH, on_click=lambda e: asyncio.create_task(on_search(e))),
-        ]
-    )
-
     #スライダー行
     slider_row = ft.Row(
         [
@@ -149,7 +183,7 @@ async def main(page: ft.Page):
         ft.Column(
             [
                 status_text,
-                header,
+                search_bar.view,
                 gallery_area,
                 slider_row, #スライダーを表示
             ],
@@ -160,54 +194,6 @@ async def main(page: ft.Page):
 
     #ロード
     searcher = await initialize_engine(page, status_text)
-
-    async def on_search(e):
-        nonlocal current_results
-        
-        query = search_input.value
-        if not query: return #検索窓が空なら何もしない
-
-        #ステータスメッセージの更新
-        status_text.value = "検索中..."
-        page.update()
-
-        #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
-        results, conversion_log = searcher.search(query, limit=50)
-
-        current_results = results #検索結果をグローバル変数に保存しておく
-
-        #グリッドをクリア
-        images_grid.controls.clear()
-
-        if not results:
-            status_text.value = "見つかりませんでした。"
-        else:
-            status_text.value = f"Hit: {len(results)} {conversion_log}"
-
-            for row in results:
-                #DBには絶対パスや相対パスが入っている可能性があるため、ファイル名だけ抽出
-                #例: "data/thumbnails/123.webp" -> "123.webp"
-                if row['thumbnail_path']:
-                    filename = os.path.basename(row['thumbnail_path'])
-                    
-                    #assets_dir="data" なので、Webからは "/thumbnails/filename" でアクセス
-                    web_image_src = f"/thumbnails/{filename}"
-                    
-                    #画像コンテナ（将来的にクリックイベントを仕込む場所）
-                    img_container = ft.Container(
-                        content=ft.Image(
-                            src=web_image_src,
-                            fit="cover",
-                            repeat="noRepeat",
-                            border_radius=ft.border_radius.all(8), # 角丸
-                        ),
-                        #クリック時のデータを持たせる
-                        data=row,
-                        on_click=on_image_click, 
-                    )
-                    images_grid.controls.append(img_container)
-
-        page.update()
 
 if __name__ == "__main__":
     ft.app(
