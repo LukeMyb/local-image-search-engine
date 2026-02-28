@@ -1,6 +1,7 @@
 import flet as ft
 import asyncio
 import os
+import time
 
 class ImageViewer:
     def __init__(self, page: ft.Page):
@@ -18,6 +19,7 @@ class ImageViewer:
         self.viewer_last_focal_x = 0
         self.viewer_last_focal_y = 0
         self.is_detail_open = False
+        self.last_scale_update = 0 #スロットリング用のタイマー変数
 
         self._build_ui()
 
@@ -359,7 +361,7 @@ class ImageViewer:
         self.detail_info_panel.update()
 
     # ビューアでのピンチ操作開始
-    def on_viewer_scale_start(self, e):
+    async def on_viewer_scale_start(self, e):
         # 現在の倍率を基準点として記録
         self.viewer_base_scale = self.img_curr.scale
 
@@ -372,8 +374,11 @@ class ImageViewer:
         self.img_curr.animate_offset = None
         self.img_curr.update()
 
+        # スロットリング用のタイマーをリセット
+        self.last_scale_update = time.time()
+
     # ビューアでのピンチ操作中
-    def on_viewer_scale_update(self, e):
+    async def on_viewer_scale_update(self, e):
         # 新しい倍率 = 開始時の倍率 × 指の開き具合
         new_scale = self.viewer_base_scale * e.scale
         
@@ -417,10 +422,17 @@ class ImageViewer:
         self.viewer_last_focal_x = e.local_focal_point.x
         self.viewer_last_focal_y = e.local_focal_point.y
 
-        self.img_curr.update()
+        # 描画更新を30fps相当（0.033秒間隔）に設定
+        current_time = time.time()
+        if current_time - self.last_scale_update > 0.033:
+            self.img_curr.update()
+            self.last_scale_update = current_time
 
     # ビューアでのピンチ操作終了
-    def on_viewer_scale_end(self, e):
+    async def on_viewer_scale_end(self, e):
+        # 指を離した瞬間に確実に最終位置で描画を更新する
+        self.img_curr.update()
+
         # アニメーション設定を元に戻す（ダブルタップ時のため）
         self.img_curr.animate_scale = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
         self.img_curr.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
@@ -489,7 +501,7 @@ class ImageViewer:
                     self.toggle_detail_panel(True) #パネルを開く
 
     # ダブルタップされたときの処理
-    def on_double_tap_down(self, e):
+    async def on_double_tap_down(self, e):
         # すでに拡大されているかチェック
         if self.img_curr.scale != 1:
             # 拡大中なら → 等倍に戻す（リセット）
@@ -510,7 +522,7 @@ class ImageViewer:
         self.img_curr.update()
 
     # タップされた位置に応じて処理を振り分ける関数
-    def handle_tap(self, e):
+    async def handle_tap(self, e):
         # 詳細パネルが開いている時は、どこをタップしてもパネルを閉じる処理を優先
         if self.is_detail_open:
             self.toggle_detail_panel(False)
