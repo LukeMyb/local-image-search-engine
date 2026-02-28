@@ -2,6 +2,7 @@ import flet as ft
 import asyncio
 import os
 import webbrowser
+from core.database import ImageDatabase
 from core.tag_search import TagSearch
 from ui.search_bar import SearchBar
 from ui.viewer import ImageViewer
@@ -33,7 +34,9 @@ async def main(page: ft.Page):
     #Loading
     status_text = ft.Text("Loading...", color="green", size=20)
 
-    viewer = ImageViewer(page) #画像ビューアの初期化
+    #初期化
+    db = ImageDatabase()
+    viewer = ImageViewer(page, db)
 
     #画像クリック時の処理
     async def on_image_click(e):

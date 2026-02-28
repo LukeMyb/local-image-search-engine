@@ -4,8 +4,9 @@ import os
 import time
 
 class ImageViewer:
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, db):
         self.page = page
+        self.db = db
         
         self.ANIM_DURATION = 100 #アニメーションの設定（ミリ秒）
         self.current_results = [] #検索結果のリスト
@@ -74,6 +75,25 @@ class ImageViewer:
             animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
         )
 
+        # 右下に配置するお気に入り（ハート）ボタンのラッパー
+        self.favorite_btn = ft.IconButton(
+            icon=ft.Icons.FAVORITE_BORDER,
+            icon_color=ft.Colors.WHITE,
+            tooltip="お気に入り",
+            on_click=self.on_favorite_click,
+            icon_size=30,
+            bgcolor="#8A000000", # 閉じるボタンと同じく半透明の黒背景で押しやすく
+        )
+        self.favorite_btn_wrapper = ft.Container(
+            content=self.favorite_btn,
+            bottom=35, # 画面下端からの距離
+            right=20,  # 画面右端からの距離（親指が届きやすい位置）
+            offset=ft.Offset(0, 2), # 初期状態は画面外（下）に逃がすことでタップ干渉を防ぐ
+            animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+            opacity=0,
+            animate_opacity=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
+        )
+
         #詳細パネル用の変数とUI構築
         self.detail_filename_text = ft.Text(size=16, weight=ft.FontWeight.BOLD, color="white")
         self.detail_path_text = ft.Text(size=12, color="white70")
@@ -125,6 +145,7 @@ class ImageViewer:
                     ),
                     self.close_btn_wrapper,
                     self.indicator_container,
+                    self.favorite_btn_wrapper,
                     self.detail_info_panel,
                 ],
                 expand=True,
@@ -132,6 +153,50 @@ class ImageViewer:
         )
         # アプリの最前面レイヤーにビューアを追加
         self.page.overlay.append(self.detail_view)
+
+    # お気に入りボタンが押された時の処理
+    def on_favorite_click(self, e):
+        if 0 <= self.current_index < len(self.current_results):
+            row = self.current_results[self.current_index]
+            image_id = row['id']
+            
+            # DBのトグル関数を呼び出し、新しい状態を取得
+            new_status = self.db.toggle_favorite(image_id)
+            
+            # 見た目の更新
+            if new_status == 1:
+                self.favorite_btn.icon = ft.Icons.FAVORITE
+                self.favorite_btn.icon_color = ft.Colors.RED
+            else:
+                self.favorite_btn.icon = ft.Icons.FAVORITE_BORDER
+                self.favorite_btn.icon_color = ft.Colors.WHITE
+            self.favorite_btn.update()
+            
+            # ローカルのリストにも反映（ページを移動して戻ってきた時用）
+            if isinstance(row, dict):
+                 row['is_favorite'] = new_status
+            else:
+                 new_row = dict(row)
+                 new_row['is_favorite'] = new_status
+                 self.current_results[self.current_index] = new_row
+
+    # 画像が切り替わった時にハートの見た目を更新する関数
+    def update_favorite_button_state(self):
+        if 0 <= self.current_index < len(self.current_results):
+            row = self.current_results[self.current_index]
+            image_id = row['id']
+            
+            # 確実な状態を取得するためDBから引く
+            db_row = self.db.get_image_by_id(image_id)
+            current_status = db_row.get('is_favorite', 0) if db_row else 0
+
+            if current_status == 1:
+                self.favorite_btn.icon = ft.Icons.FAVORITE
+                self.favorite_btn.icon_color = ft.Colors.RED
+            else:
+                self.favorite_btn.icon = ft.Icons.FAVORITE_BORDER
+                self.favorite_btn.icon_color = ft.Colors.WHITE
+            self.favorite_btn.update()
 
     # ページを包むコンテナを作成する関数
     def _create_page_container(self, content_img, initial_x):
@@ -236,6 +301,7 @@ class ImageViewer:
 
         recycle_page = self.page_prev
         recycle_img = self.img_prev
+        self.update_favorite_button_state() #ページをめくった時にハートの状態を更新
         
         recycle_page.animate_offset = None
         recycle_page.offset = ft.Offset(1, 0)
@@ -274,6 +340,7 @@ class ImageViewer:
 
         self.current_index -= 1 #インデックスを戻す
         self.update_indicator()
+        self.update_favorite_button_state() # ページをめくった時にハートの状態を更新
 
         recycle_page = self.page_next
         recycle_img = self.img_next
@@ -317,15 +384,24 @@ class ImageViewer:
         #現在の位置を確認して切り替え
         if self.close_btn_wrapper.offset.y == 0:
             self.close_btn_wrapper.offset = ft.Offset(0, -2) #表示中なら -> 上に隠す (y=-2)
-            self.indicator_container.offset = ft.Offset(0, 2) #下へ隠す
+
+            #下へ隠す
+            self.indicator_container.offset = ft.Offset(0, 2)
             self.indicator_container.opacity = 0
+            self.favorite_btn_wrapper.offset = ft.Offset(0, 2)
+            self.favorite_btn_wrapper.opacity = 0
         else:
-            self.close_btn_wrapper.offset = ft.Offset(0, 0) #隠れてるなら -> 定位置に戻す (y=0) ＝ ニュッと出す
+            self.close_btn_wrapper.offset = ft.Offset(0, 0) #隠れてるなら -> 定位置に戻す (y=0)
+
+            #定位置に戻す
             self.indicator_container.offset = ft.Offset(0, 0)
             self.indicator_container.opacity = 1
+            self.favorite_btn_wrapper.offset = ft.Offset(0, 0)
+            self.favorite_btn_wrapper.opacity = 1
         
         self.close_btn_wrapper.update()
         self.indicator_container.update()
+        self.favorite_btn_wrapper.update()
 
     #現在のインデックスと総件数を計算して反映
     def update_indicator(self):
@@ -561,6 +637,7 @@ class ImageViewer:
 
         self.reset_images_position(self.current_index)
         self.update_indicator()
+        self.update_favorite_button_state()
 
         #準備：画像URLをセットし、最初は「透明・最小」にする
         self.img_curr.scale = 0
@@ -571,6 +648,8 @@ class ImageViewer:
         self.close_btn_wrapper.offset = ft.Offset(0, -2)
         self.indicator_container.offset = ft.Offset(0, 2)
         self.indicator_container.opacity = 0
+        self.favorite_btn_wrapper.offset = ft.Offset(0, 2)
+        self.favorite_btn_wrapper.opacity = 0
 
         #新しく画像を開くときは詳細パネルの状態をリセット
         self.is_detail_open = False

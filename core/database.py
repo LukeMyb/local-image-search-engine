@@ -23,9 +23,17 @@ class ImageDatabase:
                 tags_combined TEXT,
                 is_thumbnail_created INTEGER DEFAULT 0,
                 is_processed_vector INTEGER DEFAULT 0,
-                is_processed_tag INTEGER DEFAULT 0
+                is_processed_tag INTEGER DEFAULT 0,
+                is_favorite INTEGER DEFAULT 0
             )
         ''')
+
+        # すでに作成済みの index.db に is_favorite カラムを追加する処理
+        try:
+            cursor.execute("ALTER TABLE images ADD COLUMN is_favorite INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            # すでにカラムが存在する場合はエラーになるため、そのままスルーする
+            pass
 
         #未処理画像を瞬時に見つけるためのインデックス
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_thumb ON images(is_thumbnail_created)')
@@ -127,6 +135,30 @@ class ImageDatabase:
             WHERE id = ?
         ''', (tags_combined, image_id))
         self.conn.commit()
+
+    # お気に入りの状態を反転（0⇔1）させる関数
+    def toggle_favorite(self, image_id):
+        cursor = self.conn.cursor()
+        # 現在の状態を取得
+        cursor.execute("SELECT is_favorite FROM images WHERE id = ?", (image_id,))
+        row = cursor.fetchone()
+        
+        new_status = 0
+        if row:
+            # 現在が0なら1に、1なら0に反転させる（row[0]で値を取得）
+            current_status = row[0]
+            new_status = 1 if current_status == 0 else 0
+            
+            # データベースを更新
+            cursor.execute('''
+                UPDATE images 
+                SET is_favorite = ? 
+                WHERE id = ?
+            ''', (new_status, image_id))
+            self.conn.commit()
+            
+        # 切り替え後の状態（1か0）をUI側に返す
+        return new_status
 
     def close(self):
         #安全に接続を閉じる
