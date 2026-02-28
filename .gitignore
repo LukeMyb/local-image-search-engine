@@ -23,4 +23,7 @@ models/*.pth
 # Configuration (ローカルの絶対パスなどが含まれるため)
 config.yaml
 
+#生成ファイルのバックアップ(gitignoreに含まれるファイルを復元するため)
+backup/
+
 memo.txt
