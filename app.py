@@ -81,15 +81,20 @@ async def main(page: ft.Page):
         status_text.value = "検索中..."
         page.update()
 
-        #非同期で検索を実行するとUIが固まらない（今回は簡易的に同期実行）
-        results, conversion_log = searcher.search(query)
+        #クエリが空欄（空白のみ含む）の場合はお気に入りを取得し、それ以外は検索を実行する
+        if not query.strip():
+            results = db.get_favorite_images()
+            conversion_log = "（お気に入り）"
+        else:
+            #検索を実行
+            results, conversion_log = searcher.search(query)
 
         all_results = results #検索結果をグローバル変数に保存しておく
         current_page = 1
 
         if not all_results:
-            status_text.value = "見つかりませんでした。"
-            gallery.update_gallery([], 1, 1) 
+            status_text.value = "お気に入り画像がありません。" if not query.strip() else "見つかりませんでした。"
+            gallery.update_gallery([], 1, 1)
         else:
             status_text.value = f"{len(all_results)}hit {conversion_log}"
             render_current_page()
@@ -126,6 +131,9 @@ async def main(page: ft.Page):
 
     #ロード
     searcher = await initialize_engine(page, status_text)
+
+    #エンジンロード完了直後に空クエリを投げ、初回起動時にお気に入りを表示させる
+    await on_search("")
 
 if __name__ == "__main__":
     #自動起動を無効化 (ダミー関数で上書き)

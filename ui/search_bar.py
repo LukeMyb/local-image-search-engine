@@ -94,7 +94,7 @@ class SearchBar:
 
         # 検索窓のテキストを取得
         query = self.search_input.value
-        if not query: return #検索窓が空なら何もしない
 
         # 上位(app.py)に検索クエリを渡して処理を任せる
-        await self.on_search_callback(query)
+        # ★追加：万が一queryがNoneだった場合にエラーを防ぐため空文字を渡す
+        await self.on_search_callback(query or "")

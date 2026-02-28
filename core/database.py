@@ -172,6 +172,13 @@ class ImageDatabase:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    # お気に入りの画像一覧を取得する関数
+    def get_favorite_images(self):
+        cursor = self.conn.cursor()
+        # お気に入りフラグが1のものを、追加日時（更新日時）が新しい順に取得
+        cursor.execute("SELECT * FROM images WHERE is_favorite = 1 ORDER BY file_mtime DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
 
 
 # --- ここから単体テスト用コード ---
