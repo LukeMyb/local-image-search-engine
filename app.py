@@ -2,6 +2,10 @@ import flet as ft
 import asyncio
 import os
 import webbrowser
+
+#Hugging Faceのオンライン通信を完全に遮断し、完全オフラインモードにする
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 from core.database import ImageDatabase
 from core.tag_search import TagSearch
 from ui.search_bar import SearchBar
