@@ -73,6 +73,15 @@ class ThumbnailGenerator:
             
             thumb_filename = f"{image_id}.webp"
             thumb_path = self.output_dir / thumb_filename
+
+            # 実際に重い画像を開く前に、物理ファイルが存在するかチェック
+            if thumb_path.exists():
+                # ファイルが既にあるなら、DBのフラグだけ「完了」にして即スキップ
+                self.db.update_thumbnail_status(image_id, str(thumb_path))
+                success_count += 1
+                if (i + 1) % 100 == 0:
+                    print(f"  ...[スキップ] {i + 1}/{total_count}枚 完了")
+                continue # 以下の重い処理を飛ばして次の画像へ
             
             try:
                 with Image.open(file_path) as img:
