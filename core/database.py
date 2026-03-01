@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import json
 
 class ImageDatabase:
     def __init__(self, db_path="data/db/index.db"):
@@ -21,6 +22,7 @@ class ImageDatabase:
                 file_mtime REAL NOT NULL,
                 thumbnail_path TEXT,
                 tags_combined TEXT,
+                tag_scores TEXT,
                 is_thumbnail_created INTEGER DEFAULT 0,
                 is_processed_vector INTEGER DEFAULT 0,
                 is_processed_tag INTEGER DEFAULT 0,
@@ -134,6 +136,24 @@ class ImageDatabase:
             SET tags_combined = ?, is_processed_tag = 1 
             WHERE id = ?
         ''', (tags_combined, image_id))
+        self.conn.commit()
+
+    # アンサンブルタグ付け用の新しい保存メソッド
+    def update_tags_with_scores(self, image_id, tags_combined, tag_scores_dict):
+        """
+        統合されたタグ名（検索用）と、信頼度スコア（ロジック計算用）を同時に保存する。
+        tag_scores_dict は辞書型を受け取り、JSON文字列に変換して保存する。
+        """
+        cursor = self.conn.cursor()
+        
+        # 辞書をJSON文字列に変換
+        scores_json = json.dumps(tag_scores_dict)
+        
+        cursor.execute('''
+            UPDATE images 
+            SET tags_combined = ?, tag_scores = ?, is_processed_tag = 1 
+            WHERE id = ?
+        ''', (tags_combined, scores_json, image_id))
         self.conn.commit()
 
     # お気に入りの状態を反転（0⇔1）させる関数

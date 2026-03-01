@@ -93,6 +93,22 @@ async def main(page: ft.Page):
             #検索を実行
             results, conversion_log = searcher.search(query)
 
+            # ここから上位5件のスコア詳細をターミナルに出力する処理
+            print(f"\n【Search Result: '{query}'】")
+            print("-" * 60)
+            for i, row in enumerate(results[:5]):
+                # match_scoreが設定されているか確認して表示
+                score = row.get('match_score', 0)
+                print(f"Rank {i+1} [Score: {score:.2f}]")
+                print(f"  Path: {row['file_path']}")
+                print("  Matches:")
+                
+                # matched_tagsの内訳を展開して表示
+                if 'matched_tags' in row:
+                    for m in row['matched_tags']:
+                        print(f"    [{m['tag']}] {m['final']:.3f} = {m['sim']:.3f}(sim) * {m['ai']:.3f}(ai) * {m['idf']:.3f}(idf)")
+            print("-" * 60)
+
         all_results = results #検索結果をグローバル変数に保存しておく
         current_page = 1
 

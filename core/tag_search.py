@@ -4,6 +4,8 @@ import pandas as pd
 import numpy as np
 import re
 import os
+import json
+import math
 import torch_directml #DirectML用のプラグイン
 from huggingface_hub import hf_hub_download
 from transformers import CLIPProcessor, CLIPModel
@@ -75,8 +77,13 @@ class TagSearch:
         self.tag_counts = {}
         cursor = self.db.conn.cursor()
         cursor.execute("SELECT tags_combined FROM images")
+
+        # 全画像数をカウントして保持する
+        rows = cursor.fetchall()
+        self.total_images = len(rows)
         
-        for row in cursor.fetchall():
+        # 上で取得したrowsを回す
+        for row in rows:
             tags_str = row[0]
             if not tags_str: continue
             
@@ -254,7 +261,7 @@ class TagSearch:
         if any(w in q for w in small) and any(w in t for w in big): return True
         return False
 
-    def calculate_image_score_with_details(self, image_tags_str, fast_lookup):
+    def calculate_image_score_with_details(self, image_tags_str, fast_lookup, parsed_tag_scores):
         total_score = 0.0
         matched_details = []
         if not image_tags_str: return 0.0, []
@@ -264,8 +271,33 @@ class TagSearch:
         
         for norm_search_tag, score in fast_lookup.items():
             if norm_search_tag in img_tags:
-                total_score += score
-                matched_details.append((norm_search_tag, score))
+                # 要素A：類似度のペナルティ係数（5乗）
+                sim_weight = score ** 5
+                
+                # 要素B：AI確信度のマイルド化（平方根）
+                # JSONからタグの確信度を取得（見つからない場合は最低閾値0.35を仮置き）
+                ai_conf = parsed_tag_scores.get(norm_search_tag, 0.35)
+                ai_weight = math.sqrt(ai_conf)
+                
+                # 要素C：希少性（IDF）の計算（常用対数＋最低10回の足切り）
+                db_count = self.tag_counts.get(norm_search_tag, 0)
+                total_imgs = max(self.total_images, 1) # 0割り防止
+                idf_weight = math.log10(total_imgs / max(db_count, 10))
+                
+                # 最終的な単語スコアを算出
+                final_word_score = sim_weight * ai_weight * idf_weight
+                
+                # 算出した最終スコアを加算
+                total_score += final_word_score
+
+                # 内訳を保持した辞書形式でリストに追加する(ターミナルでスコア参照用)
+                matched_details.append({
+                    "tag": norm_search_tag,
+                    "final": final_word_score,
+                    "sim": sim_weight,
+                    "ai": ai_weight,
+                    "idf": idf_weight
+                })
                 
         return total_score, matched_details
 
@@ -315,7 +347,7 @@ class TagSearch:
         # LIMIT句と params.append を完全に削除し、全件取得する
         # 仮想テーブル(images_fts)をMATCH検索し、元のテーブル(images)と結合してデータを取得
         full_sql = '''
-            SELECT i.id, i.file_path, i.tags_combined, i.file_mtime, i.thumbnail_path 
+            SELECT i.id, i.file_path, i.tags_combined, i.tag_scores, i.file_mtime, i.thumbnail_path 
             FROM images i
             INNER JOIN images_fts f ON i.id = f.id
             WHERE images_fts MATCH ?
@@ -329,7 +361,17 @@ class TagSearch:
 
         scored_results = []
         for row in raw_results:
-            score, matches = self.calculate_image_score_with_details(row['tags_combined'], fast_lookup)
+            # JSON文字列をPythonの辞書に変換（データがない場合のエラー回避策も含む）
+            scores_dict = {}
+            if row.get('tag_scores'):
+                try:
+                    scores_dict = json.loads(row['tag_scores'])
+                except json.JSONDecodeError:
+                    pass
+            # 次のステップ（計算ロジック）で使うために辞書データをrowに保持しておく
+            row['parsed_tag_scores'] = scores_dict
+
+            score, matches = self.calculate_image_score_with_details(row['tags_combined'], fast_lookup, row['parsed_tag_scores'])
             row['match_score'] = score
             row['matched_tags'] = matches
             scored_results.append(row)
@@ -352,6 +394,10 @@ if __name__ == "__main__":
     for i, row in enumerate(results[:5]):
         print(f"Rank {i+1} [Score: {row['match_score']:.2f}]")
         print(f"  Path: {row['file_path']}")
-        match_info = ", ".join([f"{t}({s:.2f})" for t, s in row['matched_tags']])
-        print(f"  Matches: {match_info}")
+
+        # 保持しておいた係数の内訳を展開して表示
+        print("  Matches:")
+        for m in row['matched_tags']:
+            print(f"    [{m['tag']}] {m['final']:.3f} = {m['sim']:.3f}(sim) * {m['ai']:.3f}(ai) * {m['idf']:.3f}(idf)")
+
         print("-" * 60)
