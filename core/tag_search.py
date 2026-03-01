@@ -284,7 +284,7 @@ class TagSearch:
                 total_imgs = max(self.total_images, 1) # 0割り防止
                 idf_weight = math.log10(total_imgs / max(db_count, 10))
                 
-                # 最終的な単語スコアを算出
+                # 最終的な単語スコアを算出(クエリとタグの類似度 * タグの信頼度 * タグの希少性)
                 final_word_score = sim_weight * ai_weight * idf_weight
                 
                 # 算出した最終スコアを加算

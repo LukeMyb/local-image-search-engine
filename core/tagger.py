@@ -76,8 +76,6 @@ class Tagger:
         except:
             return None
         if img is None: return None
-            
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) #色の順番をBGRからRGBに入れ替え
         
         #---画像を448x448にリサイズ---
         #真っ白なキャンバスを作成
@@ -257,9 +255,9 @@ if __name__ == "__main__":
     tagger = Tagger()
     
     # テスト実行ブロック
-    #TEST_IMAGE = "data/images/186APPLE/IMG_6539.JPG"
-    #tagger.debug_compare_models(TEST_IMAGE)
+    TEST_IMAGE = "data/images/185APPLE/IMG_5464.JPG"
+    tagger.debug_compare_models(TEST_IMAGE)
     
     # 本番実行ブロック
     # force_update=True にすれば、前のタグを全部消して上書きします
-    tagger.process_all(force_update=True)
+    #tagger.process_all(force_update=True)
