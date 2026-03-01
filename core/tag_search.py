@@ -302,13 +302,26 @@ class TagSearch:
         words = [w for w in words if w]
         if not words: return []
 
+        # プラス検索とマイナス検索（除外）に単語を振り分ける
+        positive_words = []
+        negative_words = []
+        for w in words:
+            if w.startswith('-') and len(w) > 1:
+                negative_words.append(w[1:])
+            else:
+                positive_words.append(w)
+
+        # プラス検索の単語が1つもない場合はエラーを回避して空を返す（FTS5は肯定条件が必須なため）
+        if not positive_words: 
+            return []
+
         print(f"\n{'='*60}")
         print(f" Query: '{user_query}'")
         print(f"{'='*60}")
         
         search_groups = [] 
 
-        for word in words:
+        for word in positive_words:
             final_tag, similar_tags_map = self.find_similar_tags_with_score(word)
 
             search_groups.append(similar_tags_map)
@@ -337,6 +350,30 @@ class TagSearch:
 
         # 複数の検索ワード(グループ)をANDで結合
         match_query = " AND ".join(match_groups)
+
+        # ここからマイナス検索（除外）のクエリ構築処理
+        if negative_words:
+            negative_tags = set()
+            print(f"  [Negative Search] Processing exclusions...")
+            for word in negative_words:
+                # 除外ワードもベクトル検索や翻訳にかけて類似タグを網羅する
+                #除外検索では類似タグの網羅リストさえ手に入ればいいため, _ で受け流す
+                _, similar_tags_map = self.find_similar_tags_with_score(word)
+                for tag in similar_tags_map.keys():
+                    norm_tag = tag.replace('_', ' ')
+
+                    #プラス検索の対象になっているタグは絶対に除外しない（巻き込み防止）
+                    if norm_tag not in fast_lookup:
+                        negative_tags.add(f'"{norm_tag}"')
+            
+            if negative_tags:
+                # FTS5の NOT 構文で除外タグをすべて繋げる
+                not_string = " NOT ".join(list(negative_tags))
+                match_query = f"{match_query} NOT {not_string}"
+                print(f"  -> Added {len(negative_tags)} tags to NOT query.")
+
+        # ターミナルで最終的なMATCHクエリを確認できるように出力
+        print(f"  [FTS5 Query] {match_query}")
 
         # LIMIT句と params.append を完全に削除し、全件取得する
         # 仮想テーブル(images_fts)をMATCH検索し、元のテーブル(images)と結合してデータを取得
