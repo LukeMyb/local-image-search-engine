@@ -184,9 +184,8 @@ class TagSearch:
         # --- Step 1: 初期入力でチェック ---
         english_word, found = self._check_alias_or_list(word) #foundはAlias辞書もしくはタグリストに検索ワードが存在するか
         if found:
-            log_msg = f"[Direct/Alias Hit]: {word} -> {english_word}"
             print(f"  ├─ [Direct/Alias Hit]: {word} -> {english_word}")
-            return english_word, {english_word: 1.0}, log_msg
+            return english_word, {english_word: 1.0}
 
         # --- Step 2: Google翻訳 ---
         try:
@@ -194,9 +193,8 @@ class TagSearch:
             # 翻訳結果を再度Alias辞書・リストで確認
             english_word, found = self._check_alias_or_list(translated_g)
             if found:
-                log_msg = f"[Google -> Alias/List]: {word} -> {english_word}"
                 print(f"  ├─ [Google -> Alias/List]: {word} -> {english_word}")
-                return english_word, {english_word: 1.0}, log_msg
+                return english_word, {english_word: 1.0}
         except Exception as e:
             print(f"  [!] Google Translate Error: {e}")
 
@@ -207,16 +205,14 @@ class TagSearch:
             #まずは辞書・リストにあるか確認
             english_word, found = self._check_alias_or_list(translated_b)
             if found:
-                log_msg = f"[Bing -> Alias/List]: {word} -> {english_word}"
                 print(f"  ├─ [Bing -> Alias/List]: {word} -> {english_word}")
-                return english_word, {english_word: 1.0}, log_msg
+                return english_word, {english_word: 1.0}
         except Exception as e:
             print(f"  [!] Bing Translate Error: {e}")
 
         # --- Step 4: CLIPベクトル検索 (最終手段) ---
         #Bing翻訳の結果があればそれを使用し、なければGoogle翻訳や元の単語をフォールバックにする
         final_query = translated_b if translated_b else (translated_g if 'translated_g' in locals() else word)
-        log_msg = f"[Vector Search]: {word} -> '{final_query}'"
         print(f"  ├─ [Vector Search]: Using query '{final_query}'")
 
         found_tags_map = {} 
@@ -242,7 +238,7 @@ class TagSearch:
             if score > 0.90:
                 found_tags_map[tag_name] = max(found_tags_map.get(tag_name, 0), score)
         
-        return final_query, found_tags_map, log_msg
+        return final_query, found_tags_map
 
     def get_size_modifiers(self):
         return ["small", "flat", "tiny", "little", "mini", "short", "low",
@@ -311,11 +307,9 @@ class TagSearch:
         print(f"{'='*60}")
         
         search_groups = [] 
-        conversion_logs = []
 
         for word in words:
-            final_tag, similar_tags_map, log_msg = self.find_similar_tags_with_score(word)
-            conversion_logs.append(log_msg)
+            final_tag, similar_tags_map = self.find_similar_tags_with_score(word)
 
             search_groups.append(similar_tags_map)
             print(f"  Target: '{final_tag}' -> Candidates: {len(similar_tags_map)}")
@@ -339,7 +333,7 @@ class TagSearch:
             if or_parts:
                 match_groups.append(f"({' OR '.join(or_parts)})")
 
-        if not match_groups: return [], ""
+        if not match_groups: return []
 
         # 複数の検索ワード(グループ)をANDで結合
         match_query = " AND ".join(match_groups)
@@ -378,15 +372,14 @@ class TagSearch:
             
         scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
 
-        #複数単語のログを文字列として結合し、検索結果と一緒に返す
-        final_log = " | ".join(conversion_logs)
-        return scored_results, final_log
+        #複検索結果を返す
+        return scored_results
 
 if __name__ == "__main__":
     searcher = TagSearch()
     # テスト: 辞書にある単語と、ない単語を混ぜる
     q = "黒髪" 
-    results, log = searcher.search(q)
+    results = searcher.search(q)
     
     print(f"\n【Final Result】")
     print("-" * 60)
