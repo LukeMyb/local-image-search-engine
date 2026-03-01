@@ -88,10 +88,9 @@ async def main(page: ft.Page):
         #クエリが空欄（空白のみ含む）の場合はお気に入りを取得し、それ以外は検索を実行する
         if not query.strip():
             results = db.get_favorite_images()
-            conversion_log = "（お気に入り）"
         else:
             #検索を実行
-            results, conversion_log = searcher.search(query)
+            results = searcher.search(query)
 
             # ここから上位5件のスコア詳細をターミナルに出力する処理
             print(f"\n【Search Result: '{query}'】")
@@ -116,7 +115,12 @@ async def main(page: ft.Page):
             status_text.value = "お気に入り画像がありません。" if not query.strip() else "見つかりませんでした。"
             gallery.update_gallery([], 1, 1)
         else:
-            status_text.value = f"{len(all_results)}hit {conversion_log}"
+            #クエリが空（お気に入り）の時と、通常検索時で表示を分ける
+            if not query.strip():
+                status_text.value = f"{len(all_results)}hit （お気に入り）"
+            else:
+                status_text.value = f"{len(all_results)}hit"
+
             render_current_page()
 
         page.update()
