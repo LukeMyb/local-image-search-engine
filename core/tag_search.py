@@ -250,11 +250,15 @@ class TagSearch:
         return any(m in text.lower() for m in modifiers)
 
     def check_conflict(self, query_translated, tag_name):
-        q, t = query_translated.lower(), tag_name.lower()
+        #アンダースコアをスペースに統一して、より確実に単語を比較できるようにする
+        q = query_translated.lower().replace('_', ' ')
+        t = tag_name.lower().replace('_', ' ')
+
         big = ["big", "large", "huge", "giant", "massive", "gigantic"]
         small = ["small", "flat", "tiny", "little"]
         if any(w in q for w in big) and any(w in t for w in small): return True
         if any(w in q for w in small) and any(w in t for w in big): return True
+
         return False
 
     def calculate_image_score_with_details(self, image_tags_str, fast_lookup, parsed_tag_scores):
