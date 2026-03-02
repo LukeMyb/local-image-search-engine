@@ -30,13 +30,6 @@ class ImageDatabase:
             )
         ''')
 
-        # すでに作成済みの index.db に is_favorite カラムを追加する処理
-        try:
-            cursor.execute("ALTER TABLE images ADD COLUMN is_favorite INTEGER DEFAULT 0")
-        except sqlite3.OperationalError:
-            # すでにカラムが存在する場合はエラーになるため、そのままスルーする
-            pass
-
         #未処理画像を瞬時に見つけるためのインデックス
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_thumb ON images(is_thumbnail_created)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_vector ON images(is_processed_vector)')
@@ -86,6 +79,17 @@ class ImageDatabase:
             BEGIN
                 DELETE FROM images_fts WHERE id = OLD.id;
             END;
+        ''')
+
+        # ブックマーク（保存済みクエリ）管理用のテーブル
+        # nameをUNIQUEにして名前の重複を禁止する
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_saved_queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                query TEXT NOT NULL,
+                last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
         ''')
         
         self.conn.commit()
@@ -198,6 +202,66 @@ class ImageDatabase:
         # お気に入りフラグが1のものを、追加日時（更新日時）が新しい順に取得
         cursor.execute("SELECT * FROM images WHERE is_favorite = 1 ORDER BY file_mtime DESC")
         return [dict(row) for row in cursor.fetchall()]
+    
+
+
+    # -----ブックマーク関連メソッド-----
+
+    def get_bookmark_by_name(self, name):
+        """名前でブックマークを取得（UI側での上書き確認ポップアップ判定用）"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT * FROM user_saved_queries WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+    def save_bookmark(self, name, query):
+        """ブックマークの保存（重複時は上書き、新規時は挿入）"""
+        cursor = self.conn.cursor()
+        # すでに同じ名前が存在するか確認
+        cursor.execute('SELECT id FROM user_saved_queries WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        
+        if row:
+            # 既存なら UPDATE (IDを維持しつつ、クエリと時刻を更新)
+            cursor.execute('''
+                UPDATE user_saved_queries 
+                SET query = ?, last_used_at = CURRENT_TIMESTAMP 
+                WHERE name = ?
+            ''', (query, name))
+        else:
+            # 新規なら INSERT
+            cursor.execute('''
+                INSERT INTO user_saved_queries (name, query) 
+                VALUES (?, ?)
+            ''', (name, query))
+        self.conn.commit()
+
+    def get_bookmarks(self, filter_text=""):
+        """ブックマーク一覧の取得（フィルターの有無でソート順を動的に変更）"""
+        cursor = self.conn.cursor()
+        if not filter_text:
+            # フィルター空欄：直近で使ったもの（履歴順）
+            cursor.execute('SELECT * FROM user_saved_queries ORDER BY last_used_at DESC')
+        else:
+            # フィルター入力あり：探しやすさ重視（名前順）
+            cursor.execute('SELECT * FROM user_saved_queries WHERE name LIKE ? ORDER BY name ASC', (f'%{filter_text}%',))
+        return [dict(row) for row in cursor.fetchall()]
+
+    def update_bookmark_usage(self, bookmark_id):
+        """検索実行時に呼び出し、使用時刻を最新に更新する"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE user_saved_queries 
+            SET last_used_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        ''', (bookmark_id,))
+        self.conn.commit()
+
+    def delete_bookmark(self, bookmark_id):
+        """ブックマークの削除"""
+        cursor = self.conn.cursor()
+        cursor.execute('DELETE FROM user_saved_queries WHERE id = ?', (bookmark_id,))
+        self.conn.commit()
 
 
 
