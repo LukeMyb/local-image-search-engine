@@ -161,7 +161,7 @@ class Tagger:
         # --- 統合とデータベース保存 ---
         print("=== スコアのMAX統合とDB保存を開始 ===")
         success_count = 0
-        for row in targets:
+        for i, row in enumerate(targets):
             image_id = row['id']
             c_res = conv_results.get(image_id, {})
             m_res = moat_results.get(image_id, {})
@@ -255,9 +255,9 @@ if __name__ == "__main__":
     tagger = Tagger()
     
     # テスト実行ブロック
-    TEST_IMAGE = "data/images/185APPLE/IMG_5464.JPG"
-    tagger.debug_compare_models(TEST_IMAGE)
+    #TEST_IMAGE = "data/images/185APPLE/IMG_5464.JPG"
+    #tagger.debug_compare_models(TEST_IMAGE)
     
     # 本番実行ブロック
     # force_update=True にすれば、前のタグを全部消して上書きします
-    #tagger.process_all(force_update=True)
+    tagger.process_all(force_update=True)
