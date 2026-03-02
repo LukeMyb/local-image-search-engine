@@ -179,8 +179,6 @@ class TagSearch:
         return key, False
 
     def find_similar_tags_with_score(self, word, top_k=25): 
-        log_msg = ""
-
         # --- Step 1: 初期入力でチェック ---
         english_word, found = self._check_alias_or_list(word) #foundはAlias辞書もしくはタグリストに検索ワードが存在するか
         if found:
@@ -216,6 +214,20 @@ class TagSearch:
         print(f"  ├─ [Vector Search]: Using query '{final_query}'")
 
         found_tags_map = {} 
+
+        # ★追加：翻訳された単語を使って、キャラ名_(作品名) などのタグを前方一致で直接救済する
+        norm_final = final_query.lower().replace(' ', '_')
+        prefix_search = f"{norm_final}_("
+        text_match_count = 0
+
+        for t in self.tag_list:
+            # 完全一致、または「キャラ名_(」で始まるタグをリストから探す
+            if t == norm_final or t.startswith(prefix_search):
+                found_tags_map[t] = 1.0
+                text_match_count += 1
+                
+        if text_match_count > 0:
+            print(f"  ├─ [Text Match Hit]: Found {text_match_count} tags matching '{norm_final}' or '{prefix_search}...'")
 
         # ベクトル比較 (CLIP)
         query_vec = self.query_to_vector(final_query)
