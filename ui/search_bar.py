@@ -32,7 +32,7 @@ class SearchBar:
             expand=True, 
             on_submit=lambda e: asyncio.create_task(self._handle_search()), #エンターキーで検索
             on_change=self._handle_change, #文字が入力されるたびに呼ばれる
-            
+
             #TextFieldの右端にクリアボタンを配置
             suffix=ft.IconButton(
                 icon=ft.Icons.CLEAR,
@@ -169,10 +169,8 @@ class SearchBar:
             dlg.open = False
             self.page.update()
 
-        def save_click(e): #保存ボタン
-            name = name_input.value.strip()
-            if not name:
-                return
+        # 実際に保存処理を行う共通関数
+        def execute_save(name):
             # DBに保存し、メモリを更新
             self.db.save_bookmark(name, query)
             self.refresh_saved_queries()
@@ -183,7 +181,44 @@ class SearchBar:
             if self.on_bookmark_updated:
                 self.on_bookmark_updated()
 
-            close_dlg(e)
+            dlg.open = False # メインのダイアログを閉じる
+            self.page.update()
+
+        # 上書き確認ダイアログを表示する関数
+        def show_overwrite_confirm(name):
+            def confirm_overwrite(e):
+                confirm_dlg.open = False
+                execute_save(name)
+
+            def cancel_overwrite(e):
+                confirm_dlg.open = False
+                self.page.update()
+
+            confirm_dlg = ft.AlertDialog(
+                title=ft.Text("名前の重複"),
+                content=ft.Text(f"「{name}」は既に存在します。上書きしますか？"),
+                actions=[
+                    ft.TextButton("キャンセル", on_click=cancel_overwrite),
+                    ft.TextButton("上書き", on_click=confirm_overwrite),
+                ],
+            )
+            self.page.overlay.append(confirm_dlg)
+            confirm_dlg.open = True
+            self.page.update()
+
+        def save_click(e): #保存ボタン
+            name = name_input.value.strip()
+            if not name:
+                return
+            
+            # 重複チェック
+            existing = self.db.get_bookmark_by_name(name)
+            if existing:
+                # 名前が重複していたら確認ダイアログを出す
+                show_overwrite_confirm(name)
+            else:
+                # 重複していなければそのまま保存
+                execute_save(name)
 
         dlg = ft.AlertDialog(
             title=ft.Text("検索条件を保存"),
