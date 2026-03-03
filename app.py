@@ -136,6 +136,8 @@ async def main(page: ft.Page):
 
     #検索窓の初期化
     search_bar = SearchBar(
+        page=page,
+        db=db,
         on_search_callback=on_search, 
         on_suggest_callback=on_suggest
     )
