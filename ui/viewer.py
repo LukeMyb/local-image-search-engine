@@ -21,6 +21,7 @@ class ImageViewer:
         self.viewer_last_focal_y = 0
         self.is_detail_open = False
         self.last_scale_update = 0 #スロットリング用のタイマー変数
+        self.is_ui_visible = False #UIの表示状態を記憶するフラグ
 
         self._build_ui()
 
@@ -380,10 +381,16 @@ class ImageViewer:
         self.detail_view.update()
 
     #UI（閉じるボタン）の出し入れを切り替える関数
-    def toggle_ui(self, e):
+    def toggle_ui(self, e=None, force_state=None):
+        #フラグで状態を管理
+        if force_state is not None:
+            self.is_ui_visible = force_state
+        else:
+            self.is_ui_visible = not self.is_ui_visible
+
         #現在の位置を確認して切り替え
-        if self.close_btn_wrapper.offset.y == 0:
-            self.close_btn_wrapper.offset = ft.Offset(0, -2) #表示中なら -> 上に隠す (y=-2)
+        if not self.is_ui_visible:
+            self.close_btn_wrapper.offset = ft.Offset(0, -2) #上に隠す
 
             #下へ隠す
             self.indicator_container.offset = ft.Offset(0, 2)
@@ -391,17 +398,20 @@ class ImageViewer:
             self.favorite_btn_wrapper.offset = ft.Offset(0, 2)
             self.favorite_btn_wrapper.opacity = 0
         else:
-            self.close_btn_wrapper.offset = ft.Offset(0, 0) #隠れてるなら -> 定位置に戻す (y=0)
-
             #定位置に戻す
+            self.close_btn_wrapper.offset = ft.Offset(0, 0)
+
             self.indicator_container.offset = ft.Offset(0, 0)
             self.indicator_container.opacity = 1
             self.favorite_btn_wrapper.offset = ft.Offset(0, 0)
             self.favorite_btn_wrapper.opacity = 1
-        
-        self.close_btn_wrapper.update()
-        self.indicator_container.update()
-        self.favorite_btn_wrapper.update()
+
+        # open()から状態復元として呼ばれた場合(force_stateがある場合)は、
+        # 後でページ全体が更新されるため個別のupdateはスキップする
+        if force_state is None:
+            self.close_btn_wrapper.update()
+            self.indicator_container.update()
+            self.favorite_btn_wrapper.update()
 
     #現在のインデックスと総件数を計算して反映
     def update_indicator(self):
@@ -592,8 +602,8 @@ class ImageViewer:
             self.img_curr.animate_offset = None
             
             # 拡大した瞬間にUI（ボタンなど）が邪魔なら隠す
-            if self.close_btn_wrapper.offset.y == 0:
-                 self.toggle_ui(None)
+            if self.is_ui_visible:
+                self.toggle_ui(None)
                  
         self.img_curr.update()
 
@@ -650,12 +660,8 @@ class ImageViewer:
         self.img_curr.opacity = 0
         self.detail_view.opacity = 0
 
-        # 閉じるボタンとインディケータを画面外へ
-        self.close_btn_wrapper.offset = ft.Offset(0, -2)
-        self.indicator_container.offset = ft.Offset(0, 2)
-        self.indicator_container.opacity = 0
-        self.favorite_btn_wrapper.offset = ft.Offset(0, 2)
-        self.favorite_btn_wrapper.opacity = 0
+        #記憶している前回のUI状態をそのまま復元する
+        self.toggle_ui(force_state=self.is_ui_visible)
 
         #新しく画像を開くときは詳細パネルの状態をリセット
         self.is_detail_open = False
