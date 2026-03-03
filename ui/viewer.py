@@ -87,7 +87,7 @@ class ImageViewer:
         self.favorite_btn_wrapper = ft.Container(
             content=self.favorite_btn,
             bottom=35, # 画面下端からの距離
-            right=20,  # 画面右端からの距離（親指が届きやすい位置）
+            left=20,  # 画面左端からの距離（親指が届きやすい位置）
             offset=ft.Offset(0, 2), # 初期状態は画面外（下）に逃がすことでタップ干渉を防ぐ
             animate_offset=ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT),
             opacity=0,
