@@ -32,15 +32,15 @@ class TagSearch:
             import_utils.check_torch_load_is_safe = lambda: None
 
         #脆弱性エラーを回避するため、安全な safetensors 形式で読み込むように指定
-        self.model = CLIPModel.from_pretrained(model_id, use_safetensors=False).to(self.device)
-        self.processor = CLIPProcessor.from_pretrained(model_id)
+        self.model = CLIPModel.from_pretrained(model_id, use_safetensors=False, local_files_only=True).to(self.device)
+        self.processor = CLIPProcessor.from_pretrained(model_id, local_files_only=True)
         
         #タグインデックスロード
         self.tag_index = faiss.read_index(tag_index_path)
         
         #タグ名リストロード
         repo_id = "SmilingWolf/wd-v1-4-moat-tagger-v2"
-        csv_path = hf_hub_download(repo_id, "selected_tags.csv")
+        csv_path = hf_hub_download(repo_id, "selected_tags.csv", local_files_only=True)
         self.tag_list = pd.read_csv(csv_path)["name"].tolist()
 
         #辞書ロード (10万語 + 手動修正)

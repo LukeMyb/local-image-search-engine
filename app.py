@@ -5,6 +5,8 @@ import webbrowser
 
 #Hugging Faceのオンライン通信を完全に遮断し、完全オフラインモードにする
 os.environ["HF_HUB_OFFLINE"] = "1"
+#Transformersライブラリ側の通信も強制遮断する
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 from core.database import ImageDatabase
 from core.tag_search import TagSearch
