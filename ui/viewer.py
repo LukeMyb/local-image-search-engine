@@ -266,10 +266,11 @@ class ImageViewer:
         self.page_curr.offset = ft.Offset(0, 0)
         self.page_next.offset = ft.Offset(1, 0)
         
-        # 拡大率などもリセット
-        self.img_curr.scale = 1
-        self.img_curr.offset = ft.Offset(0, 0)
-        self.img_curr.opacity = 1
+        # 拡大率や透明度を「3枚すべて」確実にリセットする（透明化バグの防止）
+        for img in [self.img_prev, self.img_curr, self.img_next]:
+            img.scale = 1
+            img.offset = ft.Offset(0, 0)
+            img.opacity = 1
 
         self.page_prev.update()
         self.page_curr.update()
@@ -309,6 +310,7 @@ class ImageViewer:
         recycle_img.src = self.get_image_src(self.current_index + 1)
         recycle_img.scale = 1
         recycle_img.offset = ft.Offset(0, 0)
+        recycle_img.opacity = 1 # スワイプ時にも確実に表示状態へ戻す
         recycle_page.update()
 
         #アニメーションの設定を戻す
@@ -351,6 +353,7 @@ class ImageViewer:
         recycle_img.src = self.get_image_src(self.current_index - 1)
         recycle_img.scale = 1
         recycle_img.offset = ft.Offset(0, 0)
+        recycle_img.opacity = 1 # スワイプ時にも確実に表示状態へ戻す
         recycle_page.update()
 
         recycle_page.animate_offset = ft.Animation(self.ANIM_DURATION, ft.AnimationCurve.EASE_OUT)
