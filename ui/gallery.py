@@ -156,21 +156,35 @@ class ImageGallery:
         )
 
         for row in results:
-            #DBには絶対パスや相対パスが入っている可能性があるため、ファイル名だけ抽出
-            #例: "data/thumbnails/123.webp" -> "123.webp"
+            #ファイル名だけ抽出
             if row['thumbnail_path']:
                 filename = os.path.basename(row['thumbnail_path'])
-                
-                #assets_dir="data" なので、Webからは "/thumbnails/filename" でアクセス
                 web_image_src = f"/thumbnails/{filename}"
+
+                # お気に入りアイコン
+                # DBのis_favoriteが1の場合のみ、白いハートを表示する
+                favorite_badge = ft.Container()
+                if row.get('is_favorite') == 1:
+                    favorite_badge = ft.Container(
+                        content=ft.Icon(ft.Icons.FAVORITE, color="white", size=14),
+                        right=5,   # 右端からの距離
+                        bottom=5, # 下端からの距離
+                        # アイコンを見やすくするために、背後にわずかな影（ドロップシャドウ）をつける
+                        shadow=ft.BoxShadow(blur_radius=4, color="black38"), 
+                    )
                 
-                #画像コンテナ（将来的にクリックイベントを仕込む場所）
+                #画像コンテナ
                 img_container = ft.Container(
-                    content=ft.Image(
-                        src=web_image_src,
-                        fit="cover",
-                        repeat="noRepeat",
-                        border_radius=ft.border_radius.all(8),
+                    content=ft.Stack(
+                        [
+                            ft.Image(
+                                src=web_image_src,
+                                fit="cover",
+                                repeat="noRepeat",
+                                border_radius=ft.border_radius.all(8),
+                            ),
+                            favorite_badge, # お気に入りならここにハートが重なる
+                        ]
                     ),
                     #クリック時のデータを持たせる
                     data=row,

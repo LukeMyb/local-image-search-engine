@@ -394,7 +394,7 @@ class TagSearch:
         # LIMIT句と params.append を完全に削除し、全件取得する
         # 仮想テーブル(images_fts)をMATCH検索し、元のテーブル(images)と結合してデータを取得
         full_sql = '''
-            SELECT i.id, i.file_path, i.tags_combined, i.tag_scores, i.file_mtime, i.thumbnail_path 
+            SELECT i.id, i.file_path, i.tags_combined, i.tag_scores, i.file_mtime, i.thumbnail_path, i.is_favorite
             FROM images i
             INNER JOIN images_fts f ON i.id = f.id
             WHERE images_fts MATCH ?
