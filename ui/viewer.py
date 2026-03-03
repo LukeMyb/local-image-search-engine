@@ -567,12 +567,12 @@ class ImageViewer:
             elif vx < -100:
                 asyncio.create_task(self.slide_next())
         else: 
-            if vy > 400: #下スワイプ
+            if vy > 800: #下スワイプ
                 if self.is_detail_open:
                     self.toggle_detail_panel(False) #パネルが開いていたら閉じる
                 else:
                     asyncio.create_task(self.close_viewer(None)) #パネルが閉じていたらビューアを閉じる
-            elif vy < -400: #上スワイプ
+            elif vy < -800: #上スワイプ
                 if not self.is_detail_open:
                     self.toggle_detail_panel(True) #パネルを開く
 
