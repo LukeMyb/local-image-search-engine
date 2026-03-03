@@ -80,9 +80,11 @@ class BookmarkDrawer:
         self.view.update()
 
     def on_select(self, query):
+        #ドロワーを閉じる
         self.view.open = False
+        self.page.drawer = None
         self.page.update()
-        
+
         # SearchBarの入力欄を上書き
         self.search_bar.search_input.value = query
         # アイコンの状態も同期させる

@@ -87,6 +87,9 @@ async def main(page: ft.Page):
         status_text.value = "検索中..."
         page.update()
 
+        #重い検索処理が始まる前に、画面に「検索中...」を描画させるための短い隙間（0.1秒）を作る
+        await asyncio.sleep(0.1)
+
         #クエリが空欄（空白のみ含む）の場合はお気に入りを取得し、それ以外は検索を実行する
         if not query.strip():
             results = db.get_favorite_images()
