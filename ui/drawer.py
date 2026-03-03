@@ -80,10 +80,16 @@ class BookmarkDrawer:
         self.view.update()
 
     def on_select(self, query):
+        #現在の検索窓の内容を取得（Noneの場合は空文字にする）
+        current_query = self.search_bar.search_input.value or ""
+
         #ドロワーを閉じる
         self.view.open = False
         self.page.drawer = None
         self.page.update()
+
+        #選択したクエリが現在の検索窓の内容と完全に一致する場合は、検索をスキップ
+        if current_query == query: return
 
         # SearchBarの入力欄を上書き
         self.search_bar.search_input.value = query
