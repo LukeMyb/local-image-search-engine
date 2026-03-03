@@ -163,7 +163,7 @@ class SearchBar:
 
     # 新規保存ダイアログ
     def _show_save_dialog(self, query):
-        name_input = ft.TextField(label="ブックマーク名", value="", autofocus=True)
+        name_input = ft.TextField(label="ブックマーク名", value="")
         
         def close_dlg(e): #キャンセルボタン
             dlg.open = False
