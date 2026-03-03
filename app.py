@@ -11,6 +11,7 @@ from core.tag_search import TagSearch
 from ui.search_bar import SearchBar
 from ui.viewer import ImageViewer
 from ui.gallery import ImageGallery
+from ui.drawer import BookmarkDrawer
 
 async def initialize_engine(page: ft.Page, status_text: ft.Text):
     await asyncio.sleep(0.1) #ブラウザへの描画時間を確保
@@ -75,7 +76,8 @@ async def main(page: ft.Page):
     #ギャラリーの初期化
     gallery = ImageGallery(
         on_image_click_callback=on_image_click,
-        on_page_change_callback=on_page_change
+        on_page_change_callback=on_page_change,
+        on_swipe_right_callback=lambda: drawer.show()
     )
 
     async def on_search(query):
@@ -141,6 +143,9 @@ async def main(page: ft.Page):
         on_search_callback=on_search, 
         on_suggest_callback=on_suggest
     )
+
+    #ドロワーの初期化
+    drawer = BookmarkDrawer(page, db, search_bar)
 
     #レイアウト
     page.add(

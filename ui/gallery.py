@@ -2,10 +2,11 @@ import flet as ft
 import os
 
 class ImageGallery:
-    def __init__(self, on_image_click_callback, on_page_change_callback=None):
+    def __init__(self, on_image_click_callback, on_page_change_callback=None, on_swipe_right_callback=None):
         # 画像がクリックされたときに上位(app.py)のビューアを開くためのコールバック
         self.on_image_click_callback = on_image_click_callback
         self.on_page_change_callback = on_page_change_callback
+        self.on_swipe_right_callback = on_swipe_right_callback
         
         self.base_columns = 3 #ピンチ操作基準用の変数
         self._build_ui()
@@ -133,6 +134,15 @@ class ImageGallery:
         
         # 次の操作のために基準値を更新
         self.base_columns = final_cols
+
+        # --- スワイプ検知 ---
+        # X軸の速度がY軸より大きく、かつプラス方向なら右スワイプと判定
+        vx = e.velocity.x
+        vy = e.velocity.y
+
+        if abs(vx) > abs(vy) and vx > 100: # 100は適度なスワイプ速度の閾値
+            if self.on_swipe_right_callback:
+                self.on_swipe_right_callback()
 
     # app.pyから検索結果を受け取って画面を描画する関数
     def update_gallery(self, results, current_page=1, total_pages=1):
