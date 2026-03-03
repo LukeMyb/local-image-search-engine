@@ -10,6 +10,8 @@ class SearchBar:
         self.on_search_callback = on_search_callback
         # サジェスト候補を取得するためのコールバック
         self.on_suggest_callback = on_suggest_callback
+        # ブックマークが変更された時に外部（ドロワー等）を更新するためのコールバック
+        self.on_bookmark_updated = None
 
         # メモリ上のブックマーク保持用（キー：クエリ、値：名前）
         self.saved_queries = {}
@@ -157,6 +159,11 @@ class SearchBar:
             self.refresh_saved_queries()
             self._update_bookmark_icon(query)
             print(f"[Bookmark] '{name}' を保存しました")
+
+            # 外部（ドロワー）に変更を通知して一覧を更新させる
+            if self.on_bookmark_updated:
+                self.on_bookmark_updated()
+
             close_dlg(e)
 
         dlg = ft.AlertDialog(
@@ -187,6 +194,11 @@ class SearchBar:
 
             self.refresh_saved_queries()
             self._update_bookmark_icon(query)
+
+            # 外部（ドロワー）に変更を通知して一覧を更新させる
+            if self.on_bookmark_updated:
+                self.on_bookmark_updated()
+                
             close_dlg(e)
 
         dlg = ft.AlertDialog(

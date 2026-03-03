@@ -146,6 +146,8 @@ async def main(page: ft.Page):
 
     #ドロワーの初期化
     drawer = BookmarkDrawer(page, db, search_bar)
+    # 検索窓でブックマークが保存・削除された際に、ドロワーのリストを更新するよう紐付け
+    search_bar.on_bookmark_updated = drawer.refresh_list
 
     #レイアウト
     page.add(
