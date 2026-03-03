@@ -608,7 +608,9 @@ class ImageViewer:
         if self.img_curr.scale > 1:
             self.toggle_ui(None) # UIの出し入れだけ許可する
             return
-
+        
+        #両端タップで左右の画面に移動
+        """
         #画面の横幅を取得
         width = self.page.width
         #左右 20% ずつをタップエリアとして定義
@@ -623,6 +625,10 @@ class ImageViewer:
         else:
             #中央付近なら「UIの出し入れ」
             self.toggle_ui(None)
+        """
+
+        #画面のどこをタップしてもUIの出し入れのみにする
+        self.toggle_ui(None)
 
     # アプリ側から呼び出すエントリポイント
     async def open(self, results, clicked_row):
