@@ -15,7 +15,7 @@ class BookmarkDrawer:
             expand=True
         )
         
-        self.bookmark_list_container = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
+        self.bookmark_list_container = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
         self._build_ui()
 
     def _build_ui(self):
@@ -66,13 +66,19 @@ class BookmarkDrawer:
                     icon=ft.Icons.DELETE_OUTLINE,
                     icon_color="red400",
                     tooltip="削除",
+                    icon_size=20, # アイコンを少し小さく
+                    padding=0,    # ボタン自体の余白をなくす
+                    width=32,     # ボタンの横幅を制限
+                    height=32,    # ボタンの高さを制限して縦伸びを防ぐ
                     on_click=lambda e, b=bm: self.confirm_delete(b)
                 )
                 
                 item = ft.ListTile(
-                    title=ft.Text(bm['name']),
+                    title=ft.Text(bm['name'], size=14), # タイトルを少し小さく
                     subtitle=ft.Text(bm['query'], size=12, color="white54", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
                     trailing=delete_btn,
+                    dense=True, # 行間を詰める密集モードを有効化
+                    content_padding=ft.padding.symmetric(horizontal=15, vertical=0), # 上下の無駄な余白をゼロにする
                     on_click=lambda e, q=bm['query']: self.on_select(q)
                 )
                 self.bookmark_list_container.controls.append(item)
