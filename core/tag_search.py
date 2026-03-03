@@ -423,7 +423,8 @@ class TagSearch:
             row['matched_tags'] = matches
             scored_results.append(row)
             
-        scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
+        # お気に入り(is_favorite)を最優先のソートキーに追加
+        scored_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
 
         #複検索結果を返す
         return scored_results
