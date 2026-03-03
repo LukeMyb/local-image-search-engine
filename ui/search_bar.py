@@ -32,6 +32,17 @@ class SearchBar:
             expand=True, 
             on_submit=lambda e: asyncio.create_task(self._handle_search()), #エンターキーで検索
             on_change=self._handle_change, #文字が入力されるたびに呼ばれる
+            
+            #TextFieldの右端にクリアボタンを配置
+            suffix=ft.IconButton(
+                icon=ft.Icons.CLEAR,
+                tooltip="検索窓をクリア",
+                on_click=self._handle_clear,
+                icon_size=16, # 少し小さめにして邪魔にならないようにする
+                padding=0,      # ボタン自体の余白をなくす
+                width=24,       # 横幅を制限して押し広げを防ぐ
+                height=24,      # 高さを制限して縦伸びを防ぐ
+            )
         )
 
         #サジェスト結果を表示するリストとコンテナ
@@ -78,6 +89,14 @@ class SearchBar:
             ],
             spacing=0,
         )
+
+    # クリアボタンが押された時の処理
+    def _handle_clear(self, e):
+        # 入力欄を空にする
+        self.search_input.value = ""
+        self.search_input.update()
+        # 文字が変更された時と同じ処理（サジェストの非表示やアイコンの更新など）を呼んで同期させる
+        self._handle_change(None)
 
     def _handle_change(self, e):
         query = self.search_input.value
