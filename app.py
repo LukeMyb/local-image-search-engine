@@ -82,7 +82,7 @@ async def main(page: ft.Page):
         on_swipe_right_callback=lambda: drawer.show()
     )
 
-    async def on_search(query):
+    async def on_search(query, is_bookmarked=False):
         nonlocal all_results, current_page
 
         #ステータスメッセージの更新
@@ -97,7 +97,7 @@ async def main(page: ft.Page):
             results = db.get_favorite_images()
         else:
             #検索を実行
-            results = searcher.search(query)
+            results = searcher.search(query, is_bookmarked)
 
             # ここから上位5件のスコア詳細をターミナルに出力する処理
             print(f"\n【Search Result: '{query}'】")

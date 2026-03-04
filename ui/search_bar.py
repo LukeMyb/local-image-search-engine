@@ -286,6 +286,9 @@ class SearchBar:
             if bm:
                 self.db.update_bookmark_usage(bm['id'])
 
+        # 現在のクエリがブックマークに保存されているか判定するフラグ
+        is_bookmarked = query in self.saved_queries
+
         # 上位(app.py)に検索クエリを渡して処理を任せる
-        # 万が一queryがNoneだった場合にエラーを防ぐため空文字を渡す
-        await self.on_search_callback(query or "")
+        # クエリと一緒に is_bookmarked フラグも手渡しする
+        await self.on_search_callback(query or "", is_bookmarked)

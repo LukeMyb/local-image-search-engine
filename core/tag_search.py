@@ -313,7 +313,7 @@ class TagSearch:
                 
         return total_score, matched_details
 
-    def search(self, user_query):
+    def search(self, user_query, is_bookmarked=False):
         words = re.split(r'[ \u3000,]+', user_query)
         words = [w for w in words if w]
         if not words: return []
@@ -423,11 +423,6 @@ class TagSearch:
             row['matched_tags'] = matches
             scored_results.append(row)
             
-        # 現在の検索クエリがブックマークに保存されているかDBに直接問い合わせて確認
-        cursor = self.db.conn.cursor()
-        cursor.execute('SELECT 1 FROM user_saved_queries WHERE query = ? LIMIT 1', (user_query,))
-        is_bookmarked = cursor.fetchone() is not None
-
         # ブックマーク済みの時だけお気に入り(is_favorite)を最優先にし、それ以外は純粋なスコア順にする
         if is_bookmarked:
             scored_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
