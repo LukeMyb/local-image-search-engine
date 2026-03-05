@@ -314,21 +314,27 @@ class TagSearch:
         return total_score, matched_details
 
     def search(self, user_query, is_bookmarked=False):
-        words = re.split(r'[ \u3000,]+', user_query)
+        # | (パイプ記号) の前後の空白を詰め、純粋な | だけに統一する
+        # これにより "A | B" も "A|B" として扱われ、後続の空白分割で千切れるのを防ぐ
+        query = re.sub(r'\s*\|\s*', '|', user_query)
+
+        words = re.split(r'[ \u3000,]+', query)
         words = [w for w in words if w]
         if not words: return []
 
         # プラス検索とマイナス検索（除外）に単語を振り分ける
-        positive_words = []
+        positive_groups = []
         negative_words = []
         for w in words:
             if w.startswith('-') and len(w) > 1:
                 negative_words.append(w[1:])
             else:
-                positive_words.append(w)
+                # ORで繋がれた単語をリストにして追加
+                parts = w.split('|')
+                positive_groups.append(parts)
 
         # プラス検索の単語が1つもない場合はエラーを回避して空を返す（FTS5は肯定条件が必須なため）
-        if not positive_words: 
+        if not positive_groups:
             return []
 
         print(f"\n{'='*60}")
@@ -337,11 +343,21 @@ class TagSearch:
         
         search_groups = [] 
 
-        for word in positive_words:
-            final_tag, similar_tags_map = self.find_similar_tags_with_score(word)
+        for or_words in positive_groups:
+            combined_similar_tags_map = {}
+            print(f"  [OR Group] Processing: {or_words}")
 
-            search_groups.append(similar_tags_map)
-            print(f"  Target: '{final_tag}' -> Candidates: {len(similar_tags_map)}")
+            for word in or_words:
+                final_tag, similar_tags_map = self.find_similar_tags_with_score(word)
+
+                print(f"  Target: '{final_tag}' -> Candidates: {len(similar_tags_map)}")
+
+                # 取得した類似タグ群を1つのグループに合流（重複時はスコアが高い方を優先）
+                for t, s in similar_tags_map.items():
+                    if t not in combined_similar_tags_map or s > combined_similar_tags_map.get(t, 0):
+                        combined_similar_tags_map[t] = s
+
+            search_groups.append(combined_similar_tags_map)
 
         match_groups = []
 
