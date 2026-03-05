@@ -32,7 +32,6 @@ class ImageDatabase:
 
         #未処理画像を瞬時に見つけるためのインデックス
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_thumb ON images(is_thumbnail_created)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_vector ON images(is_processed_vector)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_tag ON images(is_processed_tag)')
 
         # ---------------------------------------------------------
@@ -122,16 +121,6 @@ class ImageDatabase:
         ''', (thumbnail_path, image_id))
         self.conn.commit()
 
-    def update_vector_status(self, image_id):
-        #CLIPベクトル解析完了の記録
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            UPDATE images 
-            SET is_processed_vector = 1 
-            WHERE id = ?
-        ''', (image_id,))
-        self.conn.commit()
-
     def update_tags(self, image_id, tags_combined):
         #タガー解析完了と統合タグの記録
         cursor = self.conn.cursor()
@@ -191,7 +180,6 @@ class ImageDatabase:
     def get_image_by_id(self, image_id):
         #指定されたIDの画像データを取得します
         cursor = self.conn.cursor()
-        #FAISSのインデックスは0開始、dbのIDは1開始のため、呼び出し側で調整するかここで調整します
         cursor.execute("SELECT * FROM images WHERE id = ?", (image_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -284,12 +272,6 @@ if __name__ == "__main__":
     ]
     db.register_images(dummy_data)
     print(f"{len(dummy_data)}件のダミー画像を登録しました。")
-
-    # 3. データの取得テスト（辞書型のようにアクセスできるかの確認）
-    unprocessed = db.get_unprocessed_images('is_processed_vector')
-    print("未処理の画像一覧（ベクトル解析待ち）:")
-    for row in unprocessed:
-        print(f" - ID: {row['id']}, Path: {row['file_path']}")
 
     # 4. 安全に閉じる
     db.close()
