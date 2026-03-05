@@ -273,43 +273,53 @@ class TagSearch:
 
         return False
 
-    def calculate_image_score_with_details(self, image_tags_str, fast_lookup, parsed_tag_scores):
+    def calculate_image_score_with_details(self, image_tags_str, search_groups, parsed_tag_scores):
         total_score = 0.0
         matched_details = []
         if not image_tags_str: return 0.0, []
         
         # タグの正規化（小文字、スペース統一）
         img_tags = {t.strip().lower().replace('_', ' ') for t in image_tags_str.split(',')}
-        
-        for norm_search_tag, score in fast_lookup.items():
-            if norm_search_tag in img_tags:
-                # 要素A：類似度のペナルティ係数（5乗）
-                sim_weight = score ** 5
-                
-                # 要素B：AI確信度のマイルド化（平方根）
-                # JSONからタグの確信度を取得（見つからない場合は最低閾値0.35を仮置き）
-                ai_conf = parsed_tag_scores.get(norm_search_tag, 0.35)
-                ai_weight = math.sqrt(ai_conf)
-                
-                # 要素C：希少性（IDF）の計算（常用対数＋最低10回の足切り）
-                db_count = self.tag_counts.get(norm_search_tag, 0)
-                total_imgs = max(self.total_images, 1) # 0割り防止
-                idf_weight = math.log10(total_imgs / max(db_count, 10))
-                
-                # 最終的な単語スコアを算出(クエリとタグの類似度 * タグの信頼度 * タグの希少性)
-                final_word_score = sim_weight * ai_weight * idf_weight
-                
-                # 算出した最終スコアを加算
-                total_score += final_word_score
 
-                # 内訳を保持した辞書形式でリストに追加する(ターミナルでスコア参照用)
-                matched_details.append({
-                    "tag": norm_search_tag,
-                    "final": final_word_score,
-                    "sim": sim_weight,
-                    "ai": ai_weight,
-                    "idf": idf_weight
-                })
+        # ★変更: ORグループごとにループを回し、そのグループ内で一番高いスコアだけを採用する
+        for group_map in search_groups:
+            group_max_score = 0.0
+            best_match_detail = None
+        
+            for search_tag, sim_score in group_map.items():
+                norm_search_tag = search_tag.lower().replace('_', ' ')
+                if norm_search_tag in img_tags:
+                    # 要素A：類似度のペナルティ係数（5乗）
+                    sim_weight = sim_score ** 5
+                    
+                    # 要素B：AI確信度のマイルド化（平方根）
+                    # JSONからタグの確信度を取得（見つからない場合は最低閾値0.35を仮置き）
+                    ai_conf = parsed_tag_scores.get(norm_search_tag, 0.35)
+                    ai_weight = math.sqrt(ai_conf)
+                    
+                    # 要素C：希少性（IDF）の計算（常用対数＋最低10回の足切り）
+                    db_count = self.tag_counts.get(norm_search_tag, 0)
+                    total_imgs = max(self.total_images, 1) # 0割り防止
+                    idf_weight = math.log10(total_imgs / max(db_count, 10))
+                    
+                    # 最終的な単語スコアを算出(クエリとタグの類似度 * タグの信頼度 * タグの希少性)
+                    final_word_score = sim_weight * ai_weight * idf_weight
+
+                    # このグループ内で過去最高のスコアであれば更新する
+                    if final_word_score > group_max_score:
+                        group_max_score = final_word_score
+                        best_match_detail = {
+                            "tag": norm_search_tag,
+                            "final": final_word_score,
+                            "sim": sim_weight,
+                            "ai": ai_weight,
+                            "idf": idf_weight
+                        }
+
+            # グループ内で最も高かった単語のスコア1つだけを加算リストに入れる
+            if best_match_detail:
+                total_score += group_max_score
+                matched_details.append(best_match_detail)
                 
         return total_score, matched_details
 
@@ -434,7 +444,7 @@ class TagSearch:
             # 次のステップ（計算ロジック）で使うために辞書データをrowに保持しておく
             row['parsed_tag_scores'] = scores_dict
 
-            score, matches = self.calculate_image_score_with_details(row['tags_combined'], fast_lookup, row['parsed_tag_scores'])
+            score, matches = self.calculate_image_score_with_details(row['tags_combined'], search_groups, row['parsed_tag_scores'])
             row['match_score'] = score
             row['matched_tags'] = matches
             scored_results.append(row)
