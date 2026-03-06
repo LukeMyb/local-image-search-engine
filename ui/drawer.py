@@ -83,7 +83,9 @@ class BookmarkDrawer:
                 )
                 self.bookmark_list_container.controls.append(item)
         
-        self.view.update()
+        #ドロワーが画面に存在している（pageに紐づいている）時だけ明示的にupdateする
+        if self.view.page:
+            self.view.update()
 
     def on_select(self, query):
         #現在の検索窓の内容を取得（Noneの場合は空文字にする）
