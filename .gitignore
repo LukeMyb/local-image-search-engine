@@ -26,4 +26,7 @@ config.yaml
 #生成ファイルのバックアップ(gitignoreに含まれるファイルを復元するため)
 backup/
 
+#テスト用スクリプト
+test/
+
 memo.txt
