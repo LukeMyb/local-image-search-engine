@@ -7,6 +7,9 @@ import webbrowser
 os.environ["HF_HUB_OFFLINE"] = "1"
 #Transformersライブラリ側の通信も強制遮断する
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
+#テレメトリ（利用統計）の送信通信を強制遮断する
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+os.environ["DISABLE_TELEMETRY"] = "1"
 
 from core.database import ImageDatabase
 from core.tag_search import TagSearch
