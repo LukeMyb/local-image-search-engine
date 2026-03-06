@@ -24,11 +24,13 @@ class ImageIndexer:
         for file_path in self.target_dir.rglob('*'): #rglob('*')はサブフォルダの中身も含めて全ファイルを探索
             #ファイルであり, かつ拡張子が対象フォーマットに一致するか確認
             if file_path.is_file() and file_path.suffix.lower() in self.valid_extensions:
-                abs_path = str(file_path.resolve()) #絶対パスを取得
+                #相対パスのまま、スラッシュ区切り(/)の美しいフォーマットで取得
+                rel_path = file_path.as_posix()
+                
                 mtime = file_path.stat().st_mtime #OSからミリ秒精度の更新日時(UNIXタイムスタンプ)を取得
                 
                 #DB登録用にタプルとしてリストに追加
-                file_data_list.append((abs_path, mtime))
+                file_data_list.append((rel_path, mtime))
                 count += 1
                 
                 #1万枚ごとに進捗を表示
