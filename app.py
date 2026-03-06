@@ -55,7 +55,7 @@ async def main(page: ft.Page):
         if not row: return
 
         #openメソッドを呼び出す
-        await viewer.open(current_results, row)
+        await viewer.open(all_results, row)
 
     def render_current_page():
         nonlocal current_results
