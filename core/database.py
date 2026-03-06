@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import json
+import numpy as np
 
 class ImageDatabase:
     def __init__(self, db_path="data/db/index.db"):
@@ -32,6 +33,7 @@ class ImageDatabase:
 
         #未処理画像を瞬時に見つけるためのインデックス
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_thumb ON images(is_thumbnail_created)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_vector ON images(is_processed_vector)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_tag ON images(is_processed_tag)')
 
         # ---------------------------------------------------------
@@ -90,6 +92,16 @@ class ImageDatabase:
                 last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        # ベクトルデータ(768次元のfloat32)はBLOB型で保存する
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS style_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                vector_data BLOB NOT NULL,
+                last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
         self.conn.commit()
 
@@ -119,6 +131,16 @@ class ImageDatabase:
             SET thumbnail_path = ?, is_thumbnail_created = 1 
             WHERE id = ?
         ''', (thumbnail_path, image_id))
+        self.conn.commit()
+
+    def update_vector_status(self, image_id):
+        #CLIPベクトル解析完了の記録
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE images 
+            SET is_processed_vector = 1 
+            WHERE id = ?
+        ''', (image_id,))
         self.conn.commit()
 
     def update_tags(self, image_id, tags_combined):
@@ -180,6 +202,7 @@ class ImageDatabase:
     def get_image_by_id(self, image_id):
         #指定されたIDの画像データを取得します
         cursor = self.conn.cursor()
+        #FAISSのインデックスは0開始、dbのIDは1開始のため、呼び出し側で調整するかここで調整します
         cursor.execute("SELECT * FROM images WHERE id = ?", (image_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -251,6 +274,68 @@ class ImageDatabase:
         cursor.execute('DELETE FROM user_saved_queries WHERE id = ?', (bookmark_id,))
         self.conn.commit()
 
+    # ----- 絵柄（スタイル）タグ関連メソッド -----
+
+    def save_style_tag(self, name, vector):
+        """絵柄タグの重心ベクトルを保存（重複時は上書き）"""
+        cursor = self.conn.cursor()
+        
+        # NumPy配列をバイナリ(BLOB)に変換
+        vector_bytes = vector.astype(np.float32).tobytes()
+        
+        cursor.execute('SELECT id FROM style_tags WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        
+        if row:
+            # 既存なら UPDATE
+            cursor.execute('''
+                UPDATE style_tags 
+                SET vector_data = ?, last_used_at = CURRENT_TIMESTAMP 
+                WHERE name = ?
+            ''', (vector_bytes, name))
+        else:
+            # 新規なら INSERT
+            cursor.execute('''
+                INSERT INTO style_tags (name, vector_data) 
+                VALUES (?, ?)
+            ''', (name, vector_bytes))
+        self.conn.commit()
+
+    def get_style_vector(self, name):
+        """名前から絵柄タグの重心ベクトルを取得し、NumPy配列に戻す"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT vector_data FROM style_tags WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        
+        if row:
+            # BLOBからNumPy配列に復元
+            vector = np.frombuffer(row['vector_data'], dtype=np.float32)
+            # FAISSで扱いやすいように次元を (1, 768) に整形して返す
+            return vector.reshape(1, -1)
+        return None
+
+    def get_all_styles(self):
+        """保存されている絵柄タグの一覧を取得（UI表示用）"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT id, name, last_used_at FROM style_tags ORDER BY last_used_at DESC')
+        return [dict(row) for row in cursor.fetchall()]
+
+    def delete_style_tag(self, style_id):
+        """絵柄タグの削除"""
+        cursor = self.conn.cursor()
+        cursor.execute('DELETE FROM style_tags WHERE id = ?', (style_id,))
+        self.conn.commit()
+        
+    def update_style_usage(self, name):
+        """検索実行時に呼び出し、使用時刻を最新に更新する"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE style_tags 
+            SET last_used_at = CURRENT_TIMESTAMP 
+            WHERE name = ?
+        ''', (name,))
+        self.conn.commit()
+
 
 
 # --- ここから単体テスト用コード ---
@@ -272,6 +357,12 @@ if __name__ == "__main__":
     ]
     db.register_images(dummy_data)
     print(f"{len(dummy_data)}件のダミー画像を登録しました。")
+
+    # 3. データの取得テスト（辞書型のようにアクセスできるかの確認）
+    unprocessed = db.get_unprocessed_images('is_processed_vector')
+    print("未処理の画像一覧（ベクトル解析待ち）:")
+    for row in unprocessed:
+        print(f" - ID: {row['id']}, Path: {row['file_path']}")
 
     # 4. 安全に閉じる
     db.close()
