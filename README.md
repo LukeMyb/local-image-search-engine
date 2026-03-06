@@ -38,6 +38,8 @@ project_root/
 ├── app.py                 # UI・メイン実行ファイル
 ├── core/                  # バックエンドロジック
 │   ├── database.py        # SQLite (FTS5) 制御
+│   ├── download_assets.py # 翻訳辞書ダウンローダー
+│   ├── index.py           # 初期スキャン・サムネイル生成
 │   ├── tagger.py          # 画像解析・タグ付け
 │   ├── vectorize_tags.py  # タグのベクトルインデックス作成
 │   └── tag_search.py      # 検索・スコアリングエンジン
@@ -46,8 +48,6 @@ project_root/
 │   ├── gallery.py         # グリッド表示
 │   ├── viewer.py          # 画像拡大・詳細表示
 │   └── drawer.py          # ブックマーク一覧
-├── download_assets.py     # 翻訳辞書ダウンローダー
-├── index.py               # 初期スキャン・サムネイル生成
 └── data/                  # データ保存先 (自動生成)
     ├── images/            # ★ここに検索したい画像を入れてください
     ├── db/                # index.dbが生成されます
