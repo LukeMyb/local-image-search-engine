@@ -124,10 +124,22 @@ class SearchBar:
                 self.search_input.value = q
                 self.suggest_container.visible = False # サジェストを隠す
                 self.view.update()
+
+            # 絵柄タグ用のゴミ箱ボタン生成処理
+            trailing_icon = None
+            if s.get("is_style"):
+                trailing_icon = ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINE,
+                    icon_color=ft.Colors.RED_400,
+                    tooltip="この絵柄タグを削除",
+                    # ラムダ式でIDと名前の両方を渡し、ダイアログ表示メソッドを呼ぶ
+                    on_click=lambda e, sid=s["id"], sname=s["display"]: self._show_style_delete_dialog(sid, sname)
+                )
                 
             item = ft.ListTile(
                 title=ft.Text(s["display"], size=14),
                 on_click=on_click_suggest,
+                trailing=trailing_icon,
                 dense=True, # 行間を詰める
             )
             self.suggest_list.controls.append(item)
@@ -135,6 +147,36 @@ class SearchBar:
         # コンテナを表示して画面を更新
         self.suggest_container.visible = True
         self.suggest_container.update()
+
+    # 絵柄タグの削除確認ダイアログ
+    def _show_style_delete_dialog(self, style_id, style_name):
+
+        def close_dlg(e): #キャンセルボタン
+            dlg.open = False
+            self.page.update()
+
+        def delete_click(e): #削除ボタン
+            # DBから該当の絵柄タグを削除
+            self.db.delete_style_tag(style_id)
+            print(f"[Style] 絵柄タグ '{style_name}' (ID:{style_id}) を削除しました")
+            
+            # サジェスト表示を即座にリフレッシュ
+            self._handle_change(None)
+            close_dlg(e)
+
+        # ブックマークの削除と同じ形式でダイアログを構築
+        dlg = ft.AlertDialog(
+            title=ft.Text("絵柄タグの削除"),
+            content=ft.Text(f"絵柄タグ「{style_name}」を削除しますか？\n（この操作は元に戻せません）"),
+            actions=[
+                ft.TextButton("キャンセル", on_click=close_dlg),
+                ft.TextButton("削除", on_click=delete_click, style=ft.ButtonStyle(color=ft.Colors.RED)),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
 
     # 現在のクエリが保存済みかどうかでアイコンを動的に切り替える
     def _update_bookmark_icon(self, query):

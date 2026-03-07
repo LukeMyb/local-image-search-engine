@@ -130,6 +130,8 @@ class TagSearch:
                 # 前方一致で動的に絞り込み
                 if style_name.lower().startswith(prefix):
                     candidates.append({
+                        "id": s['id'],           # DBから削除するためのID
+                        "is_style": True,        # ゴミ箱ボタンを表示するかどうかのフラグ
                         "display": style_name,
                         "query": base_query + style_name,
                         "count": 0 # 絵柄は検索回数ソート不要のためダミー
