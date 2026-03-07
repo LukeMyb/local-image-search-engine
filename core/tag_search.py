@@ -11,6 +11,7 @@ from huggingface_hub import hf_hub_download
 from transformers import CLIPProcessor, CLIPModel
 import translators as ts
 from core.database import ImageDatabase
+from core.style_search import StyleSearcher
 
 class TagSearch:
     def __init__(self, db_path="data/db/index.db", tag_index_path="data/tag_vector_index.bin"):
@@ -19,6 +20,13 @@ class TagSearch:
         #CUDA/CPUの判定を削除し、DirectMLを強制的に割り当てる
         self.device = torch_directml.device()
         print(f"  [System] Device: {self.device} (DirectML)")
+
+        # 絵柄検索エンジンのロード（app.pyと共有してVRAM二重消費を防ぐ）
+        try:
+            self.style_engine = StyleSearcher(self.db)
+        except Exception as e:
+            print(f"  [System] 絵柄検索エンジンのロードに失敗しました: {e}")
+            self.style_engine = None
         
         #モデルロード
         model_id = "openai/clip-vit-base-patch32"
@@ -324,6 +332,30 @@ class TagSearch:
         return total_score, matched_details
 
     def search(self, user_query, is_bookmarked=False):
+        # 絵柄検索(style:)のバイパスルート
+        if user_query.strip().startswith("style:"):
+            if self.style_engine is None:
+                print("エラー: 絵柄検索エンジンが起動していません。")
+                return []
+            
+            style_name = user_query.strip()
+            print(f"\n{'='*60}")
+            print(f" Style Search: '{style_name}'")
+            print(f"{'='*60}")
+            
+            # style_search.pyに処理を丸投げする
+            scored_results = self.style_engine.search_by_style_name(style_name)
+            
+            # ブックマーク（お気に入り）優先のソート処理
+            if is_bookmarked:
+                scored_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
+            else:
+                scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
+                
+            return scored_results
+        
+
+
         # | (パイプ記号) の前後の空白を詰め、純粋な | だけに統一する
         # これにより "A | B" も "A|B" として扱われ、後続の空白分割で千切れるのを防ぐ
         query = re.sub(r'\s*\|\s*', '|', user_query)
