@@ -105,6 +105,26 @@ class TagSearch:
     def get_suggestions(self, query_text, limit=10):
         """入力された文字列からヒットするサジェスト候補を返す"""
         if not query_text: return []
+
+        # --- 絵柄検索(style:)のサジェスト処理 ---
+        # 入力が "style:" で始まり、かつスペースを含まない（現在絵柄タグをタイピング中）場合
+        if query_text.startswith("style:") and " " not in query_text:
+            styles = self.db.get_all_styles()
+            candidates = []
+            prefix = query_text.lower()
+            
+            for s in styles:
+                style_name = s['name'] # DBには "style:xxx" の形式で保存されている
+                # 前方一致で動的に絞り込み
+                if style_name.lower().startswith(prefix):
+                    candidates.append({
+                        "display": style_name,
+                        "query": style_name,
+                        "count": 0 # 絵柄は検索回数ソート不要のためダミー
+                    })
+            
+            # 個数制限(limit)なしで全件返す
+            return candidates
         
         # 入力文字列（スペースとアンダースコア両方対応できるようにする）
         prefix = query_text.lower().strip()
