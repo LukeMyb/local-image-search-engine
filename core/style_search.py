@@ -76,7 +76,7 @@ class StyleSearcher:
         mean_vec = np.mean(valid_vectors, axis=0)
         return mean_vec
 
-    def search_by_style_name(self, style_name, top_k=200):
+    def search_by_style_name(self, style_name, threshold=0.98):
         """【機能2】DBに保存された絵柄名（style:xxx）から検索を実行する"""
         if self.index is None:
             print("エラー: 検索インデックスがロードされていません。")
@@ -90,6 +90,11 @@ class StyleSearcher:
 
         # FAISS検索用にL2正規化
         faiss.normalize_L2(query_vector)
+
+        # 検索対象(top_k)を「FAISSに登録されている全画像数」に動的設定
+        top_k = self.index.ntotal
+        if top_k == 0:
+            return []
         
         # 検索の実行 (distances=スコア, indices=DB上の画像ID)
         distances, indices = self.index.search(query_vector, top_k)
@@ -97,8 +102,12 @@ class StyleSearcher:
         results = []
         for i in range(top_k):
             score = float(distances[0][i])
+
+            #閾値による足切り（似ていない画像はここで捨てる）
+            if score < threshold:
+                continue
+
             image_id = int(indices[0][i])
-            
             if image_id == -1: continue
 
             # DBからサムネイルパスなどの画像情報を取得
