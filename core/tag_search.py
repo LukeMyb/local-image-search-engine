@@ -106,12 +106,24 @@ class TagSearch:
         """入力された文字列からヒットするサジェスト候補を返す"""
         if not query_text: return []
 
+        # 文字列の分割と base_query の作成
+        # 全角スペースを半角に統一してから分割
+        normalized_query = query_text.replace('　', ' ')
+        parts = normalized_query.split(' ')
+        current_word = parts[-1]
+        
+        # 末尾がスペース（新しい単語の入力待ち）ならサジェスト窓は出さない
+        if not current_word:
+            return []
+
+        # サジェスト選択時に、前の単語を消さないためのベース文字列
+        base_query = " ".join(parts[:-1]) + " " if len(parts) > 1 else ""
+
         # --- 絵柄検索(style:)のサジェスト処理 ---
-        # 入力が "style:" で始まり、かつスペースを含まない（現在絵柄タグをタイピング中）場合
-        if query_text.startswith("style:") and " " not in query_text:
+        if current_word.lower().startswith("style:"):
             styles = self.db.get_all_styles()
             candidates = []
-            prefix = query_text.lower()
+            prefix = current_word.lower()
             
             for s in styles:
                 style_name = s['name'] # DBには "style:xxx" の形式で保存されている
@@ -119,15 +131,26 @@ class TagSearch:
                 if style_name.lower().startswith(prefix):
                     candidates.append({
                         "display": style_name,
-                        "query": style_name,
+                        "query": base_query + style_name,
                         "count": 0 # 絵柄は検索回数ソート不要のためダミー
                     })
             
             # 個数制限(limit)なしで全件返す
             return candidates
         
-        # 入力文字列（スペースとアンダースコア両方対応できるようにする）
-        prefix = query_text.lower().strip()
+        # 複数単語が入力されている場合（例: "style:myuto 黒髪"）、最後の単語だけをサジェスト対象にする
+        parts = query_text.split(' ')
+        current_word = parts[-1]
+        
+        # 末尾がスペース（新しい単語の入力待ち）ならサジェスト窓は出さない
+        if not current_word:
+            return []
+            
+        # サジェスト選択時に、前の単語を消さないためのベース文字列
+        base_query = " ".join(parts[:-1]) + " " if len(parts) > 1 else ""
+        
+        #入力窓の全文(query_text)ではなく、現在入力中の最後の単語(current_word)だけを照合する
+        prefix = current_word.lower().strip()
         prefix_under = prefix.replace(' ', '_')
 
         candidates = []
@@ -141,7 +164,7 @@ class TagSearch:
             if prefix in tag or prefix_under in underscored_tag:
                 candidates.append({
                     "display": f"{underscored_tag} ({count}件)", # UI表示用(アンダースコア付き)
-                    "query": underscored_tag,                    # クリック時入力(アンダースコア付き)
+                    "query": base_query + underscored_tag,                    # クリック時入力(アンダースコア付き)
                     "count": count
                 })
                 
@@ -154,7 +177,7 @@ class TagSearch:
                 count = self.tag_counts[norm_actual]
                 candidates.append({
                     "display": f"{alias} -> {actual} ({count}件)", 
-                    "query": alias, 
+                    "query": base_query + alias, 
                     "count": count
                 })
                 

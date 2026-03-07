@@ -120,10 +120,10 @@ class SearchBar:
         for s in suggestions:
             # クロージャを使ってクリック時の処理を定義
             def on_click_suggest(e, q=s["query"]):
-                self.search_input.value = q # 検索窓の文字を選択した候補で上書き
+                #検索窓の文字を上書き
+                self.search_input.value = q
                 self.suggest_container.visible = False # サジェストを隠す
                 self.view.update()
-                asyncio.create_task(self._handle_search()) # すぐに検索を実行する
                 
             item = ft.ListTile(
                 title=ft.Text(s["display"], size=14),
