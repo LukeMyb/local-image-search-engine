@@ -510,13 +510,14 @@ class TagSearch:
                 # (万が一タグスコアが0に近い場合でも絵柄が評価されるよう、最低保証点1.0を設ける)
                 base_score = max(score, 1.0)
                 score = base_score * style_multiplier
-                
+
                 matches.append({
+                    "is_style": True, # 絵柄用のフラグ
                     "tag": style_name,
-                    "final": style_score,
+                    "final": score - base_score, # 増えた点数
                     "sim": style_score,
-                    "ai": 1.0,
-                    "idf": 1.0
+                    "base": base_score,
+                    "multiplier": style_multiplier
                 })
 
             row['match_score'] = score
@@ -542,12 +543,15 @@ if __name__ == "__main__":
     print("-" * 60)
     # テスト時は上位5件だけ表示するようにスライス
     for i, row in enumerate(results[:5]):
-        print(f"Rank {i+1} [Score: {row['match_score']:.2f}]")
+        print(f"Rank {i+1} [Score: {row['match_score']:.3f}]")
         print(f"  Path: {row['file_path']}")
 
         # 保持しておいた係数の内訳を展開して表示
         print("  Matches:")
         for m in row['matched_tags']:
-            print(f"    [{m['tag']}] {m['final']:.3f} = {m['sim']:.3f}(sim) * {m['ai']:.3f}(ai) * {m['idf']:.3f}(idf)")
+            if m.get("is_style"):
+                print(f"    [{m['tag']}] {m['base']:.3f}(base) * {m['multiplier']:.3f}(sim:{m['sim']:.3f}) = {m['base'] + m['final']:.3f}")
+            else:
+                print(f"    [{m['tag']}] {m['final']:.3f} = {m['sim']:.3f}(sim) * {m['ai']:.3f}(ai) * {m['idf']:.3f}(idf)")
 
         print("-" * 60)
