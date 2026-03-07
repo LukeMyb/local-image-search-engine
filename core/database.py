@@ -102,6 +102,15 @@ class ImageDatabase:
                 last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        # 翻訳キャッシュ用のテーブルとインデックス
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS translation_cache (
+                jp_text TEXT PRIMARY KEY,
+                en_text TEXT
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_jp_text ON translation_cache(jp_text)')
         
         self.conn.commit()
 
@@ -334,6 +343,21 @@ class ImageDatabase:
             SET last_used_at = CURRENT_TIMESTAMP 
             WHERE name = ?
         ''', (name,))
+        self.conn.commit()
+
+    # ----- 翻訳キャッシュ関連メソッド -----
+
+    # 翻訳キャッシュ取得
+    def get_cached_translation(self, jp_text):
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT en_text FROM translation_cache WHERE jp_text = ?", (jp_text,))
+        row = cursor.fetchone()
+        return row['en_text'] if row else None
+
+    # 翻訳キャッシュ保存
+    def save_translation_to_cache(self, jp_text, en_text):
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO translation_cache (jp_text, en_text) VALUES (?, ?)", (jp_text, en_text))
         self.conn.commit()
 
 

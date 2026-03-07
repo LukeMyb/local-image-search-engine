@@ -235,38 +235,60 @@ class TagSearch:
         if found:
             print(f"  ├─ [Direct/Alias Hit]: {word} -> {english_word}")
             return english_word, {english_word: 1.0}
-
-        # --- Step 2: Google翻訳 ---
-        try:
-            translated_g = ts.translate_text(word, translator='google', to_language='en')
-            # 翻訳結果を再度Alias辞書・リストで確認
-            english_word, found = self._check_alias_or_list(translated_g)
+        
+        # --- Step 2: キャッシュの確認 ---
+        cached_en = self.db.get_cached_translation(word)
+        if cached_en:
+            print(f"  ├─ [Cache Hit]: {word} -> {cached_en}")
+            final_query = cached_en
+            # キャッシュされた英語がAlias辞書やリストにあるか確認
+            english_word, found = self._check_alias_or_list(cached_en)
             if found:
-                print(f"  ├─ [Google -> Alias/List]: {word} -> {english_word}")
                 return english_word, {english_word: 1.0}
-        except Exception as e:
-            print(f"  [!] Google Translate Error: {e}")
+        else:
+            # キャッシュがなければ従来通りAPIへ
+            print(f"  ├─ [API Request]: Translating '{word}'...")
 
-        # --- Step 3: Bing翻訳 ---
-        translated_b = ""
-        try:
-            translated_b = ts.translate_text(word, translator='bing', to_language='en')
-            #まずは辞書・リストにあるか確認
-            english_word, found = self._check_alias_or_list(translated_b)
-            if found:
-                print(f"  ├─ [Bing -> Alias/List]: {word} -> {english_word}")
-                return english_word, {english_word: 1.0}
-        except Exception as e:
-            print(f"  [!] Bing Translate Error: {e}")
+            # --- Step 3: Google翻訳 ---
+            try:
+                translated_g = ts.translate_text(word, translator='google', to_language='en')
 
-        # --- Step 4: CLIPベクトル検索 (最終手段) ---
-        #Bing翻訳の結果があればそれを使用し、なければGoogle翻訳や元の単語をフォールバックにする
-        final_query = translated_b if translated_b else (translated_g if 'translated_g' in locals() else word)
+                if translated_g:
+                    self.db.save_translation_to_cache(word, translated_g) # 保存
+                    
+                # 翻訳結果を再度Alias辞書・リストで確認
+                english_word, found = self._check_alias_or_list(translated_g)
+                if found:
+                    print(f"  ├─ [Google -> Alias/List]: {word} -> {english_word}")
+                    return english_word, {english_word: 1.0}
+            except Exception as e:
+                print(f"  [!] Google Translate Error: {e}")
+
+            # --- Step 4: Bing翻訳 ---
+            translated_b = ""
+            try:
+                translated_b = ts.translate_text(word, translator='bing', to_language='en')
+
+                if translated_b:
+                    self.db.save_translation_to_cache(word, translated_b) # 保存
+
+                #まずは辞書・リストにあるか確認
+                english_word, found = self._check_alias_or_list(translated_b)
+                if found:
+                    print(f"  ├─ [Bing -> Alias/List]: {word} -> {english_word}")
+                    return english_word, {english_word: 1.0}
+            except Exception as e:
+                print(f"  [!] Bing Translate Error: {e}")
+
+            # 最終的なベクトル検索用クエリ
+            final_query = translated_b if translated_b else (translated_g if 'translated_g' in locals() else word)
+
+        # --- Step 5: CLIPベクトル検索 (最終手段) ---
         print(f"  ├─ [Vector Search]: Using query '{final_query}'")
 
         found_tags_map = {} 
 
-        # ★追加：翻訳された単語を使って、キャラ名_(作品名) などのタグを前方一致で直接救済する
+        # 翻訳された単語を使って、キャラ名_(作品名) などのタグを前方一致で直接救済する
         norm_final = final_query.lower().replace(' ', '_')
         prefix_search = f"{norm_final}_("
         text_match_count = 0
