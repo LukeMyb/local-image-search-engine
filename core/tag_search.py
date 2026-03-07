@@ -332,27 +332,45 @@ class TagSearch:
         return total_score, matched_details
 
     def search(self, user_query, is_bookmarked=False):
-        # 絵柄検索(style:)のバイパスルート
-        if user_query.strip().startswith("style:"):
+        # ★追加: 絵柄タグ(style:xxx)の抽出と分離処理
+        style_match = re.search(r'style:([^\s|]+)', user_query)
+        style_name = None
+        style_scores_map = {}
+        
+        if style_match:
+            style_name = style_match.group(0) # 例: "style:A"
+            # クエリ文字列から "style:A" を取り除いて前後の空白を消す（残りのタグを抽出）
+            user_query = user_query.replace(style_name, '').strip()
+            
             if self.style_engine is None:
                 print("エラー: 絵柄検索エンジンが起動していません。")
                 return []
-            
-            style_name = user_query.strip()
+                
             print(f"\n{'='*60}")
             print(f" Style Search: '{style_name}'")
             print(f"{'='*60}")
             
-            # style_search.pyに処理を丸投げする
-            scored_results = self.style_engine.search_by_style_name(style_name)
+            # FAISSで絵柄検索を実行 (ユーザー指定の閾値0.98で足切り)
+            # ※ここで style_search.py 側の search_by_style_name の threshold が機能します
+            style_results = self.style_engine.search_by_style_name(style_name, threshold=0.98)
             
-            # ブックマーク（お気に入り）優先のソート処理
-            if is_bookmarked:
-                scored_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
-            else:
-                scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
+            # 高速なAND判定のために、見つかった画像IDとスコアを辞書(Map)にしておく
+            style_scores_map = {res['id']: res['match_score'] for res in style_results}
+            
+            # もし「style:A」以外に何も入力されていなければ、ここで結果を返して終了（パターン1）
+            if not user_query:
+                if is_bookmarked:
+                    style_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
+                else:
+                    style_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
+                return style_results
                 
-            return scored_results
+            # もし絵柄検索で1件もヒットしなければ、AND検索の結果も確実に0件なので即終了
+            if not style_scores_map:
+                print("  -> 絵柄に一致する画像が0件のため、検索を終了します。")
+                return []
+                
+            print(f"  -> 絵柄検索で {len(style_scores_map)}件 ヒット。続けてタグ検索で絞り込みます...")
         
 
 
@@ -466,6 +484,10 @@ class TagSearch:
 
         scored_results = []
         for row in raw_results:
+            # 絵柄検索(style:)が併用されている場合、FAISSの結果に無い画像は捨てる（AND結合）
+            if style_name and row['id'] not in style_scores_map:
+                continue
+
             # JSON文字列をPythonの辞書に変換（データがない場合のエラー回避策も含む）
             scores_dict = {}
             if row.get('tag_scores'):
@@ -477,6 +499,19 @@ class TagSearch:
             row['parsed_tag_scores'] = scores_dict
 
             score, matches = self.calculate_image_score_with_details(row['tags_combined'], search_groups, row['parsed_tag_scores'])
+
+            # 絵柄のスコアも合算して、ターミナルで確認できるようにする
+            if style_name:
+                style_score = style_scores_map[row['id']]
+                score += style_score # タグスコア + 絵柄スコアで最終順位を決める
+                matches.append({
+                    "tag": style_name,
+                    "final": style_score,
+                    "sim": style_score,
+                    "ai": 1.0,
+                    "idf": 1.0
+                })
+
             row['match_score'] = score
             row['matched_tags'] = matches
             scored_results.append(row)
