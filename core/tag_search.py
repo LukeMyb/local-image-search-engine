@@ -503,7 +503,14 @@ class TagSearch:
             # 絵柄のスコアも合算して、ターミナルで確認できるようにする
             if style_name:
                 style_score = style_scores_map[row['id']]
-                score += style_score # タグスコア + 絵柄スコアで最終順位を決める
+
+                # 0.98を1.0倍(基準)とし、1.00で最大3.0倍になるように係数(100)を掛ける
+                style_multiplier = 1.0 + max(0, (style_score - 0.98) * 100)
+                # タグの点数に倍率を掛けて最終スコアとする
+                # (万が一タグスコアが0に近い場合でも絵柄が評価されるよう、最低保証点1.0を設ける)
+                base_score = max(score, 1.0)
+                score = base_score * style_multiplier
+                
                 matches.append({
                     "tag": style_name,
                     "final": style_score,
