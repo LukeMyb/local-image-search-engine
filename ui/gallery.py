@@ -87,7 +87,11 @@ class ImageGallery:
             [
                 self.gallery_area,
                 self.pagination_row,
-                self.slider_row, #スライダーを表示
+                # slider_row を Container で包み、下部にだけ 20px の余白を強制的に作る
+                ft.Container(
+                    content=self.slider_row,
+                    padding=ft.padding.only(bottom=20) 
+                ),
             ],
             expand=True,
             spacing=0,
