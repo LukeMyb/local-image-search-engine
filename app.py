@@ -62,7 +62,7 @@ async def main(page: ft.Page):
         if not row: return
 
         #openメソッドを呼び出す（タスクとして非同期実行）
-        asyncio.create_task(viewer.open(current_results, row))
+        asyncio.create_task(viewer.open(all_results, row))
 
     def render_current_page():
         nonlocal current_results
