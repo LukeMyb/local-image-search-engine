@@ -11,6 +11,12 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from core.database import ImageDatabase
 from core.tag_search import TagSearch
 from core.style_search import StyleSearcher
+
+#バックグラウンド処理に必要なモジュール群
+from core.index import ImageIndexer, ThumbnailGenerator
+from core.tagger import Tagger
+from core.vectorize_images import StyleVectorizer
+
 from ui.search_bar import SearchBar
 from ui.viewer import ImageViewer
 from ui.gallery import ImageGallery
@@ -32,6 +38,52 @@ async def initialize_engine(page: ft.Page, status_text: ft.Text, db: ImageDataba
     page.update()
     
     return searcher, style_searcher
+
+# バックグラウンドで走る自動同期プロセス
+async def auto_sync_process():
+    """起動時に非同期で実行され、UIを固めずに裏で画像を処理する"""
+    print("  [AutoSync] バックグラウンド同期を開始します...")
+    
+    def run_sync():
+        try:
+            # SQLiteの「別スレッドからのアクセス禁止」エラーを防ぐため、同期処理専用のDB接続を作成
+            sync_db = ImageDatabase()
+            
+            # 1. フォルダの新規スキャン
+            print("  [AutoSync] フォルダをスキャンしています...")
+            indexer = ImageIndexer(sync_db, "data/images")
+            indexer.scan_and_register()
+
+            # 2. サムネイル未作成の画像を処理
+            unprocessed_thumbs = sync_db.get_unprocessed_images('is_thumbnail_created')
+            if unprocessed_thumbs:
+                print(f"  [AutoSync] {len(unprocessed_thumbs)}件のサムネイルを作成します...")
+                generator = ThumbnailGenerator(sync_db)
+                generator.process_all()
+
+            # 3. タグ未付与の画像を処理 (WD1.4 Tagger)
+            unprocessed_tags = sync_db.get_unprocessed_images('is_processed_tag')
+            if unprocessed_tags:
+                print(f"  [AutoSync] {len(unprocessed_tags)}件のタグ付けを実行します...")
+                # Taggerは内部で独自のDB接続を開くため安全
+                tagger = Tagger(db_path="data/db/index.db") 
+                tagger.process_all(force_update=False)
+
+            # 4. 絵柄ベクトル未処理の画像を処理
+            unprocessed_vecs = sync_db.get_unprocessed_images('is_processed_vector')
+            if unprocessed_vecs:
+                print(f"  [AutoSync] {len(unprocessed_vecs)}件の絵柄ベクトル化を実行します...")
+                vectorizer = StyleVectorizer(sync_db)
+                # RTX 50シリーズを活かしたバッチサイズで高速処理
+                vectorizer.process_all(batch_size=32)
+
+            sync_db.close()
+            print("  [AutoSync] 全てのバックグラウンド同期が完了しました。")
+        except Exception as e:
+            print(f"  [AutoSync] 同期中にエラーが発生しました: {e}")
+
+    # UIスレッドをフリーズさせないよう、重い処理を別スレッドに投げる
+    await asyncio.to_thread(run_sync)
 
 async def main(page: ft.Page):
     all_results = [] #全検索結果のリスト
@@ -219,6 +271,9 @@ async def main(page: ft.Page):
 
     #エンジンロード完了直後に空クエリを投げ、初回起動時にお気に入りを表示させる
     await on_search("")
+
+    # エンジンがロードされ、UIの表示が終わったタイミングで裏の同期タスクをキックする
+    asyncio.create_task(auto_sync_process())
 
 if __name__ == "__main__":
     #自動起動を無効化 (ダミー関数で上書き)
