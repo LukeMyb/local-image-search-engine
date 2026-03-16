@@ -230,15 +230,10 @@ class ImageViewer:
             raw_path = row.get('file_path', '')
             
             if raw_path:
-                # Windowsのパス区切り（\）をスラッシュ（/）に統一
-                normalized_path = raw_path.replace('\\', '/')
-                
-                # パスの中から '/images/' 以降の部分を抽出
-                if '/images/' in normalized_path:
-                    # 例: ".../data/images/180APPLE/abc.JPG" -> "180APPLE/abc.JPG"
-                    rel_path = normalized_path.split('/images/')[-1]
-                else:
-                    # 万が一パスに '/images/' が含まれていない場合はファイル名のみを使用
+                # 基準ディレクトリ（data/images）からの相対パスを取得してURL形式へ変換
+                try:
+                    rel_path = os.path.relpath(raw_path, "data/images").replace("\\", "/")
+                except ValueError:
                     rel_path = os.path.basename(raw_path)
                     
                 return f"/images/{rel_path}"
