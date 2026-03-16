@@ -356,7 +356,7 @@ class TagSearch:
         # タグの正規化（小文字、スペース統一）
         img_tags = {t.strip().lower().replace('_', ' ') for t in image_tags_str.split(',')}
 
-        # ★変更: ORグループごとにループを回し、そのグループ内で一番高いスコアだけを採用する
+        # ORグループごとにループを回し、そのグループ内で一番高いスコアだけを採用する
         for group_map in search_groups:
             group_max_score = 0.0
             best_match_detail = None
@@ -399,7 +399,7 @@ class TagSearch:
         return total_score, matched_details
 
     def search(self, user_query, is_bookmarked=False):
-        # ★追加: 絵柄タグ(style:xxx)の抽出と分離処理
+        # 絵柄タグ(style:xxx)の抽出と分離処理
         style_match = re.search(r'style:([^\s|]+)', user_query)
         style_name = None
         style_scores_map = {}

@@ -39,7 +39,7 @@ class Tagger:
             "pattern background", "abstract background", 
             "indoors", "outdoors",
 
-            # ★追加：--- 不要な肌色・ノイズ属性 ---
+            # --- 不要な肌色・ノイズ属性 ---
             "blue_skin", "purple_skin", "green_skin", "red_skin", "grey_skin"
         }
         
