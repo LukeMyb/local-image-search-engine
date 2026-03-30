@@ -9,8 +9,7 @@ os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 from core.database import ImageDatabase
-from core.tag_search import TagSearch
-from core.style_search import StyleSearcher
+from core.search import SearchManager
 
 #バックグラウンド処理に必要なモジュール群
 from core.index import ImageIndexer, ThumbnailGenerator
@@ -26,10 +25,10 @@ async def initialize_engine(page: ft.Page, status_text: ft.Text, db: ImageDataba
     await asyncio.sleep(0.1) #ブラウザへの描画時間を確保
     
     print("AIモデルを読み込んでいます...")
-    searcher = TagSearch() #重い処理
+    search_manager = SearchManager() #重い処理 #重い処理
 
     #TagSearchが内部に持っているエンジンを共有する（二重ロード防止）
-    style_searcher = searcher.style_engine
+    style_searcher = search_manager.style_engine
 
     if style_searcher is None:
         print("  [!] 絵柄検索エンジンの統合に失敗しました。")
@@ -37,7 +36,7 @@ async def initialize_engine(page: ft.Page, status_text: ft.Text, db: ImageDataba
     status_text.value = "Ready" #準備完了メッセージ
     page.update()
     
-    return searcher, style_searcher
+    return search_manager, style_searcher
 
 # バックグラウンドで走る自動同期プロセス
 async def auto_sync_process():
