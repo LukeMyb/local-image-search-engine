@@ -11,7 +11,6 @@ from huggingface_hub import hf_hub_download
 from transformers import CLIPProcessor, CLIPModel
 import translators as ts
 from core.database import ImageDatabase
-from core.style_search import StyleSearcher
 
 class TagSearch:
     def __init__(self, db_path="data/db/index.db", tag_index_path="data/tag_vector_index.bin"):
@@ -20,13 +19,6 @@ class TagSearch:
         #CUDA/CPUの判定を削除し、DirectMLを強制的に割り当てる
         self.device = torch_directml.device()
         print(f"  [System] Device: {self.device} (DirectML)")
-
-        # 絵柄検索エンジンのロード（app.pyと共有してVRAM二重消費を防ぐ）
-        try:
-            self.style_engine = StyleSearcher(self.db)
-        except Exception as e:
-            print(f"  [System] 絵柄検索エンジンのロードに失敗しました: {e}")
-            self.style_engine = None
         
         #モデルロード
         model_id = "openai/clip-vit-base-patch32"
@@ -116,38 +108,6 @@ class TagSearch:
         if not current_word:
             return []
 
-        # サジェスト選択時に、前の単語を消さないためのベース文字列
-        base_query = " ".join(parts[:-1]) + " " if len(parts) > 1 else ""
-
-        # --- 絵柄検索(style:)のサジェスト処理 ---
-        if current_word.lower().startswith("style:"):
-            styles = self.db.get_all_styles()
-            candidates = []
-            prefix = current_word.lower()
-            
-            for s in styles:
-                style_name = s['name'] # DBには "style:xxx" の形式で保存されている
-                # 前方一致で動的に絞り込み
-                if style_name.lower().startswith(prefix):
-                    candidates.append({
-                        "id": s['id'],           # DBから削除するためのID
-                        "is_style": True,        # ゴミ箱ボタンを表示するかどうかのフラグ
-                        "display": style_name,
-                        "query": base_query + style_name,
-                        "count": 0 # 絵柄は検索回数ソート不要のためダミー
-                    })
-            
-            # 個数制限(limit)なしで全件返す
-            return candidates
-        
-        # 複数単語が入力されている場合（例: "style:myuto 黒髪"）、最後の単語だけをサジェスト対象にする
-        parts = query_text.split(' ')
-        current_word = parts[-1]
-        
-        # 末尾がスペース（新しい単語の入力待ち）ならサジェスト窓は出さない
-        if not current_word:
-            return []
-            
         # サジェスト選択時に、前の単語を消さないためのベース文字列
         base_query = " ".join(parts[:-1]) + " " if len(parts) > 1 else ""
         
@@ -399,48 +359,6 @@ class TagSearch:
         return total_score, matched_details
 
     def search(self, user_query, is_bookmarked=False):
-        # 絵柄タグ(style:xxx)の抽出と分離処理
-        style_match = re.search(r'style:([^\s|]+)', user_query)
-        style_name = None
-        style_scores_map = {}
-        
-        if style_match:
-            style_name = style_match.group(0) # 例: "style:A"
-            # クエリ文字列から "style:A" を取り除いて前後の空白を消す（残りのタグを抽出）
-            user_query = user_query.replace(style_name, '').strip()
-            
-            if self.style_engine is None:
-                print("エラー: 絵柄検索エンジンが起動していません。")
-                return []
-                
-            print(f"\n{'='*60}")
-            print(f" Style Search: '{style_name}'")
-            print(f"{'='*60}")
-            
-            # FAISSで絵柄検索を実行 (ユーザー指定の閾値0.98で足切り)
-            # ※ここで style_search.py 側の search_by_style_name の threshold が機能します
-            style_results = self.style_engine.search_by_style_name(style_name, threshold=0.98)
-            
-            # 高速なAND判定のために、見つかった画像IDとスコアを辞書(Map)にしておく
-            style_scores_map = {res['id']: res['match_score'] for res in style_results}
-            
-            # もし「style:A」以外に何も入力されていなければ、ここで結果を返して終了（パターン1）
-            if not user_query:
-                if is_bookmarked:
-                    style_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
-                else:
-                    style_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
-                return style_results
-                
-            # もし絵柄検索で1件もヒットしなければ、AND検索の結果も確実に0件なので即終了
-            if not style_scores_map:
-                print("  -> 絵柄に一致する画像が0件のため、検索を終了します。")
-                return []
-                
-            print(f"  -> 絵柄検索で {len(style_scores_map)}件 ヒット。続けてタグ検索で絞り込みます...")
-        
-
-
         # | (パイプ記号) の前後の空白を詰め、純粋な | だけに統一する
         # これにより "A | B" も "A|B" として扱われ、後続の空白分割で千切れるのを防ぐ
         query = re.sub(r'\s*\|\s*', '|', user_query)
@@ -551,10 +469,6 @@ class TagSearch:
 
         scored_results = []
         for row in raw_results:
-            # 絵柄検索(style:)が併用されている場合、FAISSの結果に無い画像は捨てる（AND結合）
-            if style_name and row['id'] not in style_scores_map:
-                continue
-
             # JSON文字列をPythonの辞書に変換（データがない場合のエラー回避策も含む）
             scores_dict = {}
             if row.get('tag_scores'):
@@ -566,26 +480,6 @@ class TagSearch:
             row['parsed_tag_scores'] = scores_dict
 
             score, matches = self.calculate_image_score_with_details(row['tags_combined'], search_groups, row['parsed_tag_scores'])
-
-            # 絵柄のスコアも合算して、ターミナルで確認できるようにする
-            if style_name:
-                style_score = style_scores_map[row['id']]
-
-                # 0.98を1.0倍(基準)とし、1.00で最大3.0倍になるように係数(100)を掛ける
-                style_multiplier = 1.0 + max(0, (style_score - 0.98) * 100)
-                # タグの点数に倍率を掛けて最終スコアとする
-                # (万が一タグスコアが0に近い場合でも絵柄が評価されるよう、最低保証点1.0を設ける)
-                base_score = max(score, 1.0)
-                score = base_score * style_multiplier
-
-                matches.append({
-                    "is_style": True, # 絵柄用のフラグ
-                    "tag": style_name,
-                    "final": score - base_score, # 増えた点数
-                    "sim": style_score,
-                    "base": base_score,
-                    "multiplier": style_multiplier
-                })
 
             row['match_score'] = score
             row['matched_tags'] = matches

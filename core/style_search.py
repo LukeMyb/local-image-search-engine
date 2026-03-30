@@ -121,6 +121,25 @@ class StyleSearcher:
                 
         return results
 
+    # 絵柄サジェスト生成
+    def get_style_suggestions(self, prefix, base_query):
+        """絵柄名(style:xxx)のサジェスト候補をDBから取得する"""
+        styles = self.db.get_all_styles()
+        candidates = []
+        
+        for s in styles:
+            style_name = s['name']
+            if style_name.lower().startswith(prefix):
+                candidates.append({
+                    "id": s['id'],           # DBから削除するためのID
+                    "is_style": True,        # ゴミ箱ボタンを表示するかどうかのフラグ
+                    "display": style_name,
+                    "query": base_query + style_name,
+                    "count": 0 # 絵柄は検索回数ソート不要のためダミー
+                })
+        
+        return candidates
+
 # --- 単体テスト ---
 if __name__ == "__main__":
     db = ImageDatabase()
