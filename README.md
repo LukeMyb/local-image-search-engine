@@ -36,13 +36,15 @@ pip install translators pillow
 ```text
 project_root/
 ├── app.py                 # UI・メイン実行ファイル
-├── core/                  # バックエンドロジック
-│   ├── database.py        # SQLite (FTS5) 制御
+├── scripts/               # 初回セットアップ
 │   ├── download_assets.py # 翻訳辞書ダウンローダー
+│   └── vectorize_tags.py  # タグのベクトルインデックス作成
+├── tasks/                 # アプリの裏で実行されるバックグラウンド処理群
 │   ├── index.py           # 初期スキャン・サムネイル生成
 │   ├── tagger.py          # 画像解析・タグ付け
-│   ├── vectorize_images.py# 絵柄(画風)ベクトルの生成
-│   ├── vectorize_tags.py  # タグのベクトルインデックス作成
+│   └── vectorize_images.py# 絵柄(画風)ベクトルの生成
+├── core/                  # バックエンドロジック
+│   ├── database.py        # SQLite (FTS5) 制御
 │   ├── search.py          # 検索全体のオーケストレーター
 │   ├── tag_search.py      # タグのテキスト・ベクトル検索エンジン
 │   └── style_search.py    # 絵柄(画風)のベクトル検索エンジン
@@ -79,7 +81,7 @@ project_root/
 10万語規模の英日翻訳辞書を取得します。（初回のみネット接続が必要です）
 
 ```bash
-python -m core.download_assets
+python -m scripts.download_assets
 
 ```
 
@@ -88,7 +90,7 @@ python -m core.download_assets
 AIの出力タグを意味のベクトルに変換し、検索用のインデックスを作成します。（初回のみネット接続が必要です）
 
 ```bash
-python -m core.vectorize_tags
+python -m scripts.vectorize_tags
 
 ```
 
@@ -97,7 +99,7 @@ python -m core.vectorize_tags
 `data/images` フォルダ内の画像をデータベースに登録し、表示用の軽いサムネイルを作成します。
 
 ```bash
-python -m core.index
+python -m tasks.index
 
 ```
 
@@ -107,7 +109,7 @@ python -m core.index
 *(※ 枚数が多い場合は時間がかかります。DirectMLによるGPU支援が効いているかターミナルで確認してください)*
 
 ```bash
-python -m core.tagger
+python -m tasks.tagger
 
 ```
 
@@ -116,7 +118,7 @@ python -m core.tagger
 VGG16モデルを使用して、全画像から画風（平均・標準偏差）を抽出し、検索用のFAISSインデックスを作成します。
 
 ```bash
-python -m core.vectorize_images
+python -m tasks.vectorize_images
 
 ```
 
