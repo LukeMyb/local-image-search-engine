@@ -5,10 +5,10 @@ Write-Host "=== Local Image Search Engine セットアップを開始します =
 
 # 実行するスクリプトの順番を定義
 $scripts = @(
-    "core/download_assets.py",
-    "core/vectorize_tags.py",
-    "core/index.py",
-    "core/tagger.py"
+    "scripts/download_assets.py",
+    "scripts/vectorize_tags.py",
+    "tasks/index.py",
+    "tasks/tagger.py"
 )
 
 foreach ($script in $scripts) {
