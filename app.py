@@ -12,9 +12,9 @@ from core.database import ImageDatabase
 from core.search import SearchManager
 
 #バックグラウンド処理に必要なモジュール群
-from core.index import ImageIndexer, ThumbnailGenerator
-from core.tagger import Tagger
-from core.vectorize_images import StyleVectorizer
+from tasks.index import ImageIndexer, ThumbnailGenerator
+from tasks.tagger import Tagger
+from tasks.vectorize_images import StyleVectorizer
 
 from ui.search_bar import SearchBar
 from ui.viewer import ImageViewer
