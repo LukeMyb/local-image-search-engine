@@ -27,5 +27,5 @@ jobs:
 
       - name: Run sync script
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.MY_PAT }}
         run: python .github/scripts/sync_issues.py
