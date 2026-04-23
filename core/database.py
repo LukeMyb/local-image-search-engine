@@ -7,7 +7,10 @@ class ImageDatabase:
     def __init__(self, db_path="data/db/index.db"):
         #データベースへの接続と初期化
         os.makedirs(os.path.dirname(db_path), exist_ok=True) #dbの存在を確認(無ければ生成)
-        self.conn = sqlite3.connect(db_path)
+
+        # FastAPIからのマルチスレッドアクセスを許可し、ロック待機時間を設定
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10.0)
+
         self.conn.row_factory = sqlite3.Row #tupleをdictのように扱えるようになる
         self._create_tables()
 
