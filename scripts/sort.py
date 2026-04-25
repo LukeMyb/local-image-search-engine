@@ -2,12 +2,22 @@ import os
 import shutil # ファイルコピーおよびメタデータ維持用
 import datetime
 import time
+import hashlib # ハッシュ値計算用
 from pathlib import Path
 
 # 元のTARGET_DIRを「読み込み元」と「保存先」に分割
 SOURCE_DIR = r"data\images" # 大元のフォルダ
 TARGET_DIR = r"data\sorted"     # 新しく作成してコピーする先のフォルダ
 BATCH_SIZE = 1000  # 1ディレクトリあたりの最大枚数
+
+# ファイルのハッシュ値を計算する関数（先頭8文字を使用）
+def get_file_hash(file_path):
+    hasher = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        # メモリを節約しつつ高速に読み込むため、細かく分割して処理
+        for chunk in iter(lambda: f.read(65536), b''):
+            hasher.update(chunk)
+    return hasher.hexdigest()[:8]
 
 def copy_and_distribute_photos():
     source_base_path = Path(SOURCE_DIR)
@@ -59,8 +69,9 @@ def copy_and_distribute_photos():
         dt = datetime.datetime.fromtimestamp(mtime)
         
         # ファイル名作成
+        file_hash = get_file_hash(file_path) # ハッシュ値を取得してファイル名に組み込む
         date_str = dt.strftime("%Y%m%d_%H%M%S")
-        new_name = f"{date_str}_{i+1:05d}{file_path.suffix.lower()}"
+        new_name = f"{date_str}_{file_hash}{file_path.suffix.lower()}"
         new_path = dest_dir / new_name
 
         # copy2 (メタデータを維持したコピー) 
@@ -69,7 +80,7 @@ def copy_and_distribute_photos():
                 shutil.copy2(file_path, new_path)
                 success_count += 1
             else:
-                print(f"スキップ: {new_name} は既に存在します")
+                print(f"重複スキップ: {new_name} は既に存在します")
         except Exception as e:
             print(f"エラー発生 ({file_path.name}): {e}")
 
