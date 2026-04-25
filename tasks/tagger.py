@@ -3,6 +3,8 @@ import cv2
 import numpy as np
 import pandas as pd
 import gc
+import time
+import datetime
 from huggingface_hub import hf_hub_download
 import onnxruntime as ort
 from core.database import ImageDatabase
@@ -122,6 +124,7 @@ class Tagger:
         #--- 第1パス：ConvNeXt（属性用）スキャン ---
         self._load_model(self.conv_model_name)
         print(f"=== 第1パス: ConvNeXtスキャン開始 (対象: {total} 枚) ===")
+        start_time_conv = time.time() # ループ開始時間を記録
         for i, row in enumerate(targets):
             image_id = row['id']
             file_path = row['file_path']
@@ -135,14 +138,21 @@ class Tagger:
             # メインメモリ節約のため、スコアが0.05以上のものだけ保持
             conv_results[image_id] = {idx: float(p) for idx, p in enumerate(probs) if p > 0.05}
 
-            if (i+1) % 10 == 0 or (i+1) == total:
-                print(f"  ...[ConvNeXt] {i+1}/{total} 枚完了")
+            # 100件ごとにETAを計算して出力
+            if (i+1) % 100 == 0 or (i+1) == total:
+                current_count = i + 1
+                elapsed = time.time() - start_time_conv
+                remaining_sec = (elapsed / current_count) * (total - current_count)
+                remaining_td = datetime.timedelta(seconds=int(remaining_sec))
+                eta_str = (datetime.datetime.now() + remaining_td).strftime("%H:%M:%S")
+                print(f"  ...[ConvNeXt] 進捗: {current_count} / {total} 枚 ... 残り時間: 約 {remaining_td} (終了予定: {eta_str})")
 
         self._unload_model() #ConvNeXtをVRAMから解放
             
         #--- 第2パス：MOAT（構図用）スキャン ---
         self._load_model(self.moat_model_name)
         print(f"=== 第2パス: MOATスキャン開始 (対象: {total} 枚) ===")
+        start_time_moat = time.time() # ループ開始時間を記録
         for i, row in enumerate(targets):
             image_id = row['id']
             file_path = row['file_path']
@@ -153,14 +163,21 @@ class Tagger:
             probs = self.session.run(None, {self.input_name: input_tensor})[0][0]
             moat_results[image_id] = {idx: float(p) for idx, p in enumerate(probs) if p > 0.05}
             
-            if (i+1) % 10 == 0 or (i+1) == total:
-                print(f"  ...[MOAT] {i+1}/{total} 枚完了")
+            # 100件ごとにETAを計算して出力
+            if (i+1) % 100 == 0 or (i+1) == total:
+                current_count = i + 1
+                elapsed = time.time() - start_time_moat
+                remaining_sec = (elapsed / current_count) * (total - current_count)
+                remaining_td = datetime.timedelta(seconds=int(remaining_sec))
+                eta_str = (datetime.datetime.now() + remaining_td).strftime("%H:%M:%S")
+                print(f"  ...[MOAT] 進捗: {current_count} / {total} 枚 ... 残り時間: 約 {remaining_td} (終了予定: {eta_str})")
                 
         self._unload_model() #MOATをVRAMから解放
 
         # --- 統合とデータベース保存 ---
         print("=== スコアのMAX統合とDB保存を開始 ===")
         success_count = 0
+        start_time_db = time.time() # ループ開始時間を記録
         for i, row in enumerate(targets):
             image_id = row['id']
             c_res = conv_results.get(image_id, {})
@@ -204,9 +221,14 @@ class Tagger:
             
             success_count += 1
 
-            # 統合・DB保存時100枚ごとに進捗を出力
+            # 100件ごとにETAを計算して出力
             if (i+1) % 100 == 0 or (i+1) == total:
-                print(f"  ...[統合・保存] {i+1}/{total} 枚完了")
+                current_count = i + 1
+                elapsed = time.time() - start_time_db
+                remaining_sec = (elapsed / current_count) * (total - current_count)
+                remaining_td = datetime.timedelta(seconds=int(remaining_sec))
+                eta_str = (datetime.datetime.now() + remaining_td).strftime("%H:%M:%S")
+                print(f"  ...[統合・保存] 進捗: {current_count} / {total} 枚 ... 残り時間: 約 {remaining_td} (終了予定: {eta_str})")
 
         print(f"=== 完了 (成功: {success_count} 枚) ===")
         self.db.close()
