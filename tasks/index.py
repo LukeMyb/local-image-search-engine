@@ -73,10 +73,15 @@ class ThumbnailGenerator:
         
         for i, row in enumerate(unprocessed_list):
             image_id = row['id']
-            file_path = Path(row['file_path'])
+            src_rel_path = Path(row['file_path'])
             
-            thumb_filename = f"{image_id}.webp"
-            thumb_path = self.output_dir / thumb_filename
+            # ファイル名に _thumb を付与
+            folder_name = src_rel_path.parent.name
+            thumb_rel_path = Path(folder_name) / f"{src_rel_path.stem}_thumb.webp"
+            thumb_path = self.output_dir / thumb_rel_path
+
+            # サブディレクトリが存在しない場合は作成
+            thumb_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 実際に重い画像を開く前に、物理ファイルが存在するかチェック
             if thumb_path.exists():
@@ -85,21 +90,21 @@ class ThumbnailGenerator:
                 success_count += 1
             else:
                 try:
-                    with Image.open(file_path) as img:
+                    with Image.open(src_rel_path) as img:
                         #RGB式に変換
                         if img.mode in ("RGBA", "P"):
                             img = img.convert("RGB")
                         
                         #アスペクト比を維持しつつ, 中央を基準に正方形に切り抜く
                         img = ImageOps.fit(img, self.target_size, method=Image.Resampling.LANCZOS)
-                        
+
                         img.save(thumb_path, "WEBP", quality=80)
                     
                     self.db.update_thumbnail_status(image_id, str(thumb_path)) #dbにサムネ生成完了を記録
                     success_count += 1
 
                 except Exception as e:
-                    print(f"Error processing {file_path}: {e}")
+                    print(f"Error processing {src_rel_path}: {e}")
             
             # 1000件処理するごとに途中経過と予測時刻を計算して出力
             if (i + 1) % 1000 == 0:
