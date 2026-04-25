@@ -28,3 +28,7 @@ backup/
 test/
 replace_list.txt
 memo.txt
+
+# フロントエンドの不要ファイル
+frontend/node_modules/
+frontend/.next/
