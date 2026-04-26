@@ -1,4 +1,5 @@
 import time
+import datetime
 from pathlib import Path
 from core.database import ImageDatabase
 from PIL import Image, ImageOps
@@ -68,42 +69,54 @@ class ThumbnailGenerator:
         print(f"サムネイルの生成を開始します(対象: {total_count}枚)...")
         
         success_count = 0
+        start_time = time.time() # ループ開始のタイムスタンプを記録
         
         for i, row in enumerate(unprocessed_list):
             image_id = row['id']
-            file_path = Path(row['file_path'])
+            src_rel_path = Path(row['file_path'])
             
-            thumb_filename = f"{image_id}.webp"
-            thumb_path = self.output_dir / thumb_filename
+            # ファイル名に _thumb を付与
+            folder_name = src_rel_path.parent.name
+            thumb_rel_path = Path(folder_name) / f"{src_rel_path.stem}_thumb.webp"
+            thumb_path = self.output_dir / thumb_rel_path
+
+            # サブディレクトリが存在しない場合は作成
+            thumb_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 実際に重い画像を開く前に、物理ファイルが存在するかチェック
             if thumb_path.exists():
                 # ファイルが既にあるなら、DBのフラグだけ「完了」にして即スキップ
                 self.db.update_thumbnail_status(image_id, str(thumb_path))
                 success_count += 1
-                if (i + 1) % 100 == 0:
-                    print(f"  ...[スキップ] {i + 1}/{total_count}枚 完了")
-                continue # 以下の重い処理を飛ばして次の画像へ
-            
-            try:
-                with Image.open(file_path) as img:
-                    #RGB式に変換
-                    if img.mode in ("RGBA", "P"):
-                        img = img.convert("RGB")
-                    
-                    #アスペクト比を維持しつつ, 中央を基準に正方形に切り抜く
-                    img = ImageOps.fit(img, self.target_size, method=Image.Resampling.LANCZOS)
-                    
-                    img.save(thumb_path, "WEBP", quality=80)
-                
-                self.db.update_thumbnail_status(image_id, str(thumb_path)) #dbにサムネ生成完了を記録
-                success_count += 1
+            else:
+                try:
+                    with Image.open(src_rel_path) as img:
+                        #RGB式に変換
+                        if img.mode in ("RGBA", "P"):
+                            img = img.convert("RGB")
+                        
+                        #アスペクト比を維持しつつ, 中央を基準に正方形に切り抜く
+                        img = ImageOps.fit(img, self.target_size, method=Image.Resampling.LANCZOS)
 
-            except Exception as e:
-                print(f"Error processing {file_path}: {e}")
+                        img.save(thumb_path, "WEBP", quality=80)
+                    
+                    self.db.update_thumbnail_status(image_id, str(thumb_path)) #dbにサムネ生成完了を記録
+                    success_count += 1
+
+                except Exception as e:
+                    print(f"Error processing {src_rel_path}: {e}")
             
-            if (i + 1) % 100 == 0:
-                print(f"  ...{i + 1}/{total_count}枚 完了")
+            # 1000件処理するごとに途中経過と予測時刻を計算して出力
+            if (i + 1) % 1000 == 0:
+                current_count = i + 1
+                elapsed_time = time.time() - start_time
+                time_per_file = elapsed_time / current_count
+                remaining_time_sec = time_per_file * (total_count - current_count)
+                remaining_td = datetime.timedelta(seconds=int(remaining_time_sec))
+                eta_time = datetime.datetime.now() + remaining_td
+                eta_str = eta_time.strftime("%H:%M:%S")
+
+                print(f"進捗: {current_count} / {total_count} 件 ... 残り時間: 約 {remaining_td} (終了予定: {eta_str})")
 
         print(f"サムネイル生成完了 成功: {success_count}枚 / 失敗: {total_count - success_count}枚")
 
