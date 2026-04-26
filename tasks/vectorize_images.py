@@ -1,5 +1,6 @@
 import os
 import time
+import datetime
 import numpy as np
 import faiss
 from pathlib import Path
@@ -120,10 +121,15 @@ class StyleVectorizer:
                 batch_tensors = []
                 batch_ids = []
                 
-                # 進捗表示
+                # 進捗、処理速度、ETAをまとめて出力
                 elapsed = time.time() - start_time
                 speed = processed_count / elapsed
-                print(f"  ...{processed_count}/{total_count}枚 完了(速度: {speed:.1f}枚/秒)")
+                
+                remaining_sec = (elapsed / processed_count) * (total_count - processed_count)
+                remaining_td = datetime.timedelta(seconds=int(remaining_sec))
+                eta_str = (datetime.datetime.now() + remaining_td).strftime("%H:%M:%S")
+                
+                print(f"  ...進捗: {processed_count} / {total_count} 枚 (速度: {speed:.1f}枚/秒) ... 残り時間: 約 {remaining_td} (終了予定: {eta_str})")
 
         print("絵柄ベクトル化処理が完了しました")
 
