@@ -230,18 +230,19 @@ class ImageViewer:
             raw_path = row.get('file_path', '')
             
             if raw_path:
-                # 基準ディレクトリ（data/images）からの相対パスを取得してURL形式へ変換
-                try:
-                    rel_path = os.path.relpath(raw_path, "data/images").replace("\\", "/")
-                except ValueError:
-                    rel_path = os.path.basename(raw_path)
-                    
-                return f"/images/{rel_path}"
+                # DBのパスから直接 "data/" を取り除いてURL化する
+                path_str = str(raw_path).replace("\\", "/")
+                if path_str.startswith("data/"):
+                    return "/" + path_str[5:]
+                return "/" + path_str
             else:
-                # thumbnail_pathの取得処理も少し安全に修正
                 thumbnail_path = row.get('thumbnail_path')
                 if thumbnail_path:
-                    return f"/thumbnails/{os.path.basename(thumbnail_path)}"
+                    # サムネイルも同様に "data/" を取り除く
+                    thumb_str = str(thumbnail_path).replace("\\", "/")
+                    if thumb_str.startswith("data/"):
+                        return "/" + thumb_str[5:]
+                    return "/" + thumb_str
         return self.dummy_src
 
     # 3. 3枚の画像をセットして位置をリセットする関数（重要）

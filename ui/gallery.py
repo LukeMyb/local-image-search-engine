@@ -279,8 +279,12 @@ class ImageGallery:
         for row in results:
             #ファイル名だけ抽出
             if row['thumbnail_path']:
-                filename = os.path.basename(row['thumbnail_path'])
-                web_image_src = f"/thumbnails/{filename}"
+                # DBのパス (data/thumbnails/...) から "data/" を取り除いてURL化する
+                thumb_path_str = str(row['thumbnail_path']).replace("\\", "/")
+                if thumb_path_str.startswith("data/"):
+                    web_image_src = "/" + thumb_path_str[5:]
+                else:
+                    web_image_src = "/" + thumb_path_str
 
                 # お気に入りアイコン
                 # DBのis_favoriteが1の場合のみ、白いハートを表示する
