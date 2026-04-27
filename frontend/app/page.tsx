@@ -8,8 +8,8 @@ export default function Home() {
 
   return (
     // 画面全体を暗い背景にし、中央にテキストだけを配置する最小限のデザイン
-    <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">
-      <p>{statusMessage}</p>
+    <div className="p-4 min-h-screen bg-zinc-900 text-green-400">
+      <p className="text-lg font-medium">{statusMessage}</p>
     </div>
   );
 }
