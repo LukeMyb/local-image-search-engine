@@ -318,6 +318,9 @@ class SearchBar:
         # 検索窓のテキストを取得
         query = self.search_input.value
 
+        # 検索実行時に履歴をDBへ保存
+        self.db.save_search_history(query or "")
+
         # 検索実行時にもアイコン状態を更新（不要文字を消してEnterを押した時用）
         self._update_bookmark_icon(query)
 

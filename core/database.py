@@ -111,6 +111,15 @@ class ImageDatabase:
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_jp_text ON translation_cache(jp_text)')
+
+        # 検索履歴を管理するテーブル (最新1件のみを保持)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS search_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
         self.conn.commit()
 
@@ -359,6 +368,25 @@ class ImageDatabase:
         cursor = self.conn.cursor()
         cursor.execute("INSERT OR REPLACE INTO translation_cache (jp_text, en_text) VALUES (?, ?)", (jp_text, en_text))
         self.conn.commit()
+
+    # ----- クエリキャッシュ関連メソッド -----
+
+    # 検索履歴を保存するメソッド
+    def save_search_history(self, query):
+        """最新の検索クエリを1件だけ保存する"""
+        cursor = self.conn.cursor()
+        # 常に最新の1件だけにするため、既存の履歴を削除してから挿入
+        cursor.execute("DELETE FROM search_history")
+        cursor.execute("INSERT INTO search_history (query) VALUES (?)", (query,))
+        self.conn.commit()
+
+    # 前回のクエリを取得するメソッド
+    def get_last_query(self):
+        """前回の検索クエリを取得する"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT query FROM search_history ORDER BY executed_at DESC LIMIT 1")
+        row = cursor.fetchone()
+        return row['query'] if row else ""
 
 
 
