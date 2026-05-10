@@ -19,7 +19,7 @@ export default function Home() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="タグやキーワードを入力..."
-        className="p-3 rounded-md text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-400 max-w-md"
+        className="p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 max-w-md"
       />
     </div>
   );
