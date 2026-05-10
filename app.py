@@ -268,8 +268,13 @@ async def main(page: ft.Page):
     #ロード
     searcher, style_searcher = await initialize_engine(page, status_text, db)
 
+    # 前回のクエリを復元
+    last_query = db.get_last_query()
+    search_bar.search_input.value = last_query
+    search_bar._update_bookmark_icon(last_query)
+
     #エンジンロード完了直後に空クエリを投げ、初回起動時にお気に入りを表示させる
-    await on_search("")
+    await on_search(last_query)
 
     # エンジンがロードされ、UIの表示が終わったタイミングで裏の同期タスクをキックする
     asyncio.create_task(auto_sync_process())
