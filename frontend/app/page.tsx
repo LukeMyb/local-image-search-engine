@@ -8,10 +8,41 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState("システム待機中...");
   // 検索キーワードを管理する変数
   const [query, setQuery] = useState("");
+  // 検索結果（APIから返ってきた生データ）を保存する変数
+  const [results, setResults] = useState<string>("");
 
-  // ボタンを押した時のダミー処理
-  const handleSearch = () => {
-    setStatusMessage(`「${query}」で検索を実行しました`);
+  const handleSearch = async () => {
+    // 空欄の場合は何もしない
+    if (!query) return;
+
+    setStatusMessage(`「${query}」を検索中...`);
+    setResults(""); // 検索開始時に前の結果をクリア
+
+    try {
+      // Python側のAPIを叩く
+      const response = await fetch(`http://localhost:8000/search?q=${query}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTPエラー: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // ブラウザのフリーズを防ぐため、最初の2件だけを抽出する安全装置
+      const safeData = {
+        query: data.query,
+        total_hits: data.results.length,
+        results: data.results.slice(0, 2)
+      };
+
+      // 安全なデータの方を文字にして変数に格納
+      setResults(JSON.stringify(safeData, null, 2));
+      setStatusMessage(`${data.results.length}件の検索が完了しました！`);
+
+    } catch (error) {
+      console.error(error);
+      setStatusMessage("通信エラーが発生しました。");
+    }
   };
 
   return (
@@ -40,6 +71,13 @@ export default function Home() {
           <Search size={16} />
         </button>
       </div>
+
+      {/* 検索結果（生データ）を表示するエリア */}
+      {results && (
+        <pre className="p-4 bg-black text-white rounded-md overflow-x-auto text-sm mt-4 max-w-2xl">
+          {results}
+        </pre>
+      )}
     </div>
   );
 }
