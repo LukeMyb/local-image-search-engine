@@ -3,20 +3,25 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 
+// 検索結果のデータ構造を定義（今回は最低限必要な id だけ）
+interface SearchResult {
+  id: number;
+}
+
 export default function Home() {
   // ステータスを管理する変数
   const [statusMessage, setStatusMessage] = useState("システム待機中...");
   // 検索キーワードを管理する変数
   const [query, setQuery] = useState("");
-  // 検索結果（APIから返ってきた生データ）を保存する変数
-  const [results, setResults] = useState<string>("");
+  // 画像のデータ（配列）
+  const [results, setResults] = useState<SearchResult[]>([]);
 
   const handleSearch = async () => {
     // 空欄の場合は何もしない
     if (!query) return;
 
     setStatusMessage(`「${query}」を検索中...`);
-    setResults(""); // 検索開始時に前の結果をクリア
+    setResults([]); // 検索開始時に前の画像をクリア
 
     try {
       // Python側のAPIを叩く
@@ -28,16 +33,10 @@ export default function Home() {
 
       const data = await response.json();
 
-      // ブラウザのフリーズを防ぐため、最初の2件だけを抽出する安全装置
-      const safeData = {
-        query: data.query,
-        total_hits: data.results.length,
-        results: data.results.slice(0, 2)
-      };
-
-      // 安全なデータの方を文字にして変数に格納
-      setResults(JSON.stringify(safeData, null, 2));
-      setStatusMessage(`${data.results.length}件の検索が完了しました！`);
+      // 数千件の画像を一度に描画するとブラウザがフリーズするため、
+      // 表示用の安全装置として先頭の50件だけ
+      setResults(data.results.slice(0, 50));
+      setStatusMessage(`${data.results.length}件の検索が完了しました（先頭50件を表示中）`);
 
     } catch (error) {
       console.error(error);
@@ -72,12 +71,19 @@ export default function Home() {
         </button>
       </div>
 
-      {/* 検索結果（生データ）を表示するエリア */}
-      {results && (
-        <pre className="p-4 bg-black text-white rounded-md overflow-x-auto text-sm mt-4 max-w-2xl">
-          {results}
-        </pre>
-      )}
+      {/* 取得したIDを使って画像を並べる処理 */}
+      <div className="flex flex-wrap gap-4 mt-4">
+        {results.map((item) => (
+          <img
+            key={item.id}
+            // Python側の画像のエンドポイントを呼び出し
+            src={`http://localhost:8000/image/${item.id}`}
+            alt={`Image ${item.id}`}
+            // 縦横比を崩さずに、とりあえず幅を固定して雑に並べる
+            className="w-48 h-auto object-cover rounded-md"
+          />
+        ))}
+      </div>
     </div>
   );
 }
