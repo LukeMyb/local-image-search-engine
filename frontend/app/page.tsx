@@ -77,10 +77,10 @@ export default function Home() {
           <img
             key={item.id}
             // Python側の画像のエンドポイントを呼び出し
-            src={`http://localhost:8000/image/${item.id}`}
+            src={`http://localhost:8000/thumbnail/${item.id}`}
             alt={`Image ${item.id}`}
-            // 縦横比を崩さずに、とりあえず幅を固定して雑に並べる
-            className="w-48 h-auto object-cover rounded-md"
+            // w-48(幅) と h-48(高さ) を指定し、強制的に綺麗な正方形のグリッドにする
+            className="w-48 h-48 object-cover rounded-md"
           />
         ))}
       </div>

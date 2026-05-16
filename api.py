@@ -39,6 +39,24 @@ def get_image(image_id: int):
     # 安全に画像データそのものをブラウザへ配達する
     return FileResponse(image_data['file_path'])
 
+@app.get("/thumbnail/{image_id}")
+def get_thumbnail(image_id: int):
+    """
+    画像IDを受け取り、ローカルのサムネイルファイルパスを特定してブラウザに画像データを配達する
+    """
+    image_data = search_manager.db.get_image_by_id(image_id)
+    
+    # データベースにIDが登録されていない、またはサムネイルパスがない場合のエラー
+    if not image_data or not image_data.get('thumbnail_path'):
+        raise HTTPException(status_code=404, detail="Thumbnail not found in database")
+        
+    # PC(ディスク)上にサムネイルファイルが実在するか確認
+    if not os.path.exists(image_data['thumbnail_path']):
+        raise HTTPException(status_code=404, detail="Thumbnail file not found on disk")
+        
+    # 安全にサムネイル画像データをブラウザへ配達する
+    return FileResponse(image_data['thumbnail_path'])
+
 @app.get("/search")
 def search(q: str):
     """
