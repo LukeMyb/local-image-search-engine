@@ -19,6 +19,36 @@ export default function Home() {
   // 選択された画像（モーダルで表示する画像）を管理する変数
   const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
 
+  // iOSの強制ズーム（ピンチ＆ダブルタップ）をJavaScriptで完全にブロックする
+  useEffect(() => {
+    // 1. ピンチイン・ピンチアウト（2本指でのズーム）を防ぐ
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    // 2. ダブルタップによるズームを防ぐ
+    let lastTouchEnd = 0;
+    const handleTouchEnd = (e: TouchEvent) => {
+      const now = new Date().getTime();
+      if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    };
+
+    // イベントリスナーを登録（passive: false にすることで preventDefault が効くようになる）
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd, { passive: false });
+
+    // クリーンアップ関数（アプリ終了時や画面移動時にイベントを解除する）
+    return () => {
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, []); // <- 空の配列にすることで、アプリ起動時に1回だけ実行される
+
   // モーダルの開閉に合わせて背景のスクロールを制御する
   useEffect(() => {
     if (selectedImage) {
