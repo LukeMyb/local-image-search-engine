@@ -18,6 +18,8 @@ export default function Home() {
   const [results, setResults] = useState<SearchResult[]>([]);
   // 選択された画像（モーダルで表示する画像）を管理する変数
   const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
+  // ドロワーの開閉状態を管理する変数
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // iOSの強制ズーム（ピンチ＆ダブルタップ）をJavaScriptで完全にブロックする
   useEffect(() => {
@@ -152,6 +154,7 @@ export default function Home() {
         {/* ドロワーメニュー展開ボタン */}
         <button
           type="button"
+          onClick={() => setIsDrawerOpen(true)}
           className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
         >
           <Menu size={16} />
@@ -261,6 +264,37 @@ export default function Home() {
             >
               <X size={24} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ドロワー（ブックマーク一覧）の描画処理 */}
+      {isDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* 背景の半透明オーバーレイ（ここをタップするとドロワーが閉じる） */}
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsDrawerOpen(false)}
+          ></div>
+          
+          {/* ドロワー本体（左側に固定） */}
+          <div className="relative w-80 max-w-[80%] bg-zinc-900 h-full shadow-2xl flex flex-col border-r border-zinc-800">
+            
+            {/* フィルター用検索窓 */}
+            <div className="p-4 border-b border-zinc-800">
+              <input
+                type="text"
+                placeholder="ブックマークを検索..."
+                className="w-full p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+            </div>
+            
+            {/* ブックマークリスト表示エリア */}
+            <div className="flex-1 overflow-y-auto p-2">
+              <p className="text-zinc-500 text-center mt-8 text-sm">ブックマークがありません</p>
+              
+              
+            </div>
           </div>
         </div>
       )}
