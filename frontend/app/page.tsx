@@ -15,11 +15,13 @@ export default function Home() {
   const [query, setQuery] = useState("");
   // 画像のデータ（配列）
   const [results, setResults] = useState<SearchResult[]>([]);
+  // 選択された画像（モーダルで表示する画像）を管理する変数
+  const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
 
   const handleSearch = async (e?: React.FormEvent) => {
     // フォーム送信によるページリロードを確実に阻止する
     if (e) e.preventDefault();
-    
+
     // 空欄の場合は何もしない
     if (!query) return;
 
@@ -85,11 +87,44 @@ export default function Home() {
             // Python側の画像のエンドポイントを呼び出し
             src={`http://192.168.11.3:8000/thumbnail/${item.id}`}
             alt={`Image ${item.id}`}
-            // 枠に合わせて自動で正方形になる w-full aspect-square
-            className="w-full aspect-square object-cover rounded-md"
+            // クリックされたら、この画像の情報を selectedImage にセットする
+            onClick={() => setSelectedImage(item)}
+            // カーソルを指マーク(cursor-pointer)にし、クリックできることを強調
+            className="w-full aspect-square object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity"
           />
         ))}
       </div>
+
+      {/* モーダルの描画処理 (selectedImage に中身がある時だけ表示される) */}
+      {selectedImage && (
+        <div 
+          // 画面全体を覆う半透明の黒い背景
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50"
+          // 背景をクリックしたらモーダルを閉じる(nullにする)
+          onClick={() => setSelectedImage(null)}
+        >
+          {/* 画像を中央に配置するコンテナ */}
+          <div 
+            className="relative w-full h-full flex flex-col items-center"
+            // 画像自体をクリックしても閉じないようにする
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img 
+              // 本画像(/image/)を呼び出す
+              src={`http://192.168.11.3:8000/image/${selectedImage.id}`} 
+              alt={`Selected ${selectedImage.id}`}
+              className="w-full h-full object-contain"
+            />
+            
+            <button 
+              onClick={() => setSelectedImage(null)}
+              className="absolute top-4 right-4 px-4 py-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors"
+            >
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
