@@ -182,6 +182,17 @@ export default function Home() {
               alt={`Selected ${selectedImage.id}`}
               className="w-full h-full object-contain"
             />
+
+            {/* モーダル内のお気に入りボタン（×ボタンの左隣に配置） */}
+            <button
+              onClick={(e) => toggleFavorite(selectedImage.id, e)}
+              className="absolute top-4 right-16 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
+            >
+              <Heart 
+                size={24} 
+                className={selectedImage.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
+              />
+            </button>
             
             <button 
               onClick={() => setSelectedImage(null)}
