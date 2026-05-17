@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Search, X, Heart, Menu, BookmarkPlus } from "lucide-react";
 
-// 検索結果のデータ構造を定義（今回は最低限必要な id だけ）
+// 検索結果のデータ構造を定義
 interface SearchResult {
   id: number;
   is_favorite?: number;
@@ -154,15 +154,30 @@ export default function Home() {
 
         {/* 検索フォーム（中央で可能な限り広がるように flex-grow を指定） */}
         <form onSubmit={handleSearch} className="flex flex-row gap-2 grow">
+          {/* 検索窓とクリアボタンを重ねるためのコンテナ */}
+          <div className="relative grow flex items-center">
+            {/* 検索窓（テキストボックス） */}
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="タグやキーワードを入力..."
+              className="p-3 pr-10 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 w-full min-w-0"
+            />
 
-          {/* 検索窓（テキストボックス） */}
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="タグやキーワードを入力..."
-            className="p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 w-full min-w-0"
-          />
+            {/* 文字が入力されている時だけ表示されるクリアボタン */}
+            {query && (
+              <button
+                type="button"
+                // ★追加: タップ時にフォーカスが外れる（キーボードが閉じる）のを防ぐ
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setQuery("")}
+                className="absolute right-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
 
           {/* 検索ボタン */}
           <button
