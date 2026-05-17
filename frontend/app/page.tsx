@@ -111,7 +111,7 @@ export default function Home() {
     fetchBookmarks();
   }, [isDrawerOpen, drawerFilter]); // <- ドロワーの開閉や、フィルター文字が変わるたびに実行
 
-  const handleSearch = async (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
     // フォーム送信によるページリロードを確実に阻止する
     if (e) e.preventDefault();
 
@@ -120,13 +120,16 @@ export default function Home() {
       document.activeElement.blur();
     }
 
+    // 直接渡されたキーワードがあればそれを使い、なければ検索窓(query)の値を使う
+    const currentQuery = overrideQuery !== undefined ? overrideQuery : query;
+
     // 空文字（スペースのみ含む）の判定
-    const isQueryEmpty = !query.trim();
+    const isQueryEmpty = !currentQuery.trim();
     
     // 変数 endpoint を作成
-    const endpoint = isQueryEmpty ? `/favorites` : `/search?q=${encodeURIComponent(query)}`;
+    const endpoint = isQueryEmpty ? `/favorites` : `/search?q=${encodeURIComponent(currentQuery)}`;
 
-    setStatusMessage(query ? `「${query}」を検索中...` : `お気に入り一覧を取得中...`);
+    setStatusMessage(currentQuery ? `「${currentQuery}」を検索中...` : `お気に入り一覧を取得中...`);
     setResults([]); // 検索開始時に前の画像をクリア
 
     try {
@@ -340,7 +343,14 @@ export default function Home() {
                 bookmarks.map((bm) => (
                   <div
                     key={bm.id}
-                    className="w-full p-3 hover:bg-zinc-800 rounded-md transition-colors flex flex-row items-center justify-between cursor-pointer group"
+                    // タップ時の連動処理
+                    onClick={() => {
+                      setQuery(bm.query); // 検索窓の見た目を更新
+                      setIsDrawerOpen(false); // ドロワーを閉じる
+                      handleSearch(undefined, bm.query); // 即座に検索を実行
+                    }}
+
+                    className="w-full p-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 active:bg-zinc-700 active:scale-[0.98] transition-all duration-75 flex flex-row items-center justify-between cursor-pointer group"
                   >
                     {/* 名前とクエリ */}
                     <div className="flex flex-col min-w-0 pr-2">
