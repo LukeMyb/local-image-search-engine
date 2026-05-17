@@ -115,7 +115,7 @@ export default function Home() {
       {selectedImage && (
         <div 
           // 画面全体を覆う半透明の黒い背景
-          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black flex items-center justify-center z-50"
         >
           {/* 画像を中央に配置するコンテナ */}
           <div className="relative w-full h-full flex flex-col items-center">
