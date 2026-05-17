@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 // 検索結果のデータ構造を定義（今回は最低限必要な id だけ）
 interface SearchResult {
@@ -112,9 +112,9 @@ export default function Home() {
             
             <button 
               onClick={() => setSelectedImage(null)}
-              className="absolute top-4 right-4 px-4 py-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors"
+              className="absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors"
             >
-              閉じる
+              <X size={24} />
             </button>
           </div>
         </div>
