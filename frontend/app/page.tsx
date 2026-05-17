@@ -46,7 +46,7 @@ export default function Home() {
 
   return (
     // レイアウト
-    <div className="p-4 min-h-screen bg-zinc-900 text-green-400 flex flex-col gap-4">
+    <div className="p-2 min-h-screen bg-zinc-900 text-green-400 flex flex-col gap-4">
       <p className="text-lg font-medium">{statusMessage}</p>
 
       {/* 検索窓とボタンを横に並べるための箱 (flex flex-row を指定) */}
@@ -72,15 +72,15 @@ export default function Home() {
       </div>
 
       {/* 取得したIDを使って画像を並べる処理 */}
-      <div className="flex flex-wrap gap-4 mt-4">
+      <div className="grid grid-cols-3 gap-2 md:grid-cols-6 md:gap-4 mt-4">
         {results.map((item) => (
           <img
             key={item.id}
             // Python側の画像のエンドポイントを呼び出し
             src={`http://192.168.11.3:8000/thumbnail/${item.id}`}
             alt={`Image ${item.id}`}
-            // w-48(幅) と h-48(高さ) を指定し、強制的に綺麗な正方形のグリッドにする
-            className="w-48 h-48 object-cover rounded-md"
+            // 枠に合わせて自動で正方形になる w-full aspect-square
+            className="w-full aspect-square object-cover rounded-md"
           />
         ))}
       </div>
