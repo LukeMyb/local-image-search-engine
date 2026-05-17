@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, X } from "lucide-react";
 
 // 検索結果のデータ構造を定義（今回は最低限必要な id だけ）
@@ -17,6 +17,22 @@ export default function Home() {
   const [results, setResults] = useState<SearchResult[]>([]);
   // 選択された画像（モーダルで表示する画像）を管理する変数
   const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
+
+  // モーダルの開閉に合わせて背景のスクロールを制御する
+  useEffect(() => {
+    if (selectedImage) {
+      // モーダルが開いている時: ブラウザ全体のスクロールを隠す（無効化）
+      document.body.style.overflow = "hidden";
+    } else {
+      // モーダルが閉じた時: スクロール設定を元に戻す
+      document.body.style.overflow = "";
+    }
+
+    // 安全装置: この画面から別のページへ移動した時などに、スクロール不可のままになるのを防ぐ
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedImage]); // <- selectedImage が変化するたびにこの処理を走らせる
 
   const handleSearch = async (e?: React.FormEvent) => {
     // フォーム送信によるページリロードを確実に阻止する
