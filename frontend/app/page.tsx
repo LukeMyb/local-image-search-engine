@@ -78,6 +78,11 @@ export default function Home() {
     // フォーム送信によるページリロードを確実に阻止する
     if (e) e.preventDefault();
 
+    // 検索実行時にスマホのキーボードを強制的に閉じる（フォーカスを外す）
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
     // 空文字（スペースのみ含む）の判定
     const isQueryEmpty = !query.trim();
     
@@ -169,7 +174,7 @@ export default function Home() {
             {query && (
               <button
                 type="button"
-                // ★追加: タップ時にフォーカスが外れる（キーボードが閉じる）のを防ぐ
+                // タップ時にフォーカスが外れる（キーボードが閉じる）のを防ぐ
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setQuery("")}
                 className="absolute right-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
