@@ -65,16 +65,16 @@ export default function Home() {
     };
   }, []); // <- 空の配列にすることで、アプリ起動時に1回だけ実行される
 
-  // モーダルの開閉に合わせて背景のスクロールを制御する
+  // 開閉に合わせて背景のスクロールを制御する
   useEffect(() => {
-    if (selectedImage) {
-      // モーダルが開いている時: ブラウザ全体のスクロールを隠す（無効化）
+    if (selectedImage || isDrawerOpen) {
+      // 開いている時: ブラウザ全体のスクロールを隠す（無効化）
       document.documentElement.style.overflow = "hidden";
       document.documentElement.style.overscrollBehavior = "none";
       document.body.style.overflow = "hidden";
       document.body.style.overscrollBehavior = "none";
     } else {
-      // モーダルが閉じた時: スクロール設定を元に戻す
+      // 閉じた時: スクロール設定を元に戻す
       document.documentElement.style.overflow = "";
       document.documentElement.style.overscrollBehavior = "";
       document.body.style.overflow = "";
@@ -88,7 +88,7 @@ export default function Home() {
       document.body.style.overflow = "";
       document.body.style.overscrollBehavior = "";
     };
-  }, [selectedImage]); // <- selectedImage が変化するたびにこの処理を走らせる
+  }, [selectedImage, isDrawerOpen]); // <- これらが変化するたびにこの処理を走らせる
 
   // ドロワーが開いている時に、ブックマーク一覧をサーバーから取得する
   useEffect(() => {
