@@ -286,7 +286,7 @@ if __name__ == "__main__":
     ft.run(
         main, 
         view=ft.AppView.WEB_BROWSER, 
-        port=8000, 
+        port=8100, 
         assets_dir="data", 
         host="0.0.0.0" 
     )
