@@ -9,17 +9,31 @@ interface SearchResult {
   is_favorite?: number;
 }
 
+// ブックマークのデータ構造を定義
+interface Bookmark {
+  id: number;
+  name: string;
+  query: string;
+  last_used_at: string;
+}
+
 export default function Home() {
   // ステータスを管理する変数
   const [statusMessage, setStatusMessage] = useState("システム待機中...");
   // 検索キーワードを管理する変数
   const [query, setQuery] = useState("");
+
   // 画像のデータ（配列）
   const [results, setResults] = useState<SearchResult[]>([]);
   // 選択された画像（モーダルで表示する画像）を管理する変数
   const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
+
   // ドロワーの開閉状態を管理する変数
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  // 取得したブックマーク一覧を保持する変数
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  // ドロワー内の検索フィルター文字を管理する変数
+  const [drawerFilter, setDrawerFilter] = useState("");
 
   // iOSの強制ズーム（ピンチ＆ダブルタップ）をJavaScriptで完全にブロックする
   useEffect(() => {
@@ -75,6 +89,27 @@ export default function Home() {
       document.body.style.overscrollBehavior = "";
     };
   }, [selectedImage]); // <- selectedImage が変化するたびにこの処理を走らせる
+
+  // ドロワーが開いている時に、ブックマーク一覧をサーバーから取得する
+  useEffect(() => {
+    if (!isDrawerOpen) return;
+
+    const fetchBookmarks = async () => {
+      try {
+        // filter_text 引数を付けてPythonのAPIを叩く
+        const response = await fetch(
+          `http://192.168.11.3:8000/bookmarks?filter_text=${encodeURIComponent(drawerFilter)}`
+        );
+        if (!response.ok) throw new Error("ブックマークの取得に失敗しました");
+        const data = await response.json();
+        setBookmarks(data.bookmarks);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    fetchBookmarks();
+  }, [isDrawerOpen, drawerFilter]); // <- ドロワーの開閉や、フィルター文字が変わるたびに実行
 
   const handleSearch = async (e?: React.FormEvent) => {
     // フォーム送信によるページリロードを確実に阻止する
@@ -284,16 +319,50 @@ export default function Home() {
             <div className="p-4 border-b border-zinc-800">
               <input
                 type="text"
+                // 値の同期と変更イベントの検知
+                value={drawerFilter}
+                onChange={(e) => setDrawerFilter(e.target.value)}
+
                 placeholder="ブックマークを検索..."
                 className="w-full p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600"
               />
             </div>
             
             {/* ブックマークリスト表示エリア */}
-            <div className="flex-1 overflow-y-auto p-2">
-              <p className="text-zinc-500 text-center mt-8 text-sm">ブックマークがありません</p>
-              
-              
+            <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
+              {/* ブックマークが空の場合の表示 */}
+              {bookmarks.length === 0 ? (
+                <p className="text-zinc-500 text-center mt-8 text-sm">
+                  {drawerFilter ? "一致するブックマークがありません" : "ブックマークがありません"}
+                </p>
+              ) : (
+                // 取得したブックマークをループ処理でリスト表示
+                bookmarks.map((bm) => (
+                  <div
+                    key={bm.id}
+                    className="w-full p-3 hover:bg-zinc-800 rounded-md transition-colors flex flex-row items-center justify-between cursor-pointer group"
+                  >
+                    {/* 名前とクエリ */}
+                    <div className="flex flex-col min-w-0 pr-2">
+                      <span className="text-sm font-medium text-zinc-200 truncate">
+                        {bm.name}
+                      </span>
+                      <span className="text-xs text-zinc-500 truncate mt-0.5">
+                        {bm.query}
+                      </span>
+                    </div>
+
+                    {/* 削除ボタン */}
+                    <button
+                      type="button"
+                      className="p-2 text-zinc-500 hover:text-red-400 rounded-full hover:bg-zinc-700/50 transition-colors shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      onClick={(e) => e.stopPropagation()} // 親要素のクリック発動を防ぐ
+                    >
+                      <X size={14} /> {/* 一旦 X アイコンで代用 */}
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
