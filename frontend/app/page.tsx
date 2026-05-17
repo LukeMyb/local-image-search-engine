@@ -16,7 +16,10 @@ export default function Home() {
   // 画像のデータ（配列）
   const [results, setResults] = useState<SearchResult[]>([]);
 
-  const handleSearch = async () => {
+  const handleSearch = async (e?: React.FormEvent) => {
+    // フォーム送信によるページリロードを確実に阻止する
+    if (e) e.preventDefault();
+    
     // 空欄の場合は何もしない
     if (!query) return;
 
@@ -50,7 +53,10 @@ export default function Home() {
       <p className="text-lg font-medium">{statusMessage}</p>
 
       {/* 検索窓とボタンを横に並べるための箱 (flex flex-row を指定) */}
-      <div className="flex flex-row gap-2">
+      <form 
+        onSubmit={handleSearch} 
+        className="flex flex-row gap-2"
+      >
 
         {/* 検索窓（テキストボックス） */}
         <input
@@ -63,13 +69,13 @@ export default function Home() {
 
         {/* 検索ボタン */}
         <button
-          onClick={handleSearch}
+          type="submit"
           className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center"
         >
           {/* 虫眼鏡アイコンの本体 */}
           <Search size={16} />
         </button>
-      </div>
+      </form>
 
       {/* 取得したIDを使って画像を並べる処理 */}
       <div className="grid grid-cols-3 gap-2 md:grid-cols-6 md:gap-4 mt-4">
