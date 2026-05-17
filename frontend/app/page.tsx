@@ -154,16 +154,15 @@ export default function Home() {
             />
 
             {/* 右上に配置されるお気に入りボタン */}
-            <button
-              onClick={(e) => toggleFavorite(item.id, e)}
-              className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
+            <div
+              className="absolute top-2 right-2 p-2 pointer-events-none"
             >
               <Heart 
                 size={20} 
                 // is_favorite が 1 なら赤く塗りつぶし、0 なら白い枠線のみにする
                 className={item.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
               />
-            </button>
+            </div>
           </div>
         ))}
       </div>
