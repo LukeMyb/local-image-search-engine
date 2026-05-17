@@ -100,15 +100,9 @@ export default function Home() {
         <div 
           // 画面全体を覆う半透明の黒い背景
           className="fixed inset-0 bg-black/90 flex items-center justify-center z-50"
-          // 背景をクリックしたらモーダルを閉じる(nullにする)
-          onClick={() => setSelectedImage(null)}
         >
           {/* 画像を中央に配置するコンテナ */}
-          <div 
-            className="relative w-full h-full flex flex-col items-center"
-            // 画像自体をクリックしても閉じないようにする
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="relative w-full h-full flex flex-col items-center">
             <img 
               // 本画像(/image/)を呼び出す
               src={`http://192.168.11.3:8000/image/${selectedImage.id}`} 
