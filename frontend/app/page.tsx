@@ -156,7 +156,10 @@ export default function Home() {
             {/* 右上に配置されるお気に入りマーク */}
             {item.is_favorite === 1 && (
               <div className="absolute top-2 right-2 p-2 pointer-events-none">
-                <Heart size={20} className="fill-white text-white" />
+                <Heart
+                  size={20}
+                  className="fill-white text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"
+                />
               </div>
             )}
           </div>
