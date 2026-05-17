@@ -72,3 +72,24 @@ def suggest(q: str):
     """
     suggestions = search_manager.get_suggestions(q)
     return {"query": q, "suggestions": suggestions}
+
+@app.get("/favorites")
+def get_favorites():
+    """
+    お気に入り画像の一覧を取得し、検索結果と同じフォーマットで返す
+    """
+    results = search_manager.db.get_favorite_images()
+    
+    # フロントエンドが検索結果と同じように扱えるように、
+    # {"query": "", "results": [...]} の形式で返す
+    return {"query": "", "results": results}
+
+@app.post("/favorite/{image_id}")
+def toggle_favorite(image_id: int):
+    """
+    指定された画像のお気に入り状態を反転（0⇔1）させる
+    """
+    new_status = search_manager.db.toggle_favorite(image_id)
+    
+    # 変更後の状態をフロントエンドに返す
+    return {"image_id": image_id, "is_favorite": new_status}

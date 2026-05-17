@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, X } from "lucide-react";
+import { Search, X, Heart } from "lucide-react";
 
 // 検索結果のデータ構造を定義（今回は最低限必要な id だけ）
 interface SearchResult {
   id: number;
+  is_favorite?: number;
 }
 
 export default function Home() {
@@ -38,15 +39,18 @@ export default function Home() {
     // フォーム送信によるページリロードを確実に阻止する
     if (e) e.preventDefault();
 
-    // 空欄の場合は何もしない
-    if (!query) return;
+    // 空文字（スペースのみ含む）の判定
+    const isQueryEmpty = !query.trim();
+    
+    // 変数 endpoint を作成
+    const endpoint = isQueryEmpty ? `/favorites` : `/search?q=${encodeURIComponent(query)}`;
 
-    setStatusMessage(`「${query}」を検索中...`);
+    setStatusMessage(query ? `「${query}」を検索中...` : `お気に入り一覧を取得中...`);
     setResults([]); // 検索開始時に前の画像をクリア
 
     try {
       // Python側のAPIを叩く
-      const response = await fetch(`http://192.168.11.3:8000/search?q=${query}`);
+      const response = await fetch(`http://192.168.11.3:8000${endpoint}`);
 
       if (!response.ok) {
         throw new Error(`HTTPエラー: ${response.status}`);
@@ -62,6 +66,35 @@ export default function Home() {
     } catch (error) {
       console.error(error);
       setStatusMessage("通信エラーが発生しました。");
+    }
+  };
+
+  // お気に入りボタンを押した時の処理
+  const toggleFavorite = async (image_id: number, e: React.MouseEvent) => {
+    // 画像自体のクリック判定（モーダルを開く）が発動するのを防ぐ
+    e.stopPropagation();
+
+    try {
+      // POSTでAPIを叩く
+      const response = await fetch(`http://192.168.11.3:8000/favorite/${image_id}`, {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error("通信エラー");
+
+      const data = await response.json();
+
+      // 画面上のハートの色を即座に更新するため、resultsの配列を書き換える
+      setResults(results.map(item => 
+        item.id === image_id ? { ...item, is_favorite: data.is_favorite } : item
+      ));
+      
+      // もしモーダルを開いている最中なら、モーダル側のデータも更新する
+      if (selectedImage && selectedImage.id === image_id) {
+        setSelectedImage({ ...selectedImage, is_favorite: data.is_favorite });
+      }
+
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -98,16 +131,31 @@ export default function Home() {
       {/* 取得したIDを使って画像を並べる処理 */}
       <div className="grid grid-cols-3 gap-2 md:grid-cols-6 md:gap-4 mt-4">
         {results.map((item) => (
-          <img
-            key={item.id}
-            // Python側の画像のエンドポイントを呼び出し
-            src={`http://192.168.11.3:8000/thumbnail/${item.id}`}
-            alt={`Image ${item.id}`}
-            // クリックされたら、この画像の情報を selectedImage にセットする
-            onClick={() => setSelectedImage(item)}
-            // カーソルを指マーク(cursor-pointer)にし、クリックできることを強調
-            className="w-full aspect-square object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity"
-          />
+          // 画像とボタンを重ねるため、relative を持った div で囲む
+          <div key={item.id} className="relative group">
+            <img
+              key={item.id}
+              // Python側の画像のエンドポイントを呼び出し
+              src={`http://192.168.11.3:8000/thumbnail/${item.id}`}
+              alt={`Image ${item.id}`}
+              // クリックされたら、この画像の情報を selectedImage にセットする
+              onClick={() => setSelectedImage(item)}
+              // カーソルを指マーク(cursor-pointer)にし、クリックできることを強調
+              className="w-full aspect-square object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity"
+            />
+
+            {/* 右上に配置されるお気に入りボタン */}
+            <button
+              onClick={(e) => toggleFavorite(item.id, e)}
+              className="absolute top-2 right-2 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
+            >
+              <Heart 
+                size={20} 
+                // is_favorite が 1 なら赤く塗りつぶし、0 なら白い枠線のみにする
+                className={item.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
+              />
+            </button>
+          </div>
         ))}
       </div>
 
