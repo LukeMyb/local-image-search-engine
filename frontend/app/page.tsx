@@ -153,16 +153,12 @@ export default function Home() {
               className="w-full aspect-square object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity"
             />
 
-            {/* 右上に配置されるお気に入りボタン */}
-            <div
-              className="absolute top-2 right-2 p-2 pointer-events-none"
-            >
-              <Heart 
-                size={20} 
-                // is_favorite が 1 なら赤く塗りつぶし、0 なら白い枠線のみにする
-                className={item.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
-              />
-            </div>
+            {/* 右上に配置されるお気に入りマーク */}
+            {item.is_favorite === 1 && (
+              <div className="absolute top-2 right-2 p-2 pointer-events-none">
+                <Heart size={20} className="fill-white text-white" />
+              </div>
+            )}
           </div>
         ))}
       </div>
