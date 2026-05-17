@@ -155,11 +155,8 @@ export default function Home() {
 
             {/* 右上に配置されるお気に入りマーク */}
             {item.is_favorite === 1 && (
-              <div className="absolute top-2 right-2 p-2 pointer-events-none">
-                <Heart
-                  size={20}
-                  className="fill-white text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"
-                />
+              <div className="absolute bottom-1 right-1 p-1 md:p-2 pointer-events-none">
+                <Heart className="w-5 h-5 md:w-6 md:h-6 fill-white text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"/>
               </div>
             )}
           </div>
@@ -181,10 +178,10 @@ export default function Home() {
               className="w-full h-full object-contain"
             />
 
-            {/* モーダル内のお気に入りボタン（×ボタンの左隣に配置） */}
+            {/* モーダル内のボタン */}
             <button
               onClick={(e) => toggleFavorite(selectedImage.id, e)}
-              className="absolute top-4 right-16 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
+              className="absolute bottom-4 left-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
             >
               <Heart 
                 size={24} 
