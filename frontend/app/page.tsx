@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, X, Heart } from "lucide-react";
+import { Search, X, Heart, Menu, BookmarkPlus } from "lucide-react";
 
 // 検索結果のデータ構造を定義（今回は最低限必要な id だけ）
 interface SearchResult {
@@ -142,30 +142,46 @@ export default function Home() {
     <div className="p-2 min-h-screen bg-zinc-900 text-green-400 flex flex-col gap-4">
       <p className="text-lg font-medium">{statusMessage}</p>
 
-      {/* 検索窓とボタンを横に並べるための箱 (flex flex-row を指定) */}
-      <form 
-        onSubmit={handleSearch} 
-        className="flex flex-row gap-2"
-      >
-
-        {/* 検索窓（テキストボックス） */}
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="タグやキーワードを入力..."
-          className="p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 max-w-md"
-        />
-
-        {/* 検索ボタン */}
+      {/* 操作系をすべて1行にまとめるコンテナ */}
+      <div className="flex flex-row gap-2 w-full max-w-md">
+        {/* ドロワーメニュー展開ボタン */}
         <button
-          type="submit"
-          className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center"
+          type="button"
+          className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
         >
-          {/* 虫眼鏡アイコンの本体 */}
-          <Search size={16} />
+          <Menu size={16} />
         </button>
-      </form>
+
+        {/* 検索フォーム（中央で可能な限り広がるように flex-grow を指定） */}
+        <form onSubmit={handleSearch} className="flex flex-row gap-2 grow">
+
+          {/* 検索窓（テキストボックス） */}
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="タグやキーワードを入力..."
+            className="p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 w-full min-w-0"
+          />
+
+          {/* 検索ボタン */}
+          <button
+            type="submit"
+            className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
+          >
+            {/* 虫眼鏡アイコンの本体 */}
+            <Search size={16} />
+          </button>
+        </form>
+
+        {/* ブックマーク保存ボタン（右端） */}
+        <button
+          type="button"
+          className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
+        >
+          <BookmarkPlus size={16} />
+        </button>
+      </div>
 
       {/* 取得したIDを使って画像を並べる処理 */}
       <div className="grid grid-cols-3 gap-2 md:grid-cols-6 md:gap-4 mt-4">

@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from pydantic import BaseModel
 
 from core.search import SearchManager
 
@@ -73,6 +74,8 @@ def suggest(q: str):
     suggestions = search_manager.get_suggestions(q)
     return {"query": q, "suggestions": suggestions}
 
+
+
 @app.get("/favorites")
 def get_favorites():
     """
@@ -93,3 +96,42 @@ def toggle_favorite(image_id: int):
     
     # 変更後の状態をフロントエンドに返す
     return {"image_id": image_id, "is_favorite": new_status}
+
+
+
+# フロントエンドから送られてくるJSONデータ（名前とクエリ）の型定義
+class BookmarkCreate(BaseModel):
+    name: str
+    query: str
+
+@app.post("/bookmark")
+def save_bookmark(data: BookmarkCreate):
+    """
+    新しいブックマークを保存、または既存のブックマークを上書きする
+    """
+    search_manager.db.save_bookmark(data.name, data.query)
+    return {"status": "success", "message": f"ブックマーク '{data.name}' を保存しました"}
+
+@app.get("/bookmarks")
+def get_bookmarks(filter_text: str = ""):
+    """
+    保存されているブックマークの一覧を取得する
+    """
+    bookmarks = search_manager.db.get_bookmarks(filter_text)
+    return {"bookmarks": bookmarks}
+
+@app.delete("/bookmark/{bookmark_id}")
+def delete_bookmark(bookmark_id: int):
+    """
+    指定されたIDのブックマークを削除する
+    """
+    search_manager.db.delete_bookmark(bookmark_id)
+    return {"status": "success", "message": "ブックマークを削除しました"}
+
+@app.patch("/bookmark/{bookmark_id}/use")
+def update_bookmark_usage(bookmark_id: int):
+    """
+    ブックマークが使用された時刻を現在時刻に更新する
+    """
+    search_manager.db.update_bookmark_usage(bookmark_id)
+    return {"status": "success", "message": "使用時刻を更新しました"}
