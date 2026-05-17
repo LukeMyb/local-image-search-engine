@@ -23,15 +23,24 @@ export default function Home() {
   useEffect(() => {
     if (selectedImage) {
       // モーダルが開いている時: ブラウザ全体のスクロールを隠す（無効化）
+      document.documentElement.style.overflow = "hidden";
+      document.documentElement.style.overscrollBehavior = "none";
       document.body.style.overflow = "hidden";
+      document.body.style.overscrollBehavior = "none";
     } else {
       // モーダルが閉じた時: スクロール設定を元に戻す
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.overscrollBehavior = "";
       document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
     }
 
     // 安全装置: この画面から別のページへ移動した時などに、スクロール不可のままになるのを防ぐ
     return () => {
+      document.documentElement.style.overflow = "";
+      document.documentElement.style.overscrollBehavior = "";
       document.body.style.overflow = "";
+      document.body.style.overscrollBehavior = "";
     };
   }, [selectedImage]); // <- selectedImage が変化するたびにこの処理を走らせる
 
@@ -163,7 +172,7 @@ export default function Home() {
       {selectedImage && (
         <div 
           // 画面全体を覆う半透明の黒い背景
-          className="fixed inset-0 bg-black flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black flex items-center justify-center z-50 touch-none overscroll-none"
         >
           {/* 画像を中央に配置するコンテナ */}
           <div className="relative w-full h-full flex flex-col items-center">
