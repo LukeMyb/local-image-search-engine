@@ -38,6 +38,8 @@ export default function Home() {
   // ブックマーク保存ダイアログの開閉と入力内容を管理
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [newBookmarkName, setNewBookmarkName] = useState("");
+  // 全ブックマークの完全な情報を保持する
+  const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([]);
   // 現在保存されているすべての「クエリ（文字列）」のリストを保持する変数
   const [savedQueries, setSavedQueries] = useState<string[]>([]);
 
@@ -120,15 +122,38 @@ export default function Home() {
   // サーバーからすべてのブックマークを取得して、クエリのリストを最新にする関数
   const refreshSavedQueries = async () => {
     try {
-      const response = await fetch("http://192.168.11.3:8000/bookmarks");
+      // フィルターなしで全件取得
+      const response = await fetch("http://192.168.11.3:8000/bookmarks?filter_text=");
       if (!response.ok) throw new Error();
       const data = await response.json();
-      // クエリ文字列だけの配列を作成して保存 (例: ["黒髪 ロングヘア", "style:my_art"])
+      
+      // 全データを保存
+      setAllBookmarks(data.bookmarks);
+      
+      // クエリ文字列だけの配列を作成して保存
       const queries = data.bookmarks.map((bm: Bookmark) => bm.query);
       setSavedQueries(queries);
     } catch (error) {
       console.error("ブックマーク同期エラー:", error);
     }
+  };
+
+  // ブックマークボタンを押した時の処理
+  const openBookmarkDialog = () => {
+    if (!query.trim()) return;
+
+    // 現在のクエリが保存済みかどうかを判定
+    const existingBm = allBookmarks.find(bm => bm.query === query.trim());
+    
+    if (existingBm) {
+      // 保存済みなら、既存の名前を入力欄にセットして「編集モード」にする
+      setNewBookmarkName(existingBm.name);
+    } else {
+      // 未保存なら空にする（ただし、すでに他の処理でクリア済みの場合はそのまま）
+      if (!newBookmarkName) setNewBookmarkName("");
+    }
+    
+    setIsSaveDialogOpen(true);
   };
 
   // アプリ起動時に一回だけ、保存済みクエリのリストを読み込む
@@ -294,11 +319,11 @@ export default function Home() {
           </button>
         </form>
 
-        {/* ブックマーク保存ボタン（右端） */}
+        {/* ブックマーク保存ボタン */}
         <button
           type="button"
           // クエリが入力されている時だけダイアログを開けるようにする
-          onClick={() => query.trim() && setIsSaveDialogOpen(true)}
+          onClick={openBookmarkDialog}
           className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
             query.trim() 
               // 入力されたクエリが保存済みリストにある場合、緑色(text-green-400)にする
@@ -451,7 +476,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* 新規保存ダイアログ */}
+      {/* 新規保存・編集ダイアログ */}
       {isSaveDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
@@ -460,7 +485,10 @@ export default function Home() {
           ></div>
           
           <div className="relative bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
-            <h3 className="text-lg font-medium text-white">検索条件を保存</h3>
+            {/* 保存済みかどうかでタイトルを切り替え */}
+            <h3 className="text-lg font-medium text-white">
+              {savedQueries.includes(query.trim()) ? "ブックマークを編集" : "検索条件を保存"}
+            </h3>
             
             <div>
               <p className="text-sm text-zinc-400 mb-2">クエリ: <span className="text-zinc-200">{query}</span></p>
@@ -469,9 +497,20 @@ export default function Home() {
                 value={newBookmarkName}
                 onChange={(e) => setNewBookmarkName(e.target.value)}
                 placeholder="ブックマーク名を入力..."
-                className="w-full p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className={`w-full p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-2 ${
+                  // 重複している場合は枠線を赤にする
+                  allBookmarks.some(bm => bm.name === newBookmarkName.trim() && bm.query !== query.trim())
+                    ? "border border-red-500 focus:ring-red-500"
+                    : "focus:ring-blue-600"
+                }`}
                 autoFocus // ダイアログが開いた瞬間にフォーカスを当てる
               />
+              {/* リアルタイム重複エラーメッセージ（赤文字） */}
+              {allBookmarks.some(bm => bm.name === newBookmarkName.trim() && bm.query !== query.trim()) && (
+                <p className="text-red-400 text-sm mt-2">
+                  この名前はすでに使用されています
+                </p>
+              )}
             </div>
 
             <div className="flex flex-row justify-end gap-2 mt-2">
@@ -483,7 +522,8 @@ export default function Home() {
               </button>
               <button
                 onClick={handleSaveBookmark}
-                disabled={!newBookmarkName.trim()} // 名前が空なら押せない
+                // 名前が空、または重複している場合は押せないようにする
+                disabled={!newBookmarkName.trim() || allBookmarks.some(bm => bm.name === newBookmarkName.trim() && bm.query !== query.trim())}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-white/50 text-white rounded-md transition-colors font-medium"
               >
                 保存
