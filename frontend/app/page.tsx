@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, X, Menu, BookmarkPlus, BookmarkCheck } from "lucide-react";
 
 import BookmarkManager from "../components/BookmarkManager";
 import ImageGrid from "../components/ImageGrid";
 import ImageViewer from "../components/ImageViewer";
+import SearchBar from "../components/SearchBar";
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -208,76 +208,15 @@ export default function Home() {
     <div className="p-2 min-h-screen bg-zinc-900 text-green-400 flex flex-col gap-4">
       <p className="text-lg font-medium">{statusMessage}</p>
 
-      {/* 操作系をすべて1行にまとめるコンテナ */}
-      <div className="flex flex-row gap-2 w-full max-w-md">
-        {/* ドロワーメニュー展開ボタン */}
-        <button
-          type="button"
-          onClick={() => setIsDrawerOpen(true)}
-          className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
-        >
-          <Menu size={16} />
-        </button>
-
-        {/* 検索フォーム（中央で可能な限り広がるように flex-grow を指定） */}
-        <form onSubmit={handleSearch} className="flex flex-row gap-2 grow">
-          {/* 検索窓とクリアボタンを重ねるためのコンテナ */}
-          <div className="relative grow flex items-center">
-            {/* 検索窓（テキストボックス） */}
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="タグやキーワードを入力..."
-              className="p-3 pr-10 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 w-full min-w-0"
-            />
-
-            {/* 文字が入力されている時だけ表示されるクリアボタン */}
-            {query && (
-              <button
-                type="button"
-                // タップ時にフォーカスが外れる（キーボードが閉じる）のを防ぐ
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setQuery("")}
-                className="absolute right-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-
-          {/* 検索ボタン */}
-          <button
-            type="submit"
-            className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
-          >
-            {/* 虫眼鏡アイコンの本体 */}
-            <Search size={16} />
-          </button>
-        </form>
-
-        {/* ブックマーク保存ボタン */}
-        <button
-          type="button"
-          // クエリが入力されている時だけダイアログを開けるようにする
-          onClick={openBookmarkDialog}
-          className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
-            query.trim() 
-              // 入力されたクエリが保存済みリストにある場合、緑色(text-green-400)にする
-              ? savedQueries.includes(query.trim())
-                ? "bg-[#27272a] hover:bg-zinc-700 text-green-400"
-                : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white" 
-              : "bg-[#27272a] text-zinc-600 cursor-not-allowed"
-          }`}
-        >
-          {/* 保存済みかどうかに応じてアイコンを切り替える */}
-          {query.trim() && savedQueries.includes(query.trim()) ? (
-            <BookmarkCheck size={16} />
-          ) : (
-            <BookmarkPlus size={16} />
-          )}
-        </button>
-      </div>
+      {/* (SearchBarコンポーネントを呼び出し) */}
+      <SearchBar 
+        query={query}
+        setQuery={setQuery}
+        onSearch={handleSearch}
+        setIsDrawerOpen={setIsDrawerOpen}
+        openBookmarkDialog={openBookmarkDialog}
+        savedQueries={savedQueries}
+      />
 
       {/* 取得したIDを使って画像を並べる処理 */}
       <ImageGrid 
