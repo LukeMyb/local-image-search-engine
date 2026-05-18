@@ -35,9 +35,9 @@ export function useImageSearch() {
       if (!response.ok) throw new Error(`HTTPエラー: ${response.status}`);
 
       const data = await response.json();
-      // 先頭50件のみ表示
-      setResults(data.results.slice(0, 50));
-      setStatusMessage(`${data.results.length}件の検索が完了しました（先頭50件を表示中）`);
+      // 先頭100件のみ表示
+      setResults(data.results.slice(0, 100));
+      setStatusMessage(`${data.results.length}件のヒット（先頭100件を表示中）`);
     } catch (error) {
       console.error(error);
       setStatusMessage("通信エラーが発生しました。");
