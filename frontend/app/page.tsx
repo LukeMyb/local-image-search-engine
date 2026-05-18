@@ -7,6 +7,8 @@ import ImageGrid from "../components/ImageGrid";
 import ImageViewer from "../components/ImageViewer";
 import SearchBar from "../components/SearchBar";
 
+import { useSystemUI } from "../hooks/useSystemUI";
+
 // 検索結果のデータ構造を定義
 interface SearchResult {
   id: number;
@@ -43,60 +45,8 @@ export default function Home() {
   // 現在保存されているすべての「クエリ（文字列）」のリストを保持する変数
   const [savedQueries, setSavedQueries] = useState<string[]>([]);
 
-  // iOSの強制ズーム（ピンチ＆ダブルタップ）をJavaScriptで完全にブロックする
-  useEffect(() => {
-    // 1. ピンチイン・ピンチアウト（2本指でのズーム）を防ぐ
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 1) {
-        e.preventDefault();
-      }
-    };
-
-    // 2. ダブルタップによるズームを防ぐ
-    let lastTouchEnd = 0;
-    const handleTouchEnd = (e: TouchEvent) => {
-      const now = new Date().getTime();
-      if (now - lastTouchEnd <= 300) {
-        e.preventDefault();
-      }
-      lastTouchEnd = now;
-    };
-
-    // イベントリスナーを登録（passive: false にすることで preventDefault が効くようになる）
-    document.addEventListener("touchmove", handleTouchMove, { passive: false });
-    document.addEventListener("touchend", handleTouchEnd, { passive: false });
-
-    // クリーンアップ関数（アプリ終了時や画面移動時にイベントを解除する）
-    return () => {
-      document.removeEventListener("touchmove", handleTouchMove);
-      document.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, []); // <- 空の配列にすることで、アプリ起動時に1回だけ実行される
-
-  // 開閉に合わせて背景のスクロールを制御する
-  useEffect(() => {
-    if (selectedImage || isDrawerOpen) {
-      // 開いている時: ブラウザ全体のスクロールを隠す（無効化）
-      document.documentElement.style.overflow = "hidden";
-      document.documentElement.style.overscrollBehavior = "none";
-      document.body.style.overflow = "hidden";
-      document.body.style.overscrollBehavior = "none";
-    } else {
-      // 閉じた時: スクロール設定を元に戻す
-      document.documentElement.style.overflow = "";
-      document.documentElement.style.overscrollBehavior = "";
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
-    }
-
-    // 安全装置: この画面から別のページへ移動した時などに、スクロール不可のままになるのを防ぐ
-    return () => {
-      document.documentElement.style.overflow = "";
-      document.documentElement.style.overscrollBehavior = "";
-      document.body.style.overflow = "";
-      document.body.style.overscrollBehavior = "";
-    };
-  }, [selectedImage, isDrawerOpen]); // <- これらが変化するたびにこの処理を走らせる
+  // システム制御（ズーム禁止・スクロールロック）を有効化
+  useSystemUI({ selectedImage, isDrawerOpen });
 
   // サーバーからすべてのブックマークを取得して、クエリのリストを最新にする関数
   const refreshSavedQueries = async () => {
