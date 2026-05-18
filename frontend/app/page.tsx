@@ -124,6 +124,9 @@ export default function Home() {
       document.activeElement.blur();
     }
 
+    // 再検索が走った場合、保存ダイアログの入力欄（テキストボックス）をクリアする
+    setNewBookmarkName("");
+
     // 直接渡されたキーワードがあればそれを使い、なければ検索窓(query)の値を使う
     const currentQuery = overrideQuery !== undefined ? overrideQuery : query;
 
