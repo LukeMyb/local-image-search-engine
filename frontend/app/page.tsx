@@ -136,7 +136,7 @@ export default function Home() {
       setAllBookmarks(data.bookmarks);
       
       // クエリ文字列だけの配列を作成して保存
-      const queries = data.bookmarks.map((bm: Bookmark) => bm.query);
+      const queries = data.bookmarks.map((bm: Bookmark) => bm.query.trim());
       setSavedQueries(queries);
     } catch (error) {
       console.error("ブックマーク同期エラー:", error);
@@ -148,8 +148,8 @@ export default function Home() {
     if (!query.trim()) return;
 
     // 現在のクエリが保存済みかどうかを判定
-    const existingBm = allBookmarks.find(bm => bm.query === query.trim());
-    
+    const existingBm = allBookmarks.find(bm => bm.query.trim() === query.trim());
+
     if (existingBm) {
       // 保存済みなら、既存の名前を入力欄にセットして「編集モード」にする
       setNewBookmarkName(existingBm.name);
@@ -222,8 +222,8 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: newBookmarkName,
-          query: query,
+          name: newBookmarkName.trim(),
+          query: query.trim(),
         }),
       });
 
@@ -512,7 +512,7 @@ export default function Home() {
                 placeholder="ブックマーク名を入力..."
                 className={`w-full p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-2 ${
                   // 重複している場合は枠線を赤にする
-                  allBookmarks.some(bm => bm.name === newBookmarkName.trim() && bm.query !== query.trim())
+                  allBookmarks.some(bm => bm.name.trim() === newBookmarkName.trim() && bm.query.trim() !== query.trim())
                     ? "border border-red-500 focus:ring-red-500"
                     : "focus:ring-blue-600"
                 }`}
@@ -536,7 +536,7 @@ export default function Home() {
               <button
                 onClick={handleSaveBookmark}
                 // 名前が空、または重複している場合は押せないようにする
-                disabled={!newBookmarkName.trim() || allBookmarks.some(bm => bm.name === newBookmarkName.trim() && bm.query !== query.trim())}
+                disabled={!newBookmarkName.trim() || allBookmarks.some(bm => bm.name.trim() === newBookmarkName.trim() && bm.query.trim() !== query.trim())}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-white/50 text-white rounded-md transition-colors font-medium"
               >
                 保存
