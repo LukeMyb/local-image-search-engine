@@ -81,6 +81,10 @@ export default function BookmarkManager({
     if (!newBookmarkName.trim() || !query.trim()) return;
 
     try {
+      // 既存のブックマーク（同じクエリで保存されているもの）が存在するか、名前が変更されているかを確認
+      const existingBm = allBookmarks.find(bm => bm.query.trim() === query.trim());
+      const isNameChanged = existingBm && existingBm.name.trim() !== newBookmarkName.trim();
+
       const response = await fetch("http://192.168.11.3:8000/bookmark", {
         method: "POST",
         headers: {
@@ -93,6 +97,18 @@ export default function BookmarkManager({
       });
 
       if (!response.ok) throw new Error("保存に失敗しました");
+
+      // 新規保存が「成功した場合のみ」、古いブックマークを削除（DELETE）する
+      if (isNameChanged) {
+        const deleteResponse = await fetch(`http://192.168.11.3:8000/bookmark/${existingBm.id}`, {
+          method: "DELETE",
+        });
+        
+        if (!deleteResponse.ok) {
+          // もし削除だけ失敗した場合は、データ自体は残っているのでコンソール警告のみに留める
+          console.error("古いブックマークの削除に失敗しましたが、新しい名前での保存は完了しています。");
+        }
+      }
 
       // 成功したらダイアログを閉じて入力欄をリセット
       setIsSaveDialogOpen(false);
