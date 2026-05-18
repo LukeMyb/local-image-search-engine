@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, X, Heart, Menu, BookmarkPlus, BookmarkCheck } from "lucide-react";
+import { Search, X, Heart, Menu, BookmarkPlus, BookmarkCheck, Trash2 } from "lucide-react";
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -34,6 +34,9 @@ export default function Home() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   // ドロワー内の検索フィルター文字を管理する変数
   const [drawerFilter, setDrawerFilter] = useState("");
+  // 削除ダイアログの開閉状態と、削除対象のブックマークを保持
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [bookmarkToDelete, setBookmarkToDelete] = useState<Bookmark | null>(null);
 
   // ブックマーク保存ダイアログの開閉と入力内容を管理
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -234,6 +237,34 @@ export default function Home() {
     } catch (error) {
       console.error(error);
       alert("保存に失敗しました");
+    }
+  };
+
+  // ブックマークを削除する処理
+  const handleDeleteBookmark = async () => {
+    if (!bookmarkToDelete) return;
+
+    try {
+      // APIエンドポイントは一般的なREST設計（DELETE /bookmark/{id}）を想定
+      const response = await fetch(`http://192.168.11.3:8000/bookmark/${bookmarkToDelete.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) throw new Error("削除に失敗しました");
+
+      // ドロワー内のリストから即座に消す（再取得を待たずにUIを更新してキビキビ感を出す）
+      setBookmarks(prev => prev.filter(bm => bm.id !== bookmarkToDelete.id));
+      
+      // 保存済みクエリの全リストも最新化
+      await refreshSavedQueries();
+
+      // ダイアログを閉じて状態をリセット
+      setIsDeleteDialogOpen(false);
+      setBookmarkToDelete(null);
+
+    } catch (error) {
+      console.error(error);
+      alert("削除に失敗しました");
     }
   };
 
@@ -464,9 +495,14 @@ export default function Home() {
                     <button
                       type="button"
                       className="p-2 text-zinc-500 hover:text-red-400 rounded-full hover:bg-zinc-700/50 transition-colors shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      onClick={(e) => e.stopPropagation()} // 親要素のクリック発動を防ぐ
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // 削除対象をセットして確認ダイアログを開く
+                        setBookmarkToDelete(bm);
+                        setIsDeleteDialogOpen(true);
+                      }}
                     >
-                      <X size={14} /> {/* 一旦 X アイコンで代用 */}
+                      <Trash2 size={14} /> {/* 一旦 X アイコンで代用 */}
                     </button>
                   </div>
                 ))
@@ -527,6 +563,40 @@ export default function Home() {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-white/50 text-white rounded-md transition-colors font-medium"
               >
                 保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 削除確認ダイアログ */}
+      {isDeleteDialogOpen && bookmarkToDelete && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsDeleteDialogOpen(false)}
+          ></div>
+          
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <h3 className="text-lg font-medium text-white">ブックマークの削除</h3>
+            
+            <p className="text-zinc-300 text-sm">
+              「<span className="font-bold text-white">{bookmarkToDelete.name}</span>」を削除しますか？<br/>
+              この操作は元に戻せません。
+            </p>
+
+            <div className="flex flex-row justify-end gap-2 mt-4">
+              <button
+                onClick={() => setIsDeleteDialogOpen(false)}
+                className="px-4 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDeleteBookmark}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-md transition-colors font-medium"
+              >
+                削除
               </button>
             </div>
           </div>
