@@ -472,17 +472,17 @@ export default function Home() {
                 bookmarks.map((bm) => (
                   <div
                     key={bm.id}
-                    // タップ時の連動処理
-                    onClick={() => {
-                      setQuery(bm.query); // 検索窓の見た目を更新
-                      setIsDrawerOpen(false); // ドロワーを閉じる
-                      handleSearch(undefined, bm.query); // 即座に検索を実行
-                    }}
-
-                    className="w-full p-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 active:bg-zinc-700 active:scale-[0.98] transition-all duration-75 flex flex-row items-center justify-between cursor-pointer group"
+                    className="w-full border-b border-zinc-800/50 last:border-0 flex flex-row items-stretch group"
                   >
                     {/* 名前とクエリ */}
-                    <div className="flex flex-col min-w-0 pr-2">
+                    <div
+                      onClick={() => {
+                        setQuery(bm.query);
+                        setIsDrawerOpen(false);
+                        handleSearch(undefined, bm.query);
+                      }}
+                      className="flex-1 p-3 flex flex-col min-w-0 cursor-pointer hover:bg-zinc-800/30 active:bg-zinc-700 active:scale-[0.98] transition-all duration-75 origin-left"
+                    >
                       <span className="text-sm font-medium text-zinc-200 truncate">
                         {bm.name}
                       </span>
@@ -492,18 +492,20 @@ export default function Home() {
                     </div>
 
                     {/* 削除ボタン */}
-                    <button
-                      type="button"
-                      className="p-2 text-zinc-500 hover:text-red-400 rounded-full hover:bg-zinc-700/50 transition-colors shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // 削除対象をセットして確認ダイアログを開く
-                        setBookmarkToDelete(bm);
-                        setIsDeleteDialogOpen(true);
-                      }}
-                    >
-                      <Trash2 size={14} /> {/* 一旦 X アイコンで代用 */}
-                    </button>
+                    <div className="shrink-0 flex items-center justify-center p-3 pl-0">
+                      <button
+                        type="button"
+                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-zinc-700/50 active:bg-zinc-700/50 active:scale-125 rounded-full transition-all shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // 削除対象をセットして確認ダイアログを開く
+                          setBookmarkToDelete(bm);
+                          setIsDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 size={14} /> {/* 一旦 X アイコンで代用 */}
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
