@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, X, Heart, Menu, BookmarkPlus } from "lucide-react";
+import { Search, X, Heart, Menu, BookmarkPlus, BookmarkCheck } from "lucide-react";
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -38,6 +38,8 @@ export default function Home() {
   // ブックマーク保存ダイアログの開閉と入力内容を管理
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [newBookmarkName, setNewBookmarkName] = useState("");
+  // 現在保存されているすべての「クエリ（文字列）」のリストを保持する変数
+  const [savedQueries, setSavedQueries] = useState<string[]>([]);
 
   // iOSの強制ズーム（ピンチ＆ダブルタップ）をJavaScriptで完全にブロックする
   useEffect(() => {
@@ -115,6 +117,25 @@ export default function Home() {
     fetchBookmarks();
   }, [isDrawerOpen, drawerFilter]); // <- ドロワーの開閉や、フィルター文字が変わるたびに実行
 
+  // サーバーからすべてのブックマークを取得して、クエリのリストを最新にする関数
+  const refreshSavedQueries = async () => {
+    try {
+      const response = await fetch("http://192.168.11.3:8000/bookmarks");
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      // クエリ文字列だけの配列を作成して保存 (例: ["黒髪 ロングヘア", "style:my_art"])
+      const queries = data.bookmarks.map((bm: Bookmark) => bm.query);
+      setSavedQueries(queries);
+    } catch (error) {
+      console.error("ブックマーク同期エラー:", error);
+    }
+  };
+
+  // アプリ起動時に一回だけ、保存済みクエリのリストを読み込む
+  useEffect(() => {
+    refreshSavedQueries();
+  }, []);
+
   const handleSearch = async (e?: React.FormEvent, overrideQuery?: string) => {
     // フォーム送信によるページリロードを確実に阻止する
     if (e) e.preventDefault();
@@ -182,7 +203,8 @@ export default function Home() {
       setIsSaveDialogOpen(false);
       setNewBookmarkName("");
       
-      // ドロワーを開いた時に最新化されるため、ここでの再取得は不要
+      // 保存が成功した瞬間に、メモリ上の保存済みクエリ一覧を最新にする
+      await refreshSavedQueries();
       
     } catch (error) {
       console.error(error);
@@ -279,11 +301,19 @@ export default function Home() {
           onClick={() => query.trim() && setIsSaveDialogOpen(true)}
           className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
             query.trim() 
-              ? "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white" 
-              : "bg-[#27272a] text-zinc-600 cursor-not-allowed" // 空欄の時は押せない見た目に
+              // 入力されたクエリが保存済みリストにある場合、緑色(text-green-400)にする
+              ? savedQueries.includes(query.trim())
+                ? "bg-[#27272a] hover:bg-zinc-700 text-green-400"
+                : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white" 
+              : "bg-[#27272a] text-zinc-600 cursor-not-allowed"
           }`}
         >
-          <BookmarkPlus size={16} />
+          {/* 保存済みかどうかに応じてアイコンを切り替える */}
+          {query.trim() && savedQueries.includes(query.trim()) ? (
+            <BookmarkCheck size={16} />
+          ) : (
+            <BookmarkPlus size={16} />
+          )}
         </button>
       </div>
 
