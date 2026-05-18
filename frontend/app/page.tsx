@@ -35,6 +35,10 @@ export default function Home() {
   // ドロワー内の検索フィルター文字を管理する変数
   const [drawerFilter, setDrawerFilter] = useState("");
 
+  // ブックマーク保存ダイアログの開閉と入力内容を管理
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [newBookmarkName, setNewBookmarkName] = useState("");
+
   // iOSの強制ズーム（ピンチ＆ダブルタップ）をJavaScriptで完全にブロックする
   useEffect(() => {
     // 1. ピンチイン・ピンチアウト（2本指でのズーム）を防ぐ
@@ -153,6 +157,36 @@ export default function Home() {
     }
   };
 
+  // ブックマークをサーバーに保存する処理
+  const handleSaveBookmark = async () => {
+    if (!newBookmarkName.trim() || !query.trim()) return;
+
+    try {
+      const response = await fetch("http://192.168.11.3:8000/bookmark", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: newBookmarkName,
+          query: query,
+        }),
+      });
+
+      if (!response.ok) throw new Error("保存に失敗しました");
+
+      // 成功したらダイアログを閉じて入力欄をリセット
+      setIsSaveDialogOpen(false);
+      setNewBookmarkName("");
+      
+      // ドロワーを開いた時に最新化されるため、ここでの再取得は不要
+      
+    } catch (error) {
+      console.error(error);
+      alert("保存に失敗しました");
+    }
+  };
+
   // お気に入りボタンを押した時の処理
   const toggleFavorite = async (image_id: number, e: React.MouseEvent) => {
     // 画像自体のクリック判定（モーダルを開く）が発動するのを防ぐ
@@ -238,7 +272,13 @@ export default function Home() {
         {/* ブックマーク保存ボタン（右端） */}
         <button
           type="button"
-          className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
+          // クエリが入力されている時だけダイアログを開けるようにする
+          onClick={() => query.trim() && setIsSaveDialogOpen(true)}
+          className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+            query.trim() 
+              ? "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white" 
+              : "bg-[#27272a] text-zinc-600 cursor-not-allowed" // 空欄の時は押せない見た目に
+          }`}
         >
           <BookmarkPlus size={16} />
         </button>
@@ -373,6 +413,48 @@ export default function Home() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 新規保存ダイアログ */}
+      {isSaveDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsSaveDialogOpen(false)}
+          ></div>
+          
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <h3 className="text-lg font-medium text-white">検索条件を保存</h3>
+            
+            <div>
+              <p className="text-sm text-zinc-400 mb-2">クエリ: <span className="text-zinc-200">{query}</span></p>
+              <input
+                type="text"
+                value={newBookmarkName}
+                onChange={(e) => setNewBookmarkName(e.target.value)}
+                placeholder="ブックマーク名を入力..."
+                className="w-full p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                autoFocus // ダイアログが開いた瞬間にフォーカスを当てる
+              />
+            </div>
+
+            <div className="flex flex-row justify-end gap-2 mt-2">
+              <button
+                onClick={() => setIsSaveDialogOpen(false)}
+                className="px-4 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveBookmark}
+                disabled={!newBookmarkName.trim()} // 名前が空なら押せない
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-white/50 text-white rounded-md transition-colors font-medium"
+              >
+                保存
+              </button>
             </div>
           </div>
         </div>
