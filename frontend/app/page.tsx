@@ -102,14 +102,25 @@ export default function Home() {
         setSelectedImage={setSelectedImage} 
       />
 
-      {/* モーダルの描画処理 (selectedImage に中身がある時だけ表示される) */}
-      {selectedImage && (
-        <ImageViewer 
-          selectedImage={selectedImage} 
-          onClose={() => setSelectedImage(null)} 
-          onToggleFavorite={(id, e) => toggleFavorite(id, e, selectedImage, setSelectedImage)}
-        />
-      )}
+      {/* モーダルの描画処理 */}
+      {selectedImage && (() => {
+        // 現在の画像が配列の何番目にあるかを計算
+        const currentIndex = results.findIndex((item) => item.id === selectedImage.id);
+        const hasPreceding = currentIndex > 0;
+        const hasSubsequent = currentIndex < results.length - 1;
+
+        return (
+          <ImageViewer 
+            selectedImage={selectedImage} 
+            onClose={() => setSelectedImage(null)} 
+            onToggleFavorite={(id, e) => toggleFavorite(id, e, selectedImage, setSelectedImage)}
+            onNext={() => hasSubsequent && setSelectedImage(results[currentIndex + 1])}
+            onPrev={() => hasPreceding && setSelectedImage(results[currentIndex - 1])}
+            hasPreceding={hasPreceding}
+            hasSubsequent={hasSubsequent}
+          />
+        );
+      })()}
 
       {/* ブックマーク関連の処理 */}
       <BookmarkManager

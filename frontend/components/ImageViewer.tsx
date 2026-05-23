@@ -1,4 +1,5 @@
-import { X, Heart } from "lucide-react";
+import { useEffect } from "react";
+import { X, Heart, ChevronLeft, ChevronRight } from "lucide-react";
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -10,9 +11,40 @@ interface ImageViewerProps {
   selectedImage: SearchResult;
   onClose: () => void;
   onToggleFavorite: (id: number, e: React.MouseEvent) => void;
+
+  // 前後移動用のアクションと判定フラグ
+  onNext?: () => void;
+  onPrev?: () => void;
+  hasSubsequent?: boolean;
+  hasPreceding?: boolean;
 }
 
-export default function ImageViewer({ selectedImage, onClose, onToggleFavorite }: ImageViewerProps) {
+export default function ImageViewer({
+  selectedImage,
+  onClose,
+  onToggleFavorite,
+  onNext,
+  onPrev,
+  hasSubsequent = false,
+  hasPreceding = false,
+}: ImageViewerProps) {
+
+  // キーボード操作（← →）を検知して画像を切り替える処理
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" && hasSubsequent && onNext) {
+        onNext();
+      } else if (e.key === "ArrowLeft" && hasPreceding && onPrev) {
+        onPrev();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [hasSubsequent, hasPreceding, onNext, onPrev]);
+
   return (
     <div 
       // 画面全体を覆う半透明の黒い背景
@@ -20,12 +52,33 @@ export default function ImageViewer({ selectedImage, onClose, onToggleFavorite }
     >
       {/* 画像を中央に配置するコンテナ */}
       <div className="relative w-full h-full flex flex-col items-center">
+
+        {/* 左移動ボタン (PCでのみ表示) */}
+        {hasPreceding && onPrev && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPrev(); }}
+            className="absolute top-1/2 left-4 -translate-y-1/2 z-10 p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center"
+          >
+            <ChevronLeft size={32} />
+          </button>
+        )}
+
         <img 
           // 本画像(/image/)を呼び出す
           src={`http://192.168.11.3:8000/image/${selectedImage.id}`} 
           alt={`Selected ${selectedImage.id}`}
           className="w-full h-full object-contain"
         />
+
+        {/* 右移動ボタン (PCでのみ表示) */}
+        {hasSubsequent && onNext && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onNext(); }}
+            className="absolute top-1/2 right-4 -translate-y-1/2 z-10 p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center"
+          >
+            <ChevronRight size={32} />
+          </button>
+        )}
 
         {/* モーダル内のボタン */}
         <button
