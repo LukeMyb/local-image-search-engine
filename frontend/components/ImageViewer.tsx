@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { X, Heart, ChevronLeft, ChevronRight } from "lucide-react";
 
 // 検索結果のデータ構造を定義
@@ -29,6 +29,40 @@ export default function ImageViewer({
   hasPreceding = false,
 }: ImageViewerProps) {
 
+  // スワイプ判定用のState
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  // スワイプと判定する最低移動距離（ピクセル）
+  const minSwipeDistance = 50;
+
+  // タッチイベントのハンドラー群
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEndX(null); // 前回の終了位置をリセット
+    setTouchStartX(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStartX || !touchEndX) return;
+
+    // 左へのスワイプ（正の値）か、右へのスワイプ（負の値）かを計算
+    const distance = touchStartX - touchEndX;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe && hasSubsequent && onNext) {
+      // 指を左に動かした ＝ 次の画像を見たい
+      onNext();
+    } else if (isRightSwipe && hasPreceding && onPrev) {
+      // 指を右に動かした ＝ 前の画像を見たい
+      onPrev();
+    }
+  };
+
   // キーボード操作（← →）を検知して画像を切り替える処理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -51,7 +85,12 @@ export default function ImageViewer({
       className="fixed inset-0 bg-black flex items-center justify-center z-50 touch-none overscroll-none"
     >
       {/* 画像を中央に配置するコンテナ */}
-      <div className="relative w-full h-full flex flex-col items-center">
+      <div
+        className="relative w-full h-full flex flex-col items-center"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        >
 
         {/* 左移動ボタン (PCでのみ表示) */}
         {hasPreceding && onPrev && (
