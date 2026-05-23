@@ -57,10 +57,10 @@ export default function ImageViewer({
         {hasPreceding && onPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); onPrev(); }}
-            className="absolute left-0 top-0 bottom-0 w-1/4 z-10 flex items-center justify-start pl-4 outline-none group cursor-pointer"
+            className="absolute left-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-start pl-4 outline-none group cursor-pointer"
           >
             {/* アイコンの背景の丸い部分を div に分離し、group-hover で反応させる */}
-            <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center">
+            <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors flex items-center justify-center">
               <ChevronLeft size={32} />
             </div>
           </button>
@@ -77,10 +77,10 @@ export default function ImageViewer({
         {hasSubsequent && onNext && (
           <button
             onClick={(e) => { e.stopPropagation(); onNext(); }}
-            className="absolute right-0 top-0 bottom-0 w-1/4 z-10 flex items-center justify-end pr-4 outline-none group cursor-pointer"
+            className="absolute right-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-end pr-4 outline-none group cursor-pointer"
           >
             {/* アイコンの背景部分 */}
-            <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center">
+            <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors flex items-center justify-center">
               <ChevronRight size={32} />
             </div>
           </button>
