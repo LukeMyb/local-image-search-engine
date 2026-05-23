@@ -57,9 +57,12 @@ export default function ImageViewer({
         {hasPreceding && onPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); onPrev(); }}
-            className="absolute top-1/2 left-4 -translate-y-1/2 z-10 p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center"
+            className="absolute left-0 top-0 bottom-0 w-1/4 z-10 flex items-center justify-start pl-4 outline-none group cursor-pointer"
           >
-            <ChevronLeft size={32} />
+            {/* アイコンの背景の丸い部分を div に分離し、group-hover で反応させる */}
+            <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center">
+              <ChevronLeft size={32} />
+            </div>
           </button>
         )}
 
@@ -74,16 +77,19 @@ export default function ImageViewer({
         {hasSubsequent && onNext && (
           <button
             onClick={(e) => { e.stopPropagation(); onNext(); }}
-            className="absolute top-1/2 right-4 -translate-y-1/2 z-10 p-4 bg-black/50 hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center"
+            className="absolute right-0 top-0 bottom-0 w-1/4 z-10 flex items-center justify-end pr-4 outline-none group cursor-pointer"
           >
-            <ChevronRight size={32} />
+            {/* アイコンの背景部分 */}
+            <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors hidden md:flex items-center justify-center">
+              <ChevronRight size={32} />
+            </div>
           </button>
         )}
 
         {/* モーダル内のボタン */}
         <button
           onClick={(e) => onToggleFavorite(selectedImage.id, e)}
-          className="absolute bottom-4 left-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors"
+          className="absolute bottom-4 left-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors z-20"
         >
           <Heart 
             size={24} 
@@ -94,7 +100,7 @@ export default function ImageViewer({
         <button 
           // 閉じる処理をpropsで受け取った関数に置き換え
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors"
+          className="absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors z-20"
         >
           <X size={24} />
         </button>
