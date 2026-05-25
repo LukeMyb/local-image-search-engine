@@ -391,7 +391,29 @@ class ImageDatabase:
         row = cursor.fetchone()
         return row['query'] if row else ""
 
+    # 無限スクロール用 - 複数IDから画像データを一括取得するメソッド
 
+    def get_images_by_ids(self, image_ids: list[int]):
+        """
+        指定されたIDリストから画像データを取得し、要求されたIDの順序を維持して返す
+        """
+        if not image_ids:
+            return []
+        
+        cursor = self.conn.cursor()
+        # プレースホルダー (?, ?, ?) を作成
+        placeholders = ','.join(['?'] * len(image_ids))
+        
+        # 既存の検索処理に合わせてすべてのカラム(*)を取得
+        query = f"SELECT * FROM images WHERE id IN ({placeholders})"
+        cursor.execute(query, image_ids)
+        rows = cursor.fetchall()
+        
+        # SQLiteの IN 句は順序を保証しないため、Python側で元の image_ids の順序に並べ直す
+        result_dict = {row['id']: dict(row) for row in rows}
+        sorted_results = [result_dict[img_id] for img_id in image_ids if img_id in result_dict]
+        
+        return sorted_results
 
 # --- ここから単体テスト用コード ---
 if __name__ == "__main__":

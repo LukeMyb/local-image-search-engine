@@ -4,8 +4,13 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from pydantic import BaseModel
+from typing import List
 
 from core.search import SearchManager
+
+# POST リクエストで受け取るIDリストのデータ型を定義
+class BatchImageRequest(BaseModel):
+    ids: List[int]
 
 app = FastAPI()
 
@@ -64,7 +69,27 @@ def search(q: str):
     検索クエリ(q)を受け取り、検索結果をJSONで返す
     """
     results = search_manager.search(q) 
-    return {"query": q, "results": results}
+
+    # 検索結果からIDだけをすべて抽出し、表示用は最初の100件で切り出す
+    all_ids = [img["id"] for img in results]
+    initial_results = results[:100]
+
+    return {
+        "query": q,
+        "total": len(all_ids),
+        "all_ids": all_ids,
+        "results": initial_results
+    }
+
+# IDリストから画像情報のみを取得するエンドポイント
+@app.post("/images/batch")
+def get_images_batch(request: BatchImageRequest):
+    """
+    IDのリストを受け取り、その画像データだけをDBから直接取得して返す
+    """
+    # SearchManagerが持っているdbインスタンスの新しいメソッドを呼び出す
+    results = search_manager.db.get_images_by_ids(request.ids)
+    return {"results": results}
 
 @app.get("/suggest")
 def suggest(q: str):
