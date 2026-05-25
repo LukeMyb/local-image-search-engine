@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, Heart, ChevronLeft, ChevronRight } from "lucide-react";
+import { API_BASE_URL } from "../lib/config";
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -107,7 +108,7 @@ export default function ImageViewer({
 
         <img 
           // 本画像(/image/)を呼び出す
-          src={`http://192.168.11.3:8000/image/${selectedImage.id}`} 
+          src={`${API_BASE_URL}/image/${selectedImage.id}`}
           alt={`Selected ${selectedImage.id}`}
           className="w-full h-full object-contain"
         />

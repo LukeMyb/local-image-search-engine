@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE_URL } from "../lib/config";
 
 interface SearchResult {
   id: number;
@@ -35,7 +36,7 @@ export function useImageSearch() {
     setResults([]); // 検索開始時に前の画像をクリア
 
     try {
-      const response = await fetch(`http://192.168.11.3:8000${endpoint}`);
+      const response = await fetch(`${API_BASE_URL}${endpoint}`);
       if (!response.ok) throw new Error(`HTTPエラー: ${response.status}`);
 
       const data = await response.json();
@@ -64,7 +65,7 @@ export function useImageSearch() {
     const nextIds = allIds.slice(results.length, results.length + 100);
 
     try {
-      const response = await fetch(`http://192.168.11.3:8000/images/batch`, {
+      const response = await fetch(`${API_BASE_URL}/images/batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids: nextIds }),
@@ -88,7 +89,7 @@ export function useImageSearch() {
     e.stopPropagation();
 
     try {
-      const response = await fetch(`http://192.168.11.3:8000/favorite/${image_id}`, {
+      const response = await fetch(`${API_BASE_URL}/favorite/${image_id}`, {
         method: "POST",
       });
       if (!response.ok) throw new Error("通信エラー");
