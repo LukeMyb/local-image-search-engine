@@ -12,6 +12,10 @@ export function useImageSearch() {
   const [statusMessage, setStatusMessage] = useState("システム待機中...");
   const [results, setResults] = useState<SearchResult[]>([]);
 
+  // 全IDリストとローディング状態の管理
+  const [allIds, setAllIds] = useState<number[]>([]);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // 検索実行ロジック
   const handleSearch = async (query: string, e?: React.FormEvent, overrideQuery?: string) => {
     // フォーム送信によるページリロードを阻止する
@@ -35,12 +39,46 @@ export function useImageSearch() {
       if (!response.ok) throw new Error(`HTTPエラー: ${response.status}`);
 
       const data = await response.json();
-      // 先頭100件のみ表示
-      setResults(data.results.slice(0, 100));
-      setStatusMessage(`${data.results.length}件のヒット（先頭100件を表示中）`);
+
+      // お気に入り(/favorites)など従来形式が返ってきた時もエラーにならないようフォールバックを設定
+      const ids = data.all_ids || data.results.map((r: any) => r.id);
+      const initialResults = data.results.slice(0, 100);
+
+      // IDリストと初期画像をセット
+      setAllIds(ids);
+      setResults(initialResults);
+      setStatusMessage(`${data.total || ids.length}件のヒット`);
     } catch (error) {
       console.error(error);
       setStatusMessage("通信エラーが発生しました。");
+    }
+  };
+
+  // スクロール時に次の100件を取得するロジック
+  const loadMore = async () => {
+    // 読み込み中、またはすべて読み込み済みの場合は何もしない
+    if (isLoadingMore || results.length >= allIds.length) return;
+
+    setIsLoadingMore(true);
+    // 次に取得すべき100件のIDを切り出す
+    const nextIds = allIds.slice(results.length, results.length + 100);
+
+    try {
+      const response = await fetch(`http://192.168.11.3:8000/images/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: nextIds }),
+      });
+
+      if (!response.ok) throw new Error("追加画像の取得に失敗しました");
+
+      const data = await response.json();
+      // 既存の配列の後ろに、新しく取得した画像を結合する
+      setResults((prev) => [...prev, ...data.results]);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -78,5 +116,7 @@ export function useImageSearch() {
     setStatusMessage,
     handleSearch,
     toggleFavorite,
+    loadMore,
+    hasMore: results.length < allIds.length,
   };
 }

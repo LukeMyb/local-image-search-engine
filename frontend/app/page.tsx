@@ -42,7 +42,7 @@ export default function Home() {
   const [savedQueries, setSavedQueries] = useState<string[]>([]);
 
   // 検索・画像操作ロジックをフックから取得
-  const { results, statusMessage, handleSearch, toggleFavorite } = useImageSearch();
+  const { results, statusMessage, handleSearch, toggleFavorite, loadMore, hasMore } = useImageSearch();
 
   // システム制御（ズーム禁止・スクロールロック）を有効化
   useSystemUI({ selectedImage, isDrawerOpen });
@@ -100,6 +100,8 @@ export default function Home() {
       <ImageGrid 
         results={results} 
         setSelectedImage={setSelectedImage} 
+        loadMore={loadMore}
+        hasMore={hasMore}
       />
 
       {/* モーダルの描画処理 */}
