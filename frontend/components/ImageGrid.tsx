@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import { Heart } from "lucide-react";
+import { API_BASE_URL } from "../lib/config";
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -59,7 +60,7 @@ export default function ImageGrid({
             <img
               key={item.id}
               // Python側の画像のエンドポイントを呼び出し
-              src={`http://192.168.11.3:8000/thumbnail/${item.id}`}
+              src={`${API_BASE_URL}/thumbnail/${item.id}`}
               alt={`Image ${item.id}`}
               // クリックされたら、この画像の情報を selectedImage にセットする
               onClick={() => setSelectedImage(item)}

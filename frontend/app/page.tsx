@@ -9,6 +9,8 @@ import ImageGrid from "../components/ImageGrid";
 import ImageViewer from "../components/ImageViewer";
 import SearchBar from "../components/SearchBar";
 
+import { API_BASE_URL } from "../lib/config";
+
 // 検索結果のデータ構造を定義
 interface SearchResult {
   id: number;
@@ -51,7 +53,7 @@ export default function Home() {
   const refreshSavedQueries = async () => {
     try {
       // フィルターなしで全件取得
-      const response = await fetch("http://192.168.11.3:8000/bookmarks?filter_text=");
+      const response = await fetch(`${API_BASE_URL}/bookmarks?filter_text=`);
       if (!response.ok) throw new Error();
       const data = await response.json();
       

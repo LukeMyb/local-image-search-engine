@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Trash2 } from "lucide-react";
+import { API_BASE_URL } from "../lib/config";
 
 // ブックマークのデータ構造を定義
 interface Bookmark {
@@ -63,7 +64,7 @@ export default function BookmarkManager({
     const fetchBookmarks = async () => {
       try {
         const response = await fetch(
-          `http://192.168.11.3:8000/bookmarks?filter_text=${encodeURIComponent(drawerFilter)}`
+          `${API_BASE_URL}/bookmarks?filter_text=${encodeURIComponent(drawerFilter)}`
         );
         if (!response.ok) throw new Error("ブックマークの取得に失敗しました");
         const data = await response.json();
@@ -85,7 +86,7 @@ export default function BookmarkManager({
       const existingBm = allBookmarks.find(bm => bm.query.trim() === query.trim());
       const isNameChanged = existingBm && existingBm.name.trim() !== newBookmarkName.trim();
 
-      const response = await fetch("http://192.168.11.3:8000/bookmark", {
+      const response = await fetch(`${API_BASE_URL}/bookmark`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,7 +101,7 @@ export default function BookmarkManager({
 
       // 新規保存が「成功した場合のみ」、古いブックマークを削除（DELETE）する
       if (isNameChanged) {
-        const deleteResponse = await fetch(`http://192.168.11.3:8000/bookmark/${existingBm.id}`, {
+        const deleteResponse = await fetch(`${API_BASE_URL}/bookmark/${existingBm.id}`, {
           method: "DELETE",
         });
         
@@ -127,7 +128,7 @@ export default function BookmarkManager({
     if (!bookmarkToDelete) return;
 
     try {
-      const response = await fetch(`http://192.168.11.3:8000/bookmark/${bookmarkToDelete.id}`, {
+      const response = await fetch(`${API_BASE_URL}/bookmark/${bookmarkToDelete.id}`, {
         method: "DELETE",
       });
 
