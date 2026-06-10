@@ -129,7 +129,6 @@ export function useImageSearch() {
   const fetchSuggestions = async (inputQuery: string) => {
     if (!inputQuery.trim()) {
       setSuggestions([]);
-      setIsSuggestOpen(false);
       return;
     }
 
@@ -139,8 +138,6 @@ export function useImageSearch() {
 
       const data = await response.json();
       setSuggestions(data.suggestions);
-      // 候補が存在する場合のみサジェスト枠を開く
-      setIsSuggestOpen(data.suggestions.length > 0);
     } catch (error) {
       console.error(error);
     }

@@ -44,7 +44,11 @@ export default function Home() {
   const [savedQueries, setSavedQueries] = useState<string[]>([]);
 
   // 検索・画像操作ロジックをフックから取得
-  const { results, statusMessage, handleSearch, toggleFavorite, loadMore, hasMore } = useImageSearch();
+  const { 
+    results, statusMessage, handleSearch, toggleFavorite, loadMore, hasMore,
+    // サジェスト用の状態と関数を取得
+    suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
+  } = useImageSearch();
 
   // システム制御（ズーム禁止・スクロールロック）を有効化
   useSystemUI({ selectedImage, isDrawerOpen });
@@ -96,6 +100,12 @@ export default function Home() {
         setIsDrawerOpen={setIsDrawerOpen}
         openBookmarkDialog={openBookmarkDialog}
         savedQueries={savedQueries}
+        // 以下、サジェスト用に渡すProps
+        suggestions={suggestions}
+        isSuggestOpen={isSuggestOpen}
+        setIsSuggestOpen={setIsSuggestOpen}
+        fetchSuggestions={fetchSuggestions}
+        deleteStyleTag={deleteStyleTag}
       />
 
       {/* 取得したIDを使って画像を並べる処理 */}
