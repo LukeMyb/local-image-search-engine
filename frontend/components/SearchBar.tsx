@@ -65,7 +65,7 @@ export default function SearchBar({
 
   return (
     <>
-      <div className="flex flex-row gap-2 w-full max-w-md">
+      <div className="flex flex-row gap-2 w-full max-w-md" ref={searchBarRef}>
         {/* ドロワーメニュー展開ボタン */}
         <button
           type="button"
