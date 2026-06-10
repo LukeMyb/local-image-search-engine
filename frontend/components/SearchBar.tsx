@@ -107,42 +107,42 @@ export default function SearchBar({
             )}
 
             {/* サジェストのドロップダウンUI */}
-              {isSuggestOpen && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-[#1E1E1E] border border-white/20 rounded-md shadow-2xl z-50 max-h-60 overflow-y-auto">
-                  {suggestions.map((s, idx) => (
+            {isSuggestOpen && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-[#1E1E1E] border border-white/20 rounded-md shadow-2xl z-50 max-h-60 overflow-y-auto">
+                {suggestions.map((s, idx) => (
+                  <div
+                    key={idx}
+                    className="flex flex-row justify-between items-center border-b border-white/5 last:border-0 hover:bg-zinc-800 transition-colors"
+                  >
                     <div
-                      key={idx}
-                      className="flex flex-row justify-between items-center border-b border-white/5 last:border-0 hover:bg-zinc-800 transition-colors"
+                      className="flex-1 p-3 cursor-pointer text-sm text-zinc-200"
+                      onClick={() => {
+                        setQuery(s.query); // 検索窓にクエリを反映
+                        setIsSuggestOpen(false); // サジェストを閉じる
+                      }}
                     >
-                      <div
-                        className="flex-1 p-3 cursor-pointer text-sm text-zinc-200"
-                        onClick={() => {
-                          setQuery(s.query); // 検索窓にクエリを反映
-                          setIsSuggestOpen(false); // サジェストを閉じる
-                        }}
-                      >
-                        {s.display}
-                      </div>
-
-                      {/* 絵柄タグ(is_style)の場合のみゴミ箱アイコンを表示 */}
-                      {s.is_style && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation(); // クリックイベントの伝播を防ぐ
-                            setStyleToDelete(s); // 削除ダイアログを開く
-                          }}
-                          className="p-3 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 transition-colors shrink-0"
-                          title="この絵柄タグを削除"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                      {s.display}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                    {/* 絵柄タグ(is_style)の場合のみゴミ箱アイコンを表示 */}
+                    {s.is_style && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation(); // クリックイベントの伝播を防ぐ
+                          setStyleToDelete(s); // 削除ダイアログを開く
+                        }}
+                        className="p-3 text-zinc-500 hover:text-red-400 hover:bg-zinc-700 transition-colors shrink-0"
+                        title="この絵柄タグを削除"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* 検索ボタン */}
           <button
