@@ -160,3 +160,12 @@ def update_bookmark_usage(bookmark_id: int):
     """
     search_manager.db.update_bookmark_usage(bookmark_id)
     return {"status": "success", "message": "使用時刻を更新しました"}
+
+# 絵柄タグの削除用エンドポイント
+@app.delete("/style/{style_id}")
+def delete_style(style_id: int):
+    """
+    指定されたIDの絵柄タグを削除する
+    """
+    search_manager.db.delete_style_tag(style_id)
+    return {"status": "success", "message": "絵柄タグを削除しました"}
