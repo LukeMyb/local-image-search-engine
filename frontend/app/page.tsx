@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSystemUI } from "../hooks/useSystemUI";
 import { useImageSearch } from "../hooks/useImageSearch";
+import { useDrawerSwipe } from "../hooks/useDrawerSwipe";
 
 import BookmarkManager from "../components/BookmarkManager";
 import ImageGrid from "../components/ImageGrid";
@@ -52,6 +53,9 @@ export default function Home() {
 
   // システム制御（ズーム禁止・スクロールロック）を有効化
   useSystemUI({ selectedImage, isDrawerOpen });
+
+  // スワイプによるドロワー展開ロジックを有効化
+  useDrawerSwipe({ isDrawerOpen, setIsDrawerOpen, selectedImage });
 
   // サーバーからすべてのブックマークを取得して、クエリのリストを最新にする関数
   const refreshSavedQueries = async () => {
