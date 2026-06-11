@@ -6,6 +6,10 @@ import { API_BASE_URL } from "../lib/config";
 interface SearchResult {
   id: number;
   is_favorite?: number;
+  // 詳細パネルに表示するためのデータ
+  file_path?: string;
+  tags_combined?: string;
+  [key: string]: any; // 他のプロパティも許容
 }
 
 interface ImageViewerProps {
@@ -30,12 +34,19 @@ export default function ImageViewer({
   hasPreceding = false,
 }: ImageViewerProps) {
 
-  // 横方向(X軸)の判定用State
+  // スワイプ判定用のState
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
-  // 縦方向(Y軸)の判定用State
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [touchEndY, setTouchEndY] = useState<number | null>(null);
+
+  // 詳細パネルの開閉状態を管理するState
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // 画像が切り替わった時は、詳細パネルを確実に閉じる
+  useEffect(() => {
+    setIsDetailOpen(false);
+  }, [selectedImage.id]);
 
   // スワイプと判定する最低移動距離（ピクセル）
   const minSwipeDistance = 50;
@@ -66,13 +77,23 @@ export default function ImageViewer({
 
     // 横方向より縦方向の移動量が大きい場合（縦スワイプの判定）
     if (Math.abs(distanceY) > Math.abs(distanceX)) {
-      // 下スワイプ（指を下に規定距離以上動かした）なら閉じる
       if (distanceY < -minSwipeDistance) {
-        onClose();
+        // 下スワイプ：パネルが開いていればパネルを閉じ、閉じていればビューアを閉じる
+        if (isDetailOpen) {
+          setIsDetailOpen(false);
+        } else {
+          onClose();
+        }
+      } else if (distanceY > minSwipeDistance) {
+        // 上スワイプ：パネルが閉じていればパネルを開く
+        if (!isDetailOpen) {
+          setIsDetailOpen(true);
+        }
       }
       return; // 縦スワイプと判定した場合は、左右の判定には進まない
     }
 
+    // 左右スワイプ処理
     const isLeftSwipe = distanceX > minSwipeDistance;
     const isRightSwipe = distanceX < -minSwipeDistance;
 
@@ -101,10 +122,23 @@ export default function ImageViewer({
     };
   }, [hasSubsequent, hasPreceding, onNext, onPrev]);
 
+  // 画面の余白タップで詳細パネルを閉じる処理
+  const handleTap = () => {
+    if (isDetailOpen) setIsDetailOpen(false);
+  };
+
+  // ファイルパスからファイル名だけを抽出する便利関数
+  const getFileName = (path?: string) => {
+    if (!path) return `Image ${selectedImage.id}`;
+    // Windowsのバックスラッシュ(\)とMac/Linuxのスラッシュ(/)の両方に対応して分割
+    return path.split(/[/\\]/).pop();
+  };
+
   return (
     <div 
       // 画面全体を覆う半透明の黒い背景
       className="fixed inset-0 bg-black flex items-center justify-center z-50 touch-none overscroll-none"
+      onClick={handleTap}
     >
       {/* 画像を中央に配置するコンテナ */}
       <div
@@ -129,6 +163,7 @@ export default function ImageViewer({
 
         <img 
           // 本画像(/image/)を呼び出す
+          onClick={handleTap}
           src={`${API_BASE_URL}/image/${selectedImage.id}`}
           alt={`Selected ${selectedImage.id}`}
           className="w-full h-full object-contain"
@@ -147,7 +182,7 @@ export default function ImageViewer({
           </button>
         )}
 
-        {/* モーダル内のボタン */}
+        {/* お気に入り（ハート）ボタン */}
         <button
           onClick={(e) => onToggleFavorite(selectedImage.id, e)}
           className="absolute bottom-4 left-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors z-20"
@@ -157,7 +192,8 @@ export default function ImageViewer({
             className={selectedImage.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
           />
         </button>
-        
+
+        {/* 閉じるボタン */}
         <button 
           // 閉じる処理をpropsで受け取った関数に置き換え
           onClick={onClose}
@@ -165,6 +201,33 @@ export default function ImageViewer({
         >
           <X size={24} />
         </button>
+
+        {/* 詳細情報パネル */}
+        <div
+          className={`absolute bottom-0 left-0 right-0 max-h-[50%] overflow-y-auto bg-zinc-900/95 backdrop-blur-md border-t border-zinc-700 text-white p-6 rounded-t-2xl transition-transform duration-300 ease-out flex flex-col gap-2 z-30 shadow-2xl ${
+            isDetailOpen ? "translate-y-0" : "translate-y-full"
+          }`}
+          // パネル内の操作が後ろに抜けないようにする
+          onClick={(e) => e.stopPropagation()} 
+        >
+          {/* ファイル名 */}
+          <h3 className="text-lg font-bold break-all">
+            {getFileName(selectedImage.file_path)}
+          </h3>
+          
+          {/* ファイルパス */}
+          <p className="text-xs text-zinc-400 break-all mb-2">
+            {selectedImage.file_path || "パス情報なし"}
+          </p>
+          
+          <hr className="border-zinc-700/50 my-2" />
+          
+          {/* タグ一覧 */}
+          <p className="text-xs text-zinc-500 mb-1 font-medium">タグ一覧</p>
+          <p className="text-sm text-zinc-200 leading-relaxed select-text">
+            {selectedImage.tags_combined ? selectedImage.tags_combined.replace(/,/g, ', ') : "タグなし"}
+          </p>
+        </div>
       </div>
     </div>
   );
