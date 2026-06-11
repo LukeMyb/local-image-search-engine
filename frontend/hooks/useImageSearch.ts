@@ -47,8 +47,9 @@ export function useImageSearch() {
 
     setStatusMessage(currentQuery ? `「${currentQuery}」を検索中...` : `お気に入り一覧を取得中...`);
     setResults([]); // 検索開始時に前の画像をクリア
-    // 検索実行時はサジェストを閉じる
-    setIsSuggestOpen(false);
+    setAllIds([]); // 前の検索結果のIDリストも同時にクリア
+
+    setIsSuggestOpen(false); // 検索実行時はサジェストを閉じる
 
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`);
