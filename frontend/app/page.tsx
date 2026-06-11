@@ -89,32 +89,37 @@ export default function Home() {
 
   return (
     // レイアウト
-    <div className="p-2 min-h-screen bg-zinc-900 text-green-400 flex flex-col gap-4">
-      <p className="text-lg font-medium">{statusMessage}</p>
+    <div className="min-h-screen bg-zinc-900 text-green-400 flex flex-col">
+      <div className="p-2 flex flex-col gap-4 md:sticky md:top-0 md:z-40 md:bg-zinc-900/90 md:backdrop-blur-md md:border-b md:border-zinc-800">
+        <p className="text-lg font-medium">{statusMessage}</p>
 
-      {/* (SearchBarコンポーネントを呼び出し) */}
-      <SearchBar 
-        query={query}
-        setQuery={setQuery}
-        onSearch={(e) => handleSearch(query, e)}
-        setIsDrawerOpen={setIsDrawerOpen}
-        openBookmarkDialog={openBookmarkDialog}
-        savedQueries={savedQueries}
-        // 以下、サジェスト用に渡すProps
-        suggestions={suggestions}
-        isSuggestOpen={isSuggestOpen}
-        setIsSuggestOpen={setIsSuggestOpen}
-        fetchSuggestions={fetchSuggestions}
-        deleteStyleTag={deleteStyleTag}
-      />
+        {/* (SearchBarコンポーネントを呼び出し) */}
+        <SearchBar 
+          query={query}
+          setQuery={setQuery}
+          onSearch={(e) => handleSearch(query, e)}
+          setIsDrawerOpen={setIsDrawerOpen}
+          openBookmarkDialog={openBookmarkDialog}
+          savedQueries={savedQueries}
+          // 以下、サジェスト用に渡すProps
+          suggestions={suggestions}
+          isSuggestOpen={isSuggestOpen}
+          setIsSuggestOpen={setIsSuggestOpen}
+          fetchSuggestions={fetchSuggestions}
+          deleteStyleTag={deleteStyleTag}
+        />
+      </div>
 
-      {/* 取得したIDを使って画像を並べる処理 */}
-      <ImageGrid 
-        results={results} 
-        setSelectedImage={setSelectedImage} 
-        loadMore={loadMore}
-        hasMore={hasMore}
-      />
+      {/* 画像グリッドなどを配置するメインコンテンツ領域 */}
+      <div className="p-2 pt-0 flex-1 flex flex-col gap-4">
+        {/* 取得したIDを使って画像を並べる処理 */}
+        <ImageGrid 
+          results={results} 
+          setSelectedImage={setSelectedImage} 
+          loadMore={loadMore}
+          hasMore={hasMore}
+        />
+      </div>
 
       {/* モーダルの描画処理 */}
       {selectedImage && (() => {
