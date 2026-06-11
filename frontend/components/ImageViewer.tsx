@@ -30,30 +30,51 @@ export default function ImageViewer({
   hasPreceding = false,
 }: ImageViewerProps) {
 
-  // スワイプ判定用のState
+  // 横方向(X軸)の判定用State
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
+  // 縦方向(Y軸)の判定用State
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [touchEndY, setTouchEndY] = useState<number | null>(null);
 
   // スワイプと判定する最低移動距離（ピクセル）
   const minSwipeDistance = 50;
 
   // タッチイベントのハンドラー群
   const onTouchStart = (e: React.TouchEvent) => {
-    setTouchEndX(null); // 前回の終了位置をリセット
+    // 前回の終了位置をリセット
+    setTouchEndX(null);
+    setTouchEndY(null);
+
     setTouchStartX(e.targetTouches[0].clientX);
+    setTouchStartY(e.targetTouches[0].clientY);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
     setTouchEndX(e.targetTouches[0].clientX);
+    setTouchEndY(e.targetTouches[0].clientY);
   };
 
   const onTouchEnd = () => {
-    if (!touchStartX || !touchEndX) return;
+    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
 
-    // 左へのスワイプ（正の値）か、右へのスワイプ（負の値）かを計算
-    const distance = touchStartX - touchEndX;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
+    // 移動距離を計算（開始位置 - 終了位置）
+    // 横: 正なら左スワイプ、負なら右スワイプ
+    // 縦: 正なら上スワイプ、負なら下スワイプ
+    const distanceX = touchStartX - touchEndX;
+    const distanceY = touchStartY - touchEndY;
+
+    // 横方向より縦方向の移動量が大きい場合（縦スワイプの判定）
+    if (Math.abs(distanceY) > Math.abs(distanceX)) {
+      // 下スワイプ（指を下に規定距離以上動かした）なら閉じる
+      if (distanceY < -minSwipeDistance) {
+        onClose();
+      }
+      return; // 縦スワイプと判定した場合は、左右の判定には進まない
+    }
+
+    const isLeftSwipe = distanceX > minSwipeDistance;
+    const isRightSwipe = distanceX < -minSwipeDistance;
 
     if (isLeftSwipe && hasSubsequent && onNext) {
       // 指を左に動かした ＝ 次の画像を見たい
