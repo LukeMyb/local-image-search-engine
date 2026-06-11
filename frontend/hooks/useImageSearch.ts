@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { API_BASE_URL } from "../lib/config";
 
 interface SearchResult {
@@ -127,7 +127,7 @@ export function useImageSearch() {
   };
 
   // バックエンドからサジェスト候補を取得する関数
-  const fetchSuggestions = async (inputQuery: string) => {
+  const fetchSuggestions = useCallback(async (inputQuery: string) => {
     if (!inputQuery.trim()) {
       setSuggestions([]);
       return;
@@ -142,7 +142,7 @@ export function useImageSearch() {
     } catch (error) {
       console.error(error);
     }
-  };
+  }, []);
 
   // 絵柄タグを削除する関数
   const deleteStyleTag = async (styleId: number) => {
