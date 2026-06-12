@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Heart, ArrowUp } from "lucide-react";
+import { Heart, ArrowUp, CheckCircle } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 // 検索結果のデータ構造を定義
@@ -16,6 +16,11 @@ interface ImageGridProps {
   // 無限スクロール用の関数と判定フラグ
   loadMore?: () => void;
   hasMore?: boolean;
+
+  // 選択モード用のProps
+  isSelectionMode?: boolean;
+  selectedIds?: number[];
+  toggleSelection?: (id: number) => void;
 }
 
 export default function ImageGrid({ 
@@ -23,7 +28,10 @@ export default function ImageGrid({
   selectedImage,
   setSelectedImage,
   loadMore,
-  hasMore
+  hasMore,
+  isSelectionMode = false,
+  selectedIds = [],
+  toggleSelection,
 }: ImageGridProps) {
 
   // 監視対象（一番下の透明な要素）への参照
@@ -107,29 +115,64 @@ export default function ImageGrid({
   return (
     <>
       <div className="grid grid-cols-3 gap-2 md:grid-cols-6 md:gap-4 mt-4">
-        {results.map((item) => (
-          // 画像とボタンを重ねるため、relative を持った div で囲む
-          <div key={item.id} className="relative group">
-            <img
-              key={item.id}
-              id={`grid-image-${item.id}`} // スクロールのジャンプ先となる目印（ID）を付ける
-              // Python側の画像のエンドポイントを呼び出し
-              src={`${API_BASE_URL}/thumbnail/${item.id}`}
-              alt={`Image ${item.id}`}
-              // クリックされたら、この画像の情報を selectedImage にセットする
-              onClick={() => setSelectedImage(item)}
-              // カーソルを指マーク(cursor-pointer)にし、クリックできることを強調
-              className="relative group scroll-mt-0 md:scroll-mt-24"
-            />
+        {results.map((item) => {
+          // この画像が選択されているかどうかの判定
+          const isSelected = selectedIds.includes(item.id);
 
-            {/* 右上に配置されるお気に入りマーク */}
-            {item.is_favorite === 1 && (
-              <div className="absolute bottom-1 right-1 p-1 md:p-2 pointer-events-none">
-                <Heart className="w-5 h-5 md:w-6 md:h-6 fill-white text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"/>
+          return (
+            // 画像とボタンを重ねるため、relative を持った div で囲む
+            <div key={item.id} className="relative group">
+              {/* 選択時はパディング(白枠)をつけるためのラッパー */}
+              <div 
+                className={`relative w-full h-full rounded-md overflow-hidden transition-all duration-200 ${
+                  isSelected ? "p-1.5 bg-white" : "p-0 bg-transparent"
+                }`}
+              >
+                <img
+                  key={item.id}
+                  id={`grid-image-${item.id}`} // スクロールのジャンプ先となる目印（ID）を付ける
+                  // Python側の画像のエンドポイントを呼び出し
+                  src={`${API_BASE_URL}/thumbnail/${item.id}`}
+                  alt={`Image ${item.id}`}
+
+                  // 選択モードONの時は選択切り替え、OFFの時はビューアを開く
+                  onClick={() => {
+                    if (isSelectionMode && toggleSelection) {
+                      toggleSelection(item.id);
+                    } else {
+                      setSelectedImage(item);
+                    }
+                  }}
+
+                  className={`w-full h-full object-cover transition-all duration-200 scroll-mt-0 md:scroll-mt-24 ${
+                    isSelectionMode ? "cursor-cell" : "cursor-pointer"
+                  } ${isSelected ? "rounded-sm" : "rounded-md"}`}
+                />
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* 選択モードONで、選択されている場合のチェックマーク（右上） */}
+              {isSelectionMode && isSelected && (
+                <div className="absolute top-2 right-2 pointer-events-none z-10">
+                  <CheckCircle className="w-5 h-5 text-white fill-blue-500 drop-shadow-md" />
+                </div>
+              )}
+
+              {/* 選択モードONだが、未選択の場合の薄い丸（タップ誘導） */}
+              {isSelectionMode && !isSelected && (
+                <div className="absolute top-2 right-2 pointer-events-none z-10 opacity-50">
+                  <div className="w-5 h-5 rounded-full border-2 border-white drop-shadow-md bg-black/20" />
+                </div>
+              )}
+
+              {/* 右上に配置されるお気に入りマーク */}
+              {item.is_favorite === 1 && (
+                <div className="absolute bottom-1 right-1 p-1 md:p-2 pointer-events-none">
+                  <Heart className="w-5 h-5 md:w-6 md:h-6 fill-white text-white drop-shadow-[0_0_8px_rgba(0,0,0,0.8)]"/>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* 無限スクロールの検知用タグ（この透明な箱が画面に入ったら次を読み込む） */}

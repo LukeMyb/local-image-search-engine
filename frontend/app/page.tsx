@@ -66,6 +66,23 @@ export default function Home() {
   // 検索精度モードの見た目切り替え用ステート
   const [isHighAccuracy, setIsHighAccuracy] = useState(true);
 
+  // 選択された画像のIDリストを管理するState
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
+  const toggleSelection = (id: number) => {
+    setSelectedIds((prev) => 
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  // 選択モードがOFFになったら、選択されている画像を自動リセットする
+  useEffect(() => {
+    if (!isSelectionMode) {
+      setSelectedIds([]);
+    }
+  }, [isSelectionMode]);
+
   // 検索・画像操作ロジックをフックから取得
   const { 
     results, statusMessage, handleSearch, toggleFavorite, loadMore, hasMore,
@@ -168,6 +185,9 @@ export default function Home() {
           setSelectedImage={setSelectedImage} 
           loadMore={loadMore}
           hasMore={hasMore}
+          isSelectionMode={isSelectionMode}
+          selectedIds={selectedIds}
+          toggleSelection={toggleSelection}
         />
       </div>
 
