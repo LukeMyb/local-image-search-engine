@@ -41,14 +41,14 @@ export default function ImageGrid({
       // ビューアが閉じた瞬間（selectedImageがnullになった時）
       const idToScroll = lastSelectedId.current;
       
-      // システムのスクロールロック解除（useSystemUI）を待つために、ほんの一瞬だけ遅らせて実行する
+      // システムのスクロールロック解除が終わった瞬間瞬時に実行
       setTimeout(() => {
         const el = document.getElementById(`grid-image-${idToScroll}`);
         if (el) {
           // 画面内に見えている場合は動かず、画面外にある場合のみ一番近い端にスクロール
           el.scrollIntoView({ block: "nearest", behavior: "auto" });
         }
-      }, 50);
+      }, 0);
 
       // スクロールが終わったら記憶をリセット
       lastSelectedId.current = null;
