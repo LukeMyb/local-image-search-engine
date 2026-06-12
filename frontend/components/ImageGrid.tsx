@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "react";
-import { Heart } from "lucide-react";
+import { Heart, ArrowUp } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 // 検索結果のデータ構造を定義
@@ -31,6 +31,31 @@ export default function ImageGrid({
 
   // 最後に表示していた画像のIDを記憶しておくための変数
   const lastSelectedId = useRef<number | null>(null);
+
+  // 上に戻るボタンを直接操作するための参照
+  const scrollToTopBtnRef = useRef<HTMLButtonElement>(null);
+
+  // スクロール量に応じてボタンの表示/非表示を直接切り替える処理
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!scrollToTopBtnRef.current) return;
+      
+      // 300px以上下にスクロールしたら表示、それ以外は隠す
+      if (window.scrollY > 300) {
+        scrollToTopBtnRef.current.style.opacity = "1";
+        scrollToTopBtnRef.current.style.pointerEvents = "auto";
+        scrollToTopBtnRef.current.style.transform = "translateY(0)";
+      } else {
+        scrollToTopBtnRef.current.style.opacity = "0";
+        scrollToTopBtnRef.current.style.pointerEvents = "none";
+        scrollToTopBtnRef.current.style.transform = "translateY(10px)";
+      }
+    };
+
+    // passive: true をつけることで、スクロール操作自体の動作を軽くする
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // ビューアが閉じた瞬間に、見ていた画像の位置へスクロールする処理
   useEffect(() => {
@@ -109,6 +134,15 @@ export default function ImageGrid({
 
       {/* 無限スクロールの検知用タグ（この透明な箱が画面に入ったら次を読み込む） */}
       <div ref={observerTarget} className="h-4 w-full" />
+
+      {/* 一番上に戻るボタン */}
+      <button
+        ref={scrollToTopBtnRef}
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        className="fixed bottom-6 right-6 p-3 bg-zinc-800/50 text-white rounded-full shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-zinc-700/80 z-40 opacity-0 pointer-events-none translate-y-2 border border-zinc-700/50"
+      >
+        <ArrowUp size={24} />
+      </button>
     </>
   );
 }
