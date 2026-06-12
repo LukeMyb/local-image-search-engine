@@ -68,6 +68,15 @@ export default function BookmarkManager({
         );
         if (!response.ok) throw new Error("ブックマークの取得に失敗しました");
         const data = await response.json();
+
+        // 取得したブックマークを「使用日時(last_used_at)が新しい順（降順）」にソートする
+        const sortedBookmarks = data.bookmarks.sort((a: Bookmark, b: Bookmark) => {
+          // 日時データが存在しない場合は0として扱う
+          const dateA = a.last_used_at ? new Date(a.last_used_at).getTime() : 0;
+          const dateB = b.last_used_at ? new Date(b.last_used_at).getTime() : 0;
+          return dateB - dateA;
+        });
+
         setBookmarks(data.bookmarks);
       } catch (error) {
         console.error(error);
@@ -148,6 +157,32 @@ export default function BookmarkManager({
     }
   };
 
+  // ブックマークをクリックして使用した時の処理
+  const handleUseBookmark = async (bm: Bookmark) => {
+    // 画面側の検索処理を即座に発火させる
+    setQuery(bm.query);
+    setIsDrawerOpen(false);
+    handleSearch(undefined, bm.query);
+
+    // 閉じる瞬間に、クリックされた要素をローカル配列の「一番上」に強制移動させる
+    setBookmarks((prev) => {
+      // クリックされたアイテムを取り除いた配列を作る
+      const filtered = prev.filter((item) => item.id !== bm.id);
+      // 先頭にクリックされたアイテムをくっつけて新しい配列にする
+      return [bm, ...filtered];
+    });
+
+    // 裏側でAPIを叩いて使用日時を更新する
+    try {
+      await fetch(`${API_BASE_URL}/bookmark/${bm.id}/use`, {
+        method: "PATCH",
+      });
+      // 次回ドロワーを開いた時に fetchBookmarks が走り、最新の順序で再取得されるため、ここでのState更新は不要
+    } catch (error) {
+      console.error("使用日時の更新に失敗しました", error);
+    }
+  };
+
   return (
     <>
       {/* ドロワー（ブックマーク一覧）の描画処理 */}
@@ -190,11 +225,7 @@ export default function BookmarkManager({
                   >
                     {/* 名前とクエリ */}
                     <div
-                      onClick={() => {
-                        setQuery(bm.query);
-                        setIsDrawerOpen(false);
-                        handleSearch(undefined, bm.query);
-                      }}
+                      onClick={() => handleUseBookmark(bm)}
                       className="flex-1 p-3 flex flex-col min-w-0 cursor-pointer hover:bg-zinc-800/30 active:bg-zinc-700 active:scale-[0.98] transition-all duration-75 origin-left"
                     >
                       <span className="text-sm font-medium text-zinc-200 truncate">
