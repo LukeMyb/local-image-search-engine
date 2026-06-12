@@ -10,6 +10,7 @@ interface SearchResult {
 
 interface ImageGridProps {
   results: SearchResult[];
+  selectedImage: SearchResult | null;
   setSelectedImage: (item: SearchResult) => void;
 
   // 無限スクロール用の関数と判定フラグ
@@ -19,6 +20,7 @@ interface ImageGridProps {
 
 export default function ImageGrid({ 
   results, 
+  selectedImage,
   setSelectedImage,
   loadMore,
   hasMore
@@ -26,6 +28,32 @@ export default function ImageGrid({
 
   // 監視対象（一番下の透明な要素）への参照
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  // 最後に表示していた画像のIDを記憶しておくための変数
+  const lastSelectedId = useRef<number | null>(null);
+
+  // ビューアが閉じた瞬間に、見ていた画像の位置へスクロールする処理
+  useEffect(() => {
+    if (selectedImage) {
+      // ビューアが開いている間は、スワイプされるたびに「今見ているID」を上書き記憶する
+      lastSelectedId.current = selectedImage.id;
+    } else if (lastSelectedId.current) {
+      // ビューアが閉じた瞬間（selectedImageがnullになった時）
+      const idToScroll = lastSelectedId.current;
+      
+      // システムのスクロールロック解除（useSystemUI）を待つために、ほんの一瞬だけ遅らせて実行する
+      setTimeout(() => {
+        const el = document.getElementById(`grid-image-${idToScroll}`);
+        if (el) {
+          // 該当する画像を画面の中央（center）にパッと移動させる
+          el.scrollIntoView({ block: "center", behavior: "auto" });
+        }
+      }, 50);
+
+      // スクロールが終わったら記憶をリセット
+      lastSelectedId.current = null;
+    }
+  }, [selectedImage]);
 
   // スクロール検知ロジック
   useEffect(() => {
@@ -59,6 +87,7 @@ export default function ImageGrid({
           <div key={item.id} className="relative group">
             <img
               key={item.id}
+              id={`grid-image-${item.id}`} // スクロールのジャンプ先となる目印（ID）を付ける
               // Python側の画像のエンドポイントを呼び出し
               src={`${API_BASE_URL}/thumbnail/${item.id}`}
               alt={`Image ${item.id}`}

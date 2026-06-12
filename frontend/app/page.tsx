@@ -119,6 +119,7 @@ export default function Home() {
         {/* 取得したIDを使って画像を並べる処理 */}
         <ImageGrid 
           results={results} 
+          selectedImage={selectedImage}
           setSelectedImage={setSelectedImage} 
           loadMore={loadMore}
           hasMore={hasMore}
