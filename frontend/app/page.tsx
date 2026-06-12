@@ -155,7 +155,7 @@ export default function Home() {
 
   return (
     // レイアウト
-    <div className="min-h-screen bg-zinc-900 text-green-400 flex flex-col">
+    <div className="min-h-screen bg-zinc-900 text-green-400 flex flex-col relative pb-20 touch-manipulation">
       <div className="p-2 flex flex-col gap-4 md:sticky md:top-0 md:z-40 md:bg-zinc-900/90 md:backdrop-blur-md md:border-b md:border-zinc-800">
         <p className="text-lg font-medium">{statusMessage}</p>
 
