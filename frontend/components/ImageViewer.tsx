@@ -258,7 +258,7 @@ export default function ImageViewer({
           {/* 前の画像（画面左外に配置） */}
           {prevImage && (
             <div className="absolute -left-full w-full h-full flex items-center justify-center">
-              <img src={`${API_BASE_URL}/image/${prevImage.id}`} className="w-full h-full object-contain" alt="Previous" />
+              <img src={`${API_BASE_URL}/image/${prevImage.id}`} className="max-w-full max-h-full object-contain" alt="Previous" />
             </div>
           )}
 
@@ -268,14 +268,14 @@ export default function ImageViewer({
               onClick={handleTap}
               src={`${API_BASE_URL}/image/${selectedImage.id}`}
               alt={`Selected ${selectedImage.id}`}
-              className="w-full h-full object-contain"
+              className="max-w-full max-h-full object-contain"
             />
           </div>
 
           {/* 次の画像（画面右外に配置） */}
           {nextImage && (
             <div className="absolute -right-full w-full h-full flex items-center justify-center">
-              <img src={`${API_BASE_URL}/image/${nextImage.id}`} className="w-full h-full object-contain" alt="Next" />
+              <img src={`${API_BASE_URL}/image/${nextImage.id}`} className="max-w-full max-h-full object-contain" alt="Next" />
             </div>
           )}
         </div>
