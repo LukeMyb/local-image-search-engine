@@ -55,8 +55,8 @@ export default function ImageViewer({
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // 展開アニメーションの状態と、広がる起点（座標）を管理するState
-  const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done'>('init');
+  // 展開アニメーションの状態と、起点（座標）を管理するState
+  const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done' | 'closing'>('init');
   const [transformOrigin, setTransformOrigin] = useState("center center");
 
   // 初回マウント時（画像を開いた瞬間）のみ、サムネイルの位置を取得してアニメーションを発火
@@ -89,6 +89,40 @@ export default function ImageViewer({
     setDragX(0);
     setSwipeDirection(null);
   }, [selectedImage.id]);
+
+  // 閉じるボタンや縦スワイプ時に呼ばれる、アニメーション付きの閉じる関数
+  const handleClose = useCallback(() => {
+    if (entranceState === 'closing') return;
+
+    // アニメーション開始直前に、useSystemUIによるスクロールロックを先行して解除する
+    // これにより、閉じるアニメーションの最中に裏側のスクロールバーやヘッダーのレイアウトが先行して復元される
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.overscrollBehavior = "";
+    document.body.style.overflow = "";
+    document.body.style.overscrollBehavior = "";
+
+    // 現在表示している画像のサムネイルDOMを取得
+    const el = document.getElementById(`grid-image-${selectedImage.id}`);
+    
+    if (el) {
+      // 画面外にある場合は一番近い端にスクロールさせる
+      el.scrollIntoView({ block: "nearest" });
+
+      // スクロール直後の「新しい座標」を取得し、吸い込まれるゴール地点としてセットする
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      setTransformOrigin(`${cx}px ${cy}px`);
+    }
+
+    // アニメーション状態を 'closing' にして、縮小＆フェードアウトを開始
+    setEntranceState('closing');
+
+    // アニメーション完了（300ms）後に、親から渡された本当の onClose を呼んで破棄する
+    setTimeout(() => {
+      onClose();
+    }, 300);
+  }, [selectedImage.id, onClose, entranceState]);
 
   // スワイプと判定する最低移動距離（ピクセル）
   const minSwipeDistance = 50;
@@ -188,7 +222,7 @@ export default function ImageViewer({
     if (swipeDirection === 'vertical' || (swipeDirection === null && Math.abs(distanceY) > Math.abs(distanceX))) {
       if (distanceY < -minSwipeDistance) {
         if (isDetailOpen) setIsDetailOpen(false);
-        else onClose();
+        else handleClose();
       } else if (distanceY > minSwipeDistance) {
         if (!isDetailOpen) setIsDetailOpen(true);
       }
@@ -239,6 +273,8 @@ export default function ImageViewer({
         executeNext();
       } else if (e.key === "ArrowLeft") {
         executePrev();
+      } else if (e.key === "Escape") { // Escキーでも閉じるように
+        handleClose();
       }
     };
 
@@ -268,7 +304,7 @@ export default function ImageViewer({
       {/* アニメーションで独立してフェードインする黒い背景 */}
       <div 
         className={`absolute inset-0 bg-black transition-opacity duration-300 ease-out ${
-          entranceState === 'init' ? 'opacity-0' : 'opacity-100'
+          entranceState === 'init' || entranceState === 'closing' ? 'opacity-0' : 'opacity-100'
         }`}
       />
 
@@ -276,9 +312,9 @@ export default function ImageViewer({
       <div
         // アニメーションの状態（scaleとopacity）を制御し、サムネイルの座標を中心に拡大させる
         className={`relative w-full h-full flex flex-col items-center overflow-hidden ${
-          entranceState === 'init' ? 'scale-50' : 'scale-100'
+          entranceState === 'init' || entranceState === 'closing' ? 'scale-50 opacity-0' : 'scale-100 opacity-100'
         } ${
-          entranceState !== 'done' ? 'transition-transform duration-300 ease-out' : ''
+          entranceState !== 'done' ? 'transition-all duration-300 ease-out' : ''
         }`}
         style={{ transformOrigin }}
         onTouchStart={onTouchStart}
@@ -360,8 +396,10 @@ export default function ImageViewer({
         {/* 閉じるボタン */}
         <button 
           // 閉じる処理をpropsで受け取った関数に置き換え
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors z-20"
+          onClick={handleClose}
+          className={`absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-all duration-300 z-20 ${
+            entranceState === 'closing' ? 'opacity-0' : 'opacity-100'
+          }`}
         >
           <X size={24} />
         </button>
