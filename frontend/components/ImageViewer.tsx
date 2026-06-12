@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { X, Heart, ChevronLeft, ChevronRight } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
@@ -58,6 +58,11 @@ export default function ImageViewer({
   // 展開アニメーションの状態と、起点（座標）を管理するState
   const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done' | 'closing'>('init');
   const [transformOrigin, setTransformOrigin] = useState("center center");
+
+  // 実行待ちのスワイプ操作を貯めておくキュー（レンダリングに影響を与えないようRefを使用）
+  const actionQueue = useRef<('next' | 'prev')[]>([]);
+  // アニメーションの重複やタップによる干渉を防ぐためのロック用フラグ
+  const isProcessingQueue = useRef(false);
 
   // 初回マウント時（画像を開いた瞬間）のみ、サムネイルの位置を取得してアニメーションを発火
   useEffect(() => {
@@ -128,53 +133,74 @@ export default function ImageViewer({
   const minSwipeDistance = 50;
 
   // 完全にスライドしきってから画像を切り替える関数（次へ）
-  const executeNext = useCallback(() => {
-    if (!hasSubsequent || !onNext || isAnimating) return; // 連打防止
-    
-    setIsAnimating(true);
-    // 画面幅分だけ左へ完全にスライドさせる
-    setDragX(-(typeof window !== "undefined" ? window.innerWidth : 1000));
-    
-    // スライド完了（300ms）を待ってから、位置を0に戻して画像を切り替える
-    setTimeout(() => {
-      setIsAnimating(false);
-      setDragX(0);
-      onNext();
-    }, 300);
-  }, [hasSubsequent, onNext, isAnimating]);
+  const executeNext = () => {
+    actionQueue.current.push('next');
+    processQueue();
+  };
 
   // 完全にスライドしきってから画像を切り替える関数（前へ）
-  const executePrev = useCallback(() => {
-    if (!hasPreceding || !onPrev || isAnimating) return; // 連打防止
+  const executePrev = () => {
+    actionQueue.current.push('prev');
+    processQueue();
+  };
 
+  // キューを順番に消化するエンジン
+  const processQueue = useCallback(async () => {
+    // アニメーション中、またはキューが空なら何もしない
+    if (isProcessingQueue.current || actionQueue.current.length === 0) return;
+
+    isProcessingQueue.current = true;
+    // キューの先頭を取り出して削除
+    const action = actionQueue.current.shift(); 
     setIsAnimating(true);
-    // 画面幅分だけ右へ完全にスライドさせる
-    setDragX(typeof window !== "undefined" ? window.innerWidth : 1000);
-    
-    setTimeout(() => {
+
+    if (action === 'next' && hasSubsequent && onNext) {
+      setDragX(-(typeof window !== "undefined" ? window.innerWidth : 1000));
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       setIsAnimating(false);
+      onNext();
       setDragX(0);
+    } else if (action === 'prev' && hasPreceding && onPrev) {
+      setDragX(typeof window !== "undefined" ? window.innerWidth : 1000);
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      setIsAnimating(false);
       onPrev();
-    }, 300);
-  }, [hasPreceding, onPrev, isAnimating]);
+      setDragX(0);
+    } else {
+      setDragX(0);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setIsAnimating(false);
+    }
+    
+    isProcessingQueue.current = false;
+  }, [hasSubsequent, hasPreceding, onNext, onPrev]);
+
+  // アニメーション終了を検知して次のキューを自動処理する
+  useEffect(() => {
+    processQueue();
+  }, [processQueue, selectedImage.id]);
 
   // タッチイベントのハンドラー群
   const onTouchStart = (e: React.TouchEvent) => {
-    // アニメーション中（ページめくり中）は画面へのタッチ操作を無効化し、誤引き戻しを防ぐ
-    if (isAnimating) return;
-
     setTouchStartX(e.targetTouches[0].clientX);
     setTouchStartY(e.targetTouches[0].clientY);
     setTouchStartTime(Date.now());
 
     // ドラッグ開始の初期化
-    setIsAnimating(false);
-    setDragX(0);
-    setSwipeDirection(null);
+    if (!isProcessingQueue.current) {
+      setIsAnimating(false);
+      setDragX(0);
+      setSwipeDirection(null);
+    }
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
     if (touchStartX === null || touchStartY === null) return;
+
+    // アニメーション中は指への直接追従をさせない（スライド演出を見せるため）
+    if (isAnimating) return;
 
     const currentX = e.targetTouches[0].clientX;
     const currentY = e.targetTouches[0].clientY;
@@ -220,6 +246,15 @@ export default function ImageViewer({
 
     // 縦スワイプだった場合（詳細パネル・閉じる処理）
     if (swipeDirection === 'vertical' || (swipeDirection === null && Math.abs(distanceY) > Math.abs(distanceX))) {
+      // アニメーション中の縦スワイプは安全のため無視する
+      if (isAnimating) {
+        setTouchStartX(null);
+        setTouchStartY(null);
+        setTouchStartTime(null);
+        setSwipeDirection(null);
+        return;
+      }
+
       if (distanceY < -minSwipeDistance) {
         if (isDetailOpen) setIsDetailOpen(false);
         else handleClose();
@@ -248,16 +283,20 @@ export default function ImageViewer({
       } else if (distanceX < 0 && hasPreceding && onPrev) {
         executePrev();
       } else {
-        // 条件を満たしたが、次の画像（または前の画像）が存在しない場合は元の位置に戻る
+        // アニメーション中でなければ元の位置に戻す
+        if (!isProcessingQueue.current) {
+          setIsAnimating(true);
+          setDragX(0);
+          setTimeout(() => setIsAnimating(false), 300);
+        }
+      }
+    } else {
+      // スワイプ距離や速度が足りなかった場合は元の位置に戻る
+      if (!isProcessingQueue.current) {
         setIsAnimating(true);
         setDragX(0);
         setTimeout(() => setIsAnimating(false), 300);
       }
-    } else {
-      // スワイプ距離や速度が足りなかった場合は元の位置に戻る
-      setIsAnimating(true);
-      setDragX(0);
-      setTimeout(() => setIsAnimating(false), 300);
     }
 
     setTouchStartX(null);
