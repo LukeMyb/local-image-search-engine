@@ -94,7 +94,7 @@ export default function ImageGrid({
               // クリックされたら、この画像の情報を selectedImage にセットする
               onClick={() => setSelectedImage(item)}
               // カーソルを指マーク(cursor-pointer)にし、クリックできることを強調
-              className="relative group scroll-mt-24"
+              className="relative group scroll-mt-0 md:scroll-mt-24"
             />
 
             {/* 右上に配置されるお気に入りマーク */}
