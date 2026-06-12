@@ -42,6 +42,8 @@ export default function ImageViewer({
   // スワイプ判定用のState
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  // スワイプの速度を計算するために、指が触れた瞬間の時間を記録するState
+  const [touchStartTime, setTouchStartTime] = useState<number | null>(null);
 
   // ドラッグによるX軸の移動量と、各種状態の判定フラグ
   const [dragX, setDragX] = useState(0);
@@ -93,8 +95,12 @@ export default function ImageViewer({
 
   // タッチイベントのハンドラー群
   const onTouchStart = (e: React.TouchEvent) => {
+    // アニメーション中（ページめくり中）は画面へのタッチ操作を無効化し、誤引き戻しを防ぐ
+    if (isAnimating) return;
+
     setTouchStartX(e.targetTouches[0].clientX);
     setTouchStartY(e.targetTouches[0].clientY);
+    setTouchStartTime(Date.now());
 
     // ドラッグ開始の初期化
     setIsAnimating(false);
@@ -136,6 +142,10 @@ export default function ImageViewer({
     const distanceX = touchStartX - endX;
     const distanceY = touchStartY - endY;
 
+    // 指が触れていた時間（ミリ秒）から、X軸の移動速度（ピクセル/ミリ秒）を計算
+    const elapsedTime = touchStartTime ? Date.now() - touchStartTime : 1;
+    const velocityX = Math.abs(distanceX) / elapsedTime;
+
     // 縦スワイプだった場合（詳細パネル・閉じる処理）
     if (isVerticalSwipe || Math.abs(distanceY) > Math.abs(distanceX)) {
       if (distanceY < -minSwipeDistance) {
@@ -144,24 +154,42 @@ export default function ImageViewer({
       } else if (distanceY > minSwipeDistance) {
         if (!isDetailOpen) setIsDetailOpen(true);
       }
-      // 縦スワイプ時は横の移動値をリセット
+      // リセット
+      setIsAnimating(true);
       setDragX(0);
+      setTimeout(() => setIsAnimating(false), 300);
+      setTouchStartX(null);
+      setTouchStartY(null);
+      setTouchStartTime(null);
       return;
     }
 
+    // 画面幅の40%以上移動したか、または速度が0.4px/ms以上の素早いフリックだったかを判定
+    const thresholdX = typeof window !== "undefined" ? window.innerWidth * 0.4 : 150;
+    const isHorizontalFlick = velocityX > 0.4 && Math.abs(distanceX) > 30;
+
     // 横スワイプだった場合（画像の切り替え処理）
-    if (distanceX > minSwipeDistance && hasSubsequent && onNext) {
-      executeNext();
-    } else if (distanceX < -minSwipeDistance && hasPreceding && onPrev) {
-      executePrev();
+    if (Math.abs(distanceX) > thresholdX || isHorizontalFlick) {
+      if (distanceX > 0 && hasSubsequent && onNext) {
+        executeNext();
+      } else if (distanceX < 0 && hasPreceding && onPrev) {
+        executePrev();
+      } else {
+        // 条件を満たしたが、次の画像（または前の画像）が存在しない場合は元の位置に戻る
+        setIsAnimating(true);
+        setDragX(0);
+        setTimeout(() => setIsAnimating(false), 300);
+      }
     } else {
-      // スワイプが足りなかった場合は元の位置に滑らかに戻る
+      // スワイプ距離や速度が足りなかった場合は元の位置に戻る
       setIsAnimating(true);
       setDragX(0);
+      setTimeout(() => setIsAnimating(false), 300);
     }
 
     setTouchStartX(null);
     setTouchStartY(null);
+    setTouchStartTime(null);
   };
 
   // キーボード操作（← →）を検知して画像を切り替える処理
