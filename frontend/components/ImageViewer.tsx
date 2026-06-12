@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { X, Heart, ChevronLeft, ChevronRight } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
@@ -14,6 +14,9 @@ interface SearchResult {
 
 interface ImageViewerProps {
   selectedImage: SearchResult;
+  prevImage?: SearchResult | null;
+  nextImage?: SearchResult | null;
+
   onClose: () => void;
   onToggleFavorite: (id: number, e: React.MouseEvent) => void;
 
@@ -30,89 +33,144 @@ export default function ImageViewer({
   onToggleFavorite,
   onNext,
   onPrev,
+  prevImage,
+  nextImage,
   hasSubsequent = false,
   hasPreceding = false,
 }: ImageViewerProps) {
 
   // スワイプ判定用のState
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [touchEndX, setTouchEndX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
-  const [touchEndY, setTouchEndY] = useState<number | null>(null);
+
+  // ドラッグによるX軸の移動量と、各種状態の判定フラグ
+  const [dragX, setDragX] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false); 
+  const [isVerticalSwipe, setIsVerticalSwipe] = useState(false);
 
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  // 画像が切り替わった時は、詳細パネルを確実に閉じる
+  // 画像が切り替わった時は、パネルを閉じ、ドラッグ位置も0にリセットする
   useEffect(() => {
     setIsDetailOpen(false);
+    setDragX(0);
   }, [selectedImage.id]);
 
   // スワイプと判定する最低移動距離（ピクセル）
   const minSwipeDistance = 50;
 
+  // 完全にスライドしきってから画像を切り替える関数（次へ）
+  const executeNext = useCallback(() => {
+    if (!hasSubsequent || !onNext || isAnimating) return; // 連打防止
+    
+    setIsAnimating(true);
+    // 画面幅分だけ左へ完全にスライドさせる
+    setDragX(-(typeof window !== "undefined" ? window.innerWidth : 1000));
+    
+    // スライド完了（300ms）を待ってから、位置を0に戻して画像を切り替える
+    setTimeout(() => {
+      setIsAnimating(false);
+      setDragX(0);
+      onNext();
+    }, 300);
+  }, [hasSubsequent, onNext, isAnimating]);
+
+  // 完全にスライドしきってから画像を切り替える関数（前へ）
+  const executePrev = useCallback(() => {
+    if (!hasPreceding || !onPrev || isAnimating) return; // 連打防止
+
+    setIsAnimating(true);
+    // 画面幅分だけ右へ完全にスライドさせる
+    setDragX(typeof window !== "undefined" ? window.innerWidth : 1000);
+    
+    setTimeout(() => {
+      setIsAnimating(false);
+      setDragX(0);
+      onPrev();
+    }, 300);
+  }, [hasPreceding, onPrev, isAnimating]);
+
   // タッチイベントのハンドラー群
   const onTouchStart = (e: React.TouchEvent) => {
-    // 前回の終了位置をリセット
-    setTouchEndX(null);
-    setTouchEndY(null);
-
     setTouchStartX(e.targetTouches[0].clientX);
     setTouchStartY(e.targetTouches[0].clientY);
+
+    // ドラッグ開始の初期化
+    setIsAnimating(false);
+    setDragX(0);
+    setIsVerticalSwipe(false);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEndX(e.targetTouches[0].clientX);
-    setTouchEndY(e.targetTouches[0].clientY);
+    if (touchStartX === null || touchStartY === null) return;
+
+    const currentX = e.targetTouches[0].clientX;
+    const currentY = e.targetTouches[0].clientY;
+    const diffX = currentX - touchStartX;
+    const diffY = currentY - touchStartY;
+
+    // 最初の少しの動き(10px)で、縦スワイプか横スワイプかをロックする
+    if (!isVerticalSwipe && Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 10) {
+      setIsVerticalSwipe(true);
+    }
+
+    // 横スワイプと判定された場合のみ、画面を指に追従させる
+    if (!isVerticalSwipe) {
+      let moveX = diffX;
+      // 最初の画像や最後の画像で、これ以上進めない方向へ引っ張った場合はゴムのように重くする
+      if ((moveX > 0 && !hasPreceding) || (moveX < 0 && !hasSubsequent)) {
+        moveX = moveX * 0.25;
+      }
+      setDragX(moveX);
+    }
   };
 
-  const onTouchEnd = () => {
-    if (!touchStartX || !touchEndX || !touchStartY || !touchEndY) return;
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX === null || touchStartY === null) return;
+
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
 
     // 移動距離を計算（開始位置 - 終了位置）
-    // 横: 正なら左スワイプ、負なら右スワイプ
-    // 縦: 正なら上スワイプ、負なら下スワイプ
-    const distanceX = touchStartX - touchEndX;
-    const distanceY = touchStartY - touchEndY;
+    const distanceX = touchStartX - endX;
+    const distanceY = touchStartY - endY;
 
-    // 横方向より縦方向の移動量が大きい場合（縦スワイプの判定）
-    if (Math.abs(distanceY) > Math.abs(distanceX)) {
+    // 縦スワイプだった場合（詳細パネル・閉じる処理）
+    if (isVerticalSwipe || Math.abs(distanceY) > Math.abs(distanceX)) {
       if (distanceY < -minSwipeDistance) {
-        // 下スワイプ：パネルが開いていればパネルを閉じ、閉じていればビューアを閉じる
-        if (isDetailOpen) {
-          setIsDetailOpen(false);
-        } else {
-          onClose();
-        }
+        if (isDetailOpen) setIsDetailOpen(false);
+        else onClose();
       } else if (distanceY > minSwipeDistance) {
-        // 上スワイプ：パネルが閉じていればパネルを開く
-        if (!isDetailOpen) {
-          setIsDetailOpen(true);
-        }
+        if (!isDetailOpen) setIsDetailOpen(true);
       }
-      return; // 縦スワイプと判定した場合は、左右の判定には進まない
+      // 縦スワイプ時は横の移動値をリセット
+      setDragX(0);
+      return;
     }
 
-    // 左右スワイプ処理
-    const isLeftSwipe = distanceX > minSwipeDistance;
-    const isRightSwipe = distanceX < -minSwipeDistance;
-
-    if (isLeftSwipe && hasSubsequent && onNext) {
-      // 指を左に動かした ＝ 次の画像を見たい
-      onNext();
-    } else if (isRightSwipe && hasPreceding && onPrev) {
-      // 指を右に動かした ＝ 前の画像を見たい
-      onPrev();
+    // 横スワイプだった場合（画像の切り替え処理）
+    if (distanceX > minSwipeDistance && hasSubsequent && onNext) {
+      executeNext();
+    } else if (distanceX < -minSwipeDistance && hasPreceding && onPrev) {
+      executePrev();
+    } else {
+      // スワイプが足りなかった場合は元の位置に滑らかに戻る
+      setIsAnimating(true);
+      setDragX(0);
     }
+
+    setTouchStartX(null);
+    setTouchStartY(null);
   };
 
   // キーボード操作（← →）を検知して画像を切り替える処理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" && hasSubsequent && onNext) {
-        onNext();
-      } else if (e.key === "ArrowLeft" && hasPreceding && onPrev) {
-        onPrev();
+      if (e.key === "ArrowRight") {
+        executeNext();
+      } else if (e.key === "ArrowLeft") {
+        executePrev();
       }
     };
 
@@ -142,16 +200,50 @@ export default function ImageViewer({
     >
       {/* 画像を中央に配置するコンテナ */}
       <div
-        className="relative w-full h-full flex flex-col items-center"
+        className="relative w-full h-full flex flex-col items-center overflow-hidden"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onClick={(e) => e.stopPropagation()}
+      >
+
+        {/* ドラッグでスライドする3枚の画像のコンテナ（レール） */}
+        <div
+          className={`absolute inset-0 w-full h-full flex items-center ${
+            // ドラッグ中はアニメーションを切って指に完全追従させ、離した時はtransitionで滑らかに動かす
+            isAnimating ? "transition-transform duration-300 ease-out" : ""
+          }`}
+          style={{ transform: `translateX(${dragX}px)` }}
         >
+          {/* 前の画像（画面左外に配置） */}
+          {prevImage && (
+            <div className="absolute -left-full w-full h-full flex items-center justify-center">
+              <img src={`${API_BASE_URL}/image/${prevImage.id}`} className="w-full h-full object-contain" alt="Previous" />
+            </div>
+          )}
+
+          {/* 現在の画像（画面中央に配置） */}
+          <div className="w-full h-full flex items-center justify-center">
+            <img 
+              onClick={handleTap}
+              src={`${API_BASE_URL}/image/${selectedImage.id}`}
+              alt={`Selected ${selectedImage.id}`}
+              className="w-full h-full object-contain"
+            />
+          </div>
+
+          {/* 次の画像（画面右外に配置） */}
+          {nextImage && (
+            <div className="absolute -right-full w-full h-full flex items-center justify-center">
+              <img src={`${API_BASE_URL}/image/${nextImage.id}`} className="w-full h-full object-contain" alt="Next" />
+            </div>
+          )}
+        </div>
 
         {/* 左移動ボタン (PCでのみ表示) */}
         {hasPreceding && onPrev && (
           <button
-            onClick={(e) => { e.stopPropagation(); onPrev(); }}
+            onClick={(e) => { e.stopPropagation(); executePrev(); }}
             className="absolute left-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-start pl-4 outline-none group cursor-pointer"
           >
             {/* アイコンの背景の丸い部分を div に分離し、group-hover で反応させる */}
@@ -161,18 +253,10 @@ export default function ImageViewer({
           </button>
         )}
 
-        <img 
-          // 本画像(/image/)を呼び出す
-          onClick={handleTap}
-          src={`${API_BASE_URL}/image/${selectedImage.id}`}
-          alt={`Selected ${selectedImage.id}`}
-          className="w-full h-full object-contain"
-        />
-
         {/* 右移動ボタン (PCでのみ表示) */}
         {hasSubsequent && onNext && (
           <button
-            onClick={(e) => { e.stopPropagation(); onNext(); }}
+            onClick={(e) => { e.stopPropagation(); executeNext(); }}
             className="absolute right-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-end pr-4 outline-none group cursor-pointer"
           >
             {/* アイコンの背景部分 */}

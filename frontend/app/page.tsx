@@ -133,9 +133,15 @@ export default function Home() {
         const hasPreceding = currentIndex > 0;
         const hasSubsequent = currentIndex < results.length - 1;
 
+        // 前後の画像データも取得する
+        const prevImage = hasPreceding ? results[currentIndex - 1] : null;
+        const nextImage = hasSubsequent ? results[currentIndex + 1] : null;
+
         return (
           <ImageViewer 
-            selectedImage={selectedImage} 
+            selectedImage={selectedImage}
+            prevImage={prevImage}
+            nextImage={nextImage}
             onClose={() => setSelectedImage(null)} 
             onToggleFavorite={(id, e) => toggleFavorite(id, e, selectedImage, setSelectedImage)}
             onNext={() => hasSubsequent && setSelectedImage(results[currentIndex + 1])}
