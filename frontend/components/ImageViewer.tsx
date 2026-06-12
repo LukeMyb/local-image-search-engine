@@ -48,7 +48,9 @@ export default function ImageViewer({
   // ドラッグによるX軸の移動量と、各種状態の判定フラグ
   const [dragX, setDragX] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false); 
-  const [isVerticalSwipe, setIsVerticalSwipe] = useState(false);
+
+  // 方向を完全にロックするための swipeDirection
+  const [swipeDirection, setSwipeDirection] = useState<'horizontal' | 'vertical' | null>(null);
 
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -57,6 +59,7 @@ export default function ImageViewer({
   useEffect(() => {
     setIsDetailOpen(false);
     setDragX(0);
+    setSwipeDirection(null);
   }, [selectedImage.id]);
 
   // スワイプと判定する最低移動距離（ピクセル）
@@ -105,7 +108,7 @@ export default function ImageViewer({
     // ドラッグ開始の初期化
     setIsAnimating(false);
     setDragX(0);
-    setIsVerticalSwipe(false);
+    setSwipeDirection(null);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
@@ -116,15 +119,22 @@ export default function ImageViewer({
     const diffX = currentX - touchStartX;
     const diffY = currentY - touchStartY;
 
-    // 最初の少しの動き(10px)で、縦スワイプか横スワイプかをロックする
-    if (!isVerticalSwipe && Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 10) {
-      setIsVerticalSwipe(true);
+    // 最初の10pxの動きで「縦」か「横」かを一度だけ確定し、以後変更しない
+    let currentDirection = swipeDirection;
+    if (currentDirection === null) {
+      if (Math.abs(diffX) > 10 || Math.abs(diffY) > 10) {
+        if (Math.abs(diffY) > Math.abs(diffX)) {
+          currentDirection = 'vertical';
+        } else {
+          currentDirection = 'horizontal';
+        }
+        setSwipeDirection(currentDirection);
+      }
     }
 
-    // 横スワイプと判定された場合のみ、画面を指に追従させる
-    if (!isVerticalSwipe) {
+    // 「横」に確定している場合のみ、どんなにXが0をまたいでも追従を続ける
+    if (currentDirection === 'horizontal') {
       let moveX = diffX;
-      // 最初の画像や最後の画像で、これ以上進めない方向へ引っ張った場合はゴムのように重くする
       if ((moveX > 0 && !hasPreceding) || (moveX < 0 && !hasSubsequent)) {
         moveX = moveX * 0.25;
       }
@@ -147,7 +157,7 @@ export default function ImageViewer({
     const velocityX = Math.abs(distanceX) / elapsedTime;
 
     // 縦スワイプだった場合（詳細パネル・閉じる処理）
-    if (isVerticalSwipe || Math.abs(distanceY) > Math.abs(distanceX)) {
+    if (swipeDirection === 'vertical' || (swipeDirection === null && Math.abs(distanceY) > Math.abs(distanceX))) {
       if (distanceY < -minSwipeDistance) {
         if (isDetailOpen) setIsDetailOpen(false);
         else onClose();
@@ -161,6 +171,7 @@ export default function ImageViewer({
       setTouchStartX(null);
       setTouchStartY(null);
       setTouchStartTime(null);
+      setSwipeDirection(null);
       return;
     }
 
@@ -190,6 +201,7 @@ export default function ImageViewer({
     setTouchStartX(null);
     setTouchStartY(null);
     setTouchStartTime(null);
+    setSwipeDirection(null);
   };
 
   // キーボード操作（← →）を検知して画像を切り替える処理
