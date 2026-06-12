@@ -55,6 +55,34 @@ export default function ImageViewer({
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
+  // 展開アニメーションの状態と、広がる起点（座標）を管理するState
+  const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done'>('init');
+  const [transformOrigin, setTransformOrigin] = useState("center center");
+
+  // 初回マウント時（画像を開いた瞬間）のみ、サムネイルの位置を取得してアニメーションを発火
+  useEffect(() => {
+    // 裏側にあるサムネイルのDOM要素を取得
+    const el = document.getElementById(`grid-image-${selectedImage.id}`);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      // 画面全体から見たサムネイルの中央の座標を計算して起点に設定
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      setTransformOrigin(`${cx}px ${cy}px`);
+    }
+
+    // 次の描画フレームでアニメーションを開始 (init -> animating)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setEntranceState('animating');
+        // アニメーション完了（300ms）後にtransitionクラスを外し、通常のスワイプに影響が出ないようにする
+        setTimeout(() => {
+          setEntranceState('done');
+        }, 300);
+      });
+    });
+  }, []); // 空配列なので「一覧から開いた最初の1回」だけ実行される
+
   // 画像が切り替わった時は、パネルを閉じ、ドラッグ位置も0にリセットする
   useEffect(() => {
     setIsDetailOpen(false);
@@ -234,13 +262,25 @@ export default function ImageViewer({
 
   return (
     <div 
-      // 画面全体を覆う半透明の黒い背景
-      className="fixed inset-0 bg-black flex items-center justify-center z-50 touch-none overscroll-none"
+      className="fixed inset-0 z-50 touch-none overscroll-none"
       onClick={handleTap}
     >
+      {/* アニメーションで独立してフェードインする黒い背景 */}
+      <div 
+        className={`absolute inset-0 bg-black transition-opacity duration-300 ease-out ${
+          entranceState === 'init' ? 'opacity-0' : 'opacity-100'
+        }`}
+      />
+
       {/* 画像を中央に配置するコンテナ */}
       <div
-        className="relative w-full h-full flex flex-col items-center overflow-hidden"
+        // アニメーションの状態（scaleとopacity）を制御し、サムネイルの座標を中心に拡大させる
+        className={`relative w-full h-full flex flex-col items-center overflow-hidden ${
+          entranceState === 'init' ? 'scale-50' : 'scale-100'
+        } ${
+          entranceState !== 'done' ? 'transition-transform duration-300 ease-out' : ''
+        }`}
+        style={{ transformOrigin }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
