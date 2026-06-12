@@ -77,7 +77,7 @@ export default function ControlBar({
           
           {/* アクションメニューの吹き出し (絶対配置で上に展開) */}
           {isActionMenuOpen && selectedCount > 0 && (
-            <div className="absolute bottom-full mb-3 right-0 bg-zinc-800/95 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-2xl py-2 min-w-[180px] overflow-hidden origin-bottom-right animate-in fade-in zoom-in-95 duration-200">
+            <div className="absolute bottom-full mb-3 right-0 bg-zinc-800/95 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-2xl py-2 min-w-45 overflow-hidden origin-bottom-right animate-in fade-in zoom-in-95 duration-200">
               <button
                 onClick={() => {
                   alert("絵柄タグ作成機能は準備中です"); // モック用のアラート
@@ -95,7 +95,7 @@ export default function ControlBar({
 
           {/* アクションバー本体 */}
           {/* 青枠を付けて「選択中」であることを視覚的にアピール */}
-          <div className="bg-zinc-800/90 backdrop-blur-md border border-blue-500/50 shadow-blue-900/20 shadow-2xl rounded-full px-1.5 py-1.5 flex flex-row items-center justify-between gap-4 overflow-x-auto min-w-[280px] max-w-[95vw]">
+          <div className="bg-zinc-800/90 backdrop-blur-md border border-blue-500/50 shadow-blue-900/20 shadow-2xl rounded-full px-1.5 py-1.5 flex flex-row items-center justify-between gap-4 overflow-x-auto min-w-70 max-w-[95vw]">
             
             {/* キャンセルボタン (左) */}
             <button
