@@ -445,11 +445,14 @@ export default function ImageViewer({
 
         {/* 詳細情報パネル */}
         <div
-          className={`absolute bottom-0 left-0 right-0 max-h-[50%] overflow-y-auto bg-zinc-900/95 backdrop-blur-md border-t border-zinc-700 text-white p-6 rounded-t-2xl transition-transform duration-300 ease-out flex flex-col gap-2 z-30 shadow-2xl ${
+          className={`absolute bottom-0 left-0 right-0 max-h-[50%] overflow-y-auto overscroll-contain bg-zinc-900/95 backdrop-blur-md border-t border-zinc-700 text-white p-6 rounded-t-2xl transition-transform duration-300 ease-out flex flex-col gap-2 z-30 shadow-2xl ${
             isDetailOpen ? "translate-y-0" : "translate-y-full"
           }`}
           // パネル内の操作が後ろに抜けないようにする
           onClick={(e) => e.stopPropagation()} 
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
         >
           {/* ファイル名 */}
           <h3 className="text-lg font-bold break-all">
