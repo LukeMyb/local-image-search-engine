@@ -45,8 +45,8 @@ export default function ImageGrid({
       setTimeout(() => {
         const el = document.getElementById(`grid-image-${idToScroll}`);
         if (el) {
-          // 該当する画像を画面の中央（center）にパッと移動させる
-          el.scrollIntoView({ block: "center", behavior: "auto" });
+          // 画面内に見えている場合は動かず、画面外にある場合のみ一番近い端にスクロール
+          el.scrollIntoView({ block: "nearest", behavior: "auto" });
         }
       }, 50);
 
@@ -94,7 +94,7 @@ export default function ImageGrid({
               // クリックされたら、この画像の情報を selectedImage にセットする
               onClick={() => setSelectedImage(item)}
               // カーソルを指マーク(cursor-pointer)にし、クリックできることを強調
-              className="w-full aspect-square object-cover rounded-md cursor-pointer hover:opacity-80 transition-opacity"
+              className="relative group scroll-mt-24"
             />
 
             {/* 右上に配置されるお気に入りマーク */}
