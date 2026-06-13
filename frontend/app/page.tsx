@@ -241,7 +241,8 @@ export default function Home() {
           toggleSortOrder={toggleSortOrder}
           isHighAccuracy={isHighAccuracy}
           setIsHighAccuracy={setIsHighAccuracy}
-          selectedCount={selectedIds.length}
+          selectedIds={selectedIds}
+          setSelectedIds={setSelectedIds}
         />
       )}
     </div>
