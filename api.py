@@ -12,6 +12,11 @@ from core.search import SearchManager
 class BatchImageRequest(BaseModel):
     ids: List[int]
 
+# 絵柄タグ作成リクエストのデータ型定義
+class StyleTagCreate(BaseModel):
+    name: str
+    image_ids: List[int]
+
 app = FastAPI()
 
 # フロントエンド（React/Next.js等）からのアクセスを許可する必須設定 (CORS)
@@ -129,6 +134,7 @@ class BookmarkCreate(BaseModel):
     name: str
     query: str
 
+
 @app.post("/bookmark")
 def save_bookmark(data: BookmarkCreate):
     """
@@ -160,6 +166,46 @@ def update_bookmark_usage(bookmark_id: int):
     """
     search_manager.db.update_bookmark_usage(bookmark_id)
     return {"status": "success", "message": "使用時刻を更新しました"}
+
+# 絵柄タグ作成用エンドポイント
+@app.post("/style")
+def create_style_tag(data: StyleTagCreate):
+    """
+    選択された画像IDのリストとタグ名を受け取り、重心ベクトルを計算して絵柄タグを保存する
+    """
+    # 1. 画像IDからファイルパスを取得する
+    image_paths = []
+    for img_id in data.image_ids:
+        img_data = search_manager.db.get_image_by_id(img_id)
+        if img_data and img_data.get('file_path'):
+            image_paths.append(img_data['file_path'])
+            
+    if not image_paths:
+        raise HTTPException(status_code=400, detail="有効な画像が選択されていません")
+        
+    # 絵柄検索エンジン(style_searcher)を取得
+    style_searcher = search_manager.style_engine
+    if style_searcher is None:
+        raise HTTPException(status_code=500, detail="絵柄検索エンジンがロードされていません")
+        
+    # 重心ベクトルを計算
+    print(f"DEBUG: [{data.name}] を {len(image_paths)}枚の画像から計算します...")
+    centroid = style_searcher.calculate_centroid(image_paths)
+    
+    if centroid is None:
+        raise HTTPException(status_code=500, detail="絵柄の解析に失敗しました。画像がベクトル化されていない可能性があります。")
+        
+    # データベースに保存
+    try:
+        search_manager.db.save_style_tag(data.name, centroid)
+        print(f"[{data.name}] の保存が完了しました！")
+        return {
+            "status": "success", 
+            "message": f"絵柄タグ '{data.name}' を作成しました"
+        }
+    except Exception as e:
+        # すでに同じ名前のタグが存在する場合などのエラーハンドリング
+        raise HTTPException(status_code=400, detail=f"保存に失敗しました: {str(e)}")
 
 # 絵柄タグの削除用エンドポイント
 @app.delete("/style/{style_id}")
