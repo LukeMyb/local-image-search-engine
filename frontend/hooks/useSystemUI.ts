@@ -9,6 +9,24 @@ interface UseSystemUIProps {
  * PWAとしての挙動やブラウザのシステム制御（ズーム禁止・スクロールロック）を管理するカスタムフック
  */
 export function useSystemUI({ selectedImage, isDrawerOpen }: UseSystemUIProps) {
+  // ピンチズーム（画面全体の拡大）を禁止する処理
+  useEffect(() => {
+    // 2本指以上の物理的なスワイプ（拡大操作）のみを無効化する
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    };
+
+    // passive: false で登録し、preventDefault を有効にする
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+
+    // クリーンアップ
+    return () => {
+      document.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, []);
+
   // モーダルやドロワーの開閉に合わせて背景のスクロールを制御する
   useEffect(() => {
     if (selectedImage || isDrawerOpen) {
