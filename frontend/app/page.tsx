@@ -151,6 +151,29 @@ export default function Home() {
   // アプリ起動時に一回だけ、保存済みクエリのリストを読み込む
   useEffect(() => {
     refreshSavedQueries();
+
+    // 前回の検索クエリを復元し、初期検索を走らせる
+    const restoreLastQuery = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/search/last_query`);
+        if (response.ok) {
+          const data = await response.json();
+          const lastQuery = data.query || "";
+          
+          setQuery(lastQuery); // 検索窓に前回の文字をセットする
+          
+          // その文字で初回検索を実行する（空文字の場合はお気に入りが表示される）
+          handleSearch(lastQuery); 
+        } else {
+          handleSearch(""); // 失敗した場合は空（お気に入り）で検索
+        }
+      } catch (error) {
+        console.error("前回クエリの復元エラー:", error);
+        handleSearch(""); // ネットワークエラー時も初期検索は走らせる
+      }
+    };
+
+    restoreLastQuery();
   }, []);
 
   return (

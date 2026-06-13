@@ -73,6 +73,12 @@ def search(q: str):
     """
     検索クエリ(q)を受け取り、検索結果をJSONで返す
     """
+    # 検索が実行されたら、履歴としてDBに保存する
+    try:
+        search_manager.db.save_search_history(q)
+    except Exception as e:
+        print(f"履歴の保存に失敗しました: {e}")
+
     results = search_manager.search(q) 
 
     # 検索結果からIDだけをすべて抽出し、表示用は最初の100件で切り出す
@@ -85,6 +91,19 @@ def search(q: str):
         "all_ids": all_ids,
         "results": initial_results
     }
+
+# 起動時に前回のクエリを取得するエンドポイント
+@app.get("/search/last_query")
+def get_last_query():
+    """
+    前回最後に検索したクエリ文字列を取得する
+    """
+    try:
+        last = search_manager.db.get_last_query()
+        return {"query": last if last else ""}
+    except Exception as e:
+        print(f"前回クエリの取得に失敗しました: {e}")
+        return {"query": ""}
 
 # IDリストから画像情報のみを取得するエンドポイント
 @app.post("/images/batch")
