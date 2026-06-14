@@ -61,6 +61,7 @@ export default function Home() {
     else nextSort = "score";
     
     setSortOrder(nextSort);
+    localStorage.setItem("sortOrder", nextSort); // 切り替えた瞬間にlocalStorageに保存する
     handleSearch(query, nextSort); // ソートを切り替えた瞬間に再検索を実行
   };
 
@@ -156,6 +157,10 @@ export default function Home() {
   useEffect(() => {
     refreshSavedQueries();
 
+    // localStorageから前回のソート順を読み込む（無い場合は "score" にする）
+    const savedSort = (localStorage.getItem("sortOrder") as "score" | "favorite" | "newest") || "score";
+    setSortOrder(savedSort);
+
     // 前回の検索クエリを復元し、初期検索を走らせる
     const restoreLastQuery = async () => {
       try {
@@ -165,15 +170,13 @@ export default function Home() {
           const lastQuery = data.query || "";
           
           setQuery(lastQuery); // 検索窓に前回の文字をセットする
-          
-          // その文字で初回検索を実行する（空文字の場合はお気に入りが表示される）
-          handleSearch(lastQuery, sortOrder);
+          handleSearch(lastQuery, savedSort);
         } else {
-          handleSearch("", sortOrder); // 失敗した場合は空（お気に入り）で検索
+          handleSearch("", savedSort); // 失敗した場合は空（お気に入り）で検索
         }
       } catch (error) {
         console.error("前回クエリの復元エラー:", error);
-        handleSearch("", sortOrder); // ネットワークエラー時も初期検索は走らせる
+        handleSearch("", savedSort); // ネットワークエラー時も初期検索は走らせる
       }
     };
 
