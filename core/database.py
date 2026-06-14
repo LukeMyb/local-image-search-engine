@@ -114,15 +114,6 @@ class ImageDatabase:
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_jp_text ON translation_cache(jp_text)')
-
-        # 検索履歴を管理するテーブル (最新1件のみを保持)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS search_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                query TEXT NOT NULL,
-                executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
         
         self.conn.commit()
 

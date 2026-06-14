@@ -76,8 +76,6 @@ def search(q: str, sort: str = "score"):
     """
     # 検索が実行されたら、履歴としてDBに保存する
     try:
-        search_manager.db.save_search_history(q)
-
         # 絵柄タグが使われた場合、そのタグの使用時刻も最新に更新する
         style_match = re.search(r'style:([^\s|]+)', q)
         if style_match:
@@ -98,19 +96,6 @@ def search(q: str, sort: str = "score"):
         "all_ids": all_ids,
         "results": initial_results
     }
-
-# 起動時に前回のクエリを取得するエンドポイント
-@app.get("/search/last_query")
-def get_last_query():
-    """
-    前回最後に検索したクエリ文字列を取得する
-    """
-    try:
-        last = search_manager.db.get_last_query()
-        return {"query": last if last else ""}
-    except Exception as e:
-        print(f"前回クエリの取得に失敗しました: {e}")
-        return {"query": ""}
 
 # IDリストから画像情報のみを取得するエンドポイント
 @app.post("/images/batch")
