@@ -31,7 +31,7 @@ export function useImageSearch() {
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
 
   // 検索実行ロジック
-  const handleSearch = async (query: string, e?: React.FormEvent, overrideQuery?: string) => {
+  const handleSearch = async (query: string, sortOrder: string = "score", e?: React.FormEvent, overrideQuery?: string) => {
     // フォーム送信によるページリロードを阻止する
     if (e) e.preventDefault();
 
@@ -43,7 +43,7 @@ export function useImageSearch() {
     // 直接渡されたキーワードがあればそれを使い、なければ検索窓(query)の値を使う
     const currentQuery = overrideQuery !== undefined ? overrideQuery : query;
     const isQueryEmpty = !currentQuery.trim();
-    const endpoint = isQueryEmpty ? `/favorites` : `/search?q=${encodeURIComponent(currentQuery)}`;
+    const endpoint = isQueryEmpty ? `/favorites` : `/search?q=${encodeURIComponent(currentQuery)}&sort=${sortOrder}`;
 
     setStatusMessage(currentQuery ? `「${currentQuery}」を検索中...` : `お気に入り一覧を取得中...`);
     setResults([]); // 検索開始時に前の画像をクリア

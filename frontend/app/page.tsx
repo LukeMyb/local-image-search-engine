@@ -55,9 +55,13 @@ export default function Home() {
 
   // ソート順をローテーションで切り替える関数
   const toggleSortOrder = () => {
-    if (sortOrder === "score") setSortOrder("favorite");
-    else if (sortOrder === "favorite") setSortOrder("newest");
-    else setSortOrder("score");
+    let nextSort: "score" | "favorite" | "newest";
+    if (sortOrder === "score") nextSort = "favorite";
+    else if (sortOrder === "favorite") nextSort = "newest";
+    else nextSort = "score";
+    
+    setSortOrder(nextSort);
+    handleSearch(query, nextSort); // ソートを切り替えた瞬間に再検索を実行
   };
 
   // 表示するソート文字列の決定
@@ -163,13 +167,13 @@ export default function Home() {
           setQuery(lastQuery); // 検索窓に前回の文字をセットする
           
           // その文字で初回検索を実行する（空文字の場合はお気に入りが表示される）
-          handleSearch(lastQuery); 
+          handleSearch(lastQuery, sortOrder);
         } else {
-          handleSearch(""); // 失敗した場合は空（お気に入り）で検索
+          handleSearch("", sortOrder); // 失敗した場合は空（お気に入り）で検索
         }
       } catch (error) {
         console.error("前回クエリの復元エラー:", error);
-        handleSearch(""); // ネットワークエラー時も初期検索は走らせる
+        handleSearch("", sortOrder); // ネットワークエラー時も初期検索は走らせる
       }
     };
 
@@ -186,7 +190,7 @@ export default function Home() {
         <SearchBar 
           query={query}
           setQuery={setQuery}
-          onSearch={(e) => handleSearch(query, e)}
+          onSearch={(e) => handleSearch(query, sortOrder, e)}
           setIsDrawerOpen={setIsDrawerOpen}
           openBookmarkDialog={openBookmarkDialog}
           savedQueries={savedQueries}
@@ -248,7 +252,7 @@ export default function Home() {
         setIsSaveDialogOpen={setIsSaveDialogOpen}
         query={query}
         setQuery={setQuery}
-        handleSearch={(e, oq) => handleSearch(query, e, oq)}
+        handleSearch={(e, oq) => handleSearch(query, sortOrder, e, oq)}
         allBookmarks={allBookmarks}
         savedQueries={savedQueries}
         refreshSavedQueries={refreshSavedQueries}
