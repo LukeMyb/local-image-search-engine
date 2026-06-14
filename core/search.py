@@ -43,14 +43,24 @@ class SearchManager:
         # それ以外は純粋なタグ検索のサジェストに丸投げ
         return self.tag_searcher.get_suggestions(query_text, limit)
 
-    def search(self, user_query, is_bookmarked=False):
+    def search(self, user_query, is_bookmarked=False, sort_order="score"):
         # 絵柄タグ(style:xxx)の抽出と分離処理（tag_searchから移植）
         style_match = re.search(r'style:([^\s|]+)', user_query)
         style_name = None
         style_scores_map = {}
         style_results = []
+
+        # ソートの共通処理用の内部関数
+        def sort_by_order(res_list):
+            if sort_order == "favorite":
+                res_list.sort(key=lambda x: (x.get('is_favorite', 0), x.get('match_score', 0), x['file_mtime']), reverse=True)
+            elif sort_order == "newest":
+                res_list.sort(key=lambda x: (x['file_mtime'], x.get('match_score', 0)), reverse=True)
+            else: # "score"
+                res_list.sort(key=lambda x: (x.get('match_score', 0), x['file_mtime']), reverse=True)
+            return res_list
         
-        # 1. 絵柄検索の実行
+        # 絵柄検索の実行
         if style_match:
             style_name = style_match.group(0)
             user_query = user_query.replace(style_name, '').strip()
@@ -67,11 +77,7 @@ class SearchManager:
             style_scores_map = {res['id']: res['match_score'] for res in style_results}
             
             if not user_query:
-                if is_bookmarked:
-                    style_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
-                else:
-                    style_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
-                return style_results
+                return sort_by_order(style_results)
                 
             if not style_scores_map:
                 print("  -> 絵柄に一致する画像が0件のため、検索を終了します。")
@@ -79,16 +85,14 @@ class SearchManager:
                 
             print(f"  -> 絵柄検索で {len(style_scores_map)}件 ヒット。続けてタグ検索で絞り込みます...")
 
-        # 2. タグ検索の実行
+        # タグ検索の実行
         # タグ検索エンジンには純粋なテキストクエリだけを投げる
         tag_results = self.tag_searcher.search(user_query, is_bookmarked=False) # ソートは後で行うためここではFalse
 
-        # 3. 結果のAND結合と最終スコア計算
+        # 結果のAND結合と最終スコア計算
         if not style_name:
             # 絵柄指定がなければタグ検索の結果をそのまま返す（ソートだけ適用）
-            if is_bookmarked:
-                tag_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
-            return tag_results
+            return sort_by_order(tag_results)
 
         # 絵柄とタグの両方が指定されている場合の結合・倍率計算処理
         # FAISS(絵柄)とSQLite(タグ)の双方でヒットした画像だけを残し、スコアを掛け合わせて再評価する
@@ -118,9 +122,4 @@ class SearchManager:
             scored_results.append(row)
 
         # ブックマーク済みの時だけお気に入り(is_favorite)を最優先にし、それ以外は純粋なスコア順にする
-        if is_bookmarked:
-            scored_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
-        else:
-            scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
-
-        return scored_results
+        return sort_by_order(scored_results)

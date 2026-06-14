@@ -70,7 +70,7 @@ def get_thumbnail(image_id: int):
     return FileResponse(image_data['thumbnail_path'])
 
 @app.get("/search")
-def search(q: str):
+def search(q: str, sort: str = "score"):
     """
     検索クエリ(q)を受け取り、検索結果をJSONで返す
     """
@@ -86,7 +86,7 @@ def search(q: str):
     except Exception as e:
         print(f"履歴の保存に失敗しました: {e}")
 
-    results = search_manager.search(q) 
+    results = search_manager.search(q, sort_order=sort)
 
     # 検索結果からIDだけをすべて抽出し、表示用は最初の100件で切り出す
     all_ids = [img["id"] for img in results]
