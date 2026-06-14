@@ -43,6 +43,10 @@ export function useImageSearch() {
     // 直接渡されたキーワードがあればそれを使い、なければ検索窓(query)の値を使う
     const currentQuery = overrideQuery !== undefined ? overrideQuery : query;
     const isQueryEmpty = !currentQuery.trim();
+
+    // クエリをlocalStorageに保存する
+    localStorage.setItem("lastQuery", currentQuery);
+
     const endpoint = isQueryEmpty ? `/favorites` : `/search?q=${encodeURIComponent(currentQuery)}&sort=${sortOrder}`;
 
     setStatusMessage(currentQuery ? `「${currentQuery}」を検索中...` : `お気に入り一覧を取得中...`);

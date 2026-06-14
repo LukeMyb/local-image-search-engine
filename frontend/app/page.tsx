@@ -162,22 +162,11 @@ export default function Home() {
     setSortOrder(savedSort);
 
     // 前回の検索クエリを復元し、初期検索を走らせる
-    const restoreLastQuery = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/search/last_query`);
-        if (response.ok) {
-          const data = await response.json();
-          const lastQuery = data.query || "";
-          
-          setQuery(lastQuery); // 検索窓に前回の文字をセットする
-          handleSearch(lastQuery, savedSort);
-        } else {
-          handleSearch("", savedSort); // 失敗した場合は空（お気に入り）で検索
-        }
-      } catch (error) {
-        console.error("前回クエリの復元エラー:", error);
-        handleSearch("", savedSort); // ネットワークエラー時も初期検索は走らせる
-      }
+    const restoreLastQuery = () => {
+      // localStorageから読み込んで検索を実行する
+      const lastQuery = localStorage.getItem("lastQuery") || "";
+      setQuery(lastQuery);
+      handleSearch(lastQuery, savedSort);
     };
 
     restoreLastQuery();
