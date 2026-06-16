@@ -55,6 +55,9 @@ export default function ImageViewer({
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
+  // UIの表示状態を管理するState
+  const [isUIVisible, setIsUIVisible] = useState(true);
+
   // 展開アニメーションの状態と、起点（座標）を管理するState
   const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done' | 'closing'>('init');
   const [transformOrigin, setTransformOrigin] = useState("center center");
@@ -323,9 +326,13 @@ export default function ImageViewer({
     };
   }, [hasSubsequent, hasPreceding, onNext, onPrev]);
 
-  // 画面の余白タップで詳細パネルを閉じる処理
+  // 画面の余白や画像のタップでUIを隠す処理
   const handleTap = () => {
-    if (isDetailOpen) setIsDetailOpen(false);
+    if (isDetailOpen) {
+      setIsDetailOpen(false); // パネルが開いていたら閉じるのを優先
+    } else {
+      setIsUIVisible((prev) => !prev); // パネルが閉じていればUIの出し入れを切り替え
+    }
   };
 
   // ファイルパスからファイル名だけを抽出する便利関数
@@ -359,7 +366,10 @@ export default function ImageViewer({
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleTap();
+        }}
       >
 
         {/* ドラッグでスライドする3枚の画像のコンテナ（レール） */}
@@ -380,7 +390,6 @@ export default function ImageViewer({
           {/* 現在の画像（画面中央に配置） */}
           <div className="w-full h-full flex items-center justify-center">
             <img 
-              onClick={handleTap}
               src={`${API_BASE_URL}/image/${selectedImage.id}`}
               alt={`Selected ${selectedImage.id}`}
               className="max-w-full max-h-full object-contain"
@@ -399,7 +408,9 @@ export default function ImageViewer({
         {hasPreceding && onPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); executePrev(); }}
-            className="absolute left-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-start pl-4 outline-none group cursor-pointer"
+            className={`absolute left-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-start pl-4 outline-none group cursor-pointer transition-opacity duration-300 ${
+              isUIVisible && entranceState !== 'closing' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
           >
             {/* アイコンの背景の丸い部分を div に分離し、group-hover で反応させる */}
             <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors flex items-center justify-center">
@@ -412,7 +423,9 @@ export default function ImageViewer({
         {hasSubsequent && onNext && (
           <button
             onClick={(e) => { e.stopPropagation(); executeNext(); }}
-            className="absolute right-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-end pr-4 outline-none group cursor-pointer"
+            className={`absolute right-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-end pr-4 outline-none group cursor-pointer transition-opacity duration-300 ${
+              isUIVisible && entranceState !== 'closing' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
           >
             {/* アイコンの背景部分 */}
             <div className="p-4 bg-black/50 group-hover:bg-black/80 text-white rounded-full transition-colors flex items-center justify-center">
@@ -423,8 +436,10 @@ export default function ImageViewer({
 
         {/* お気に入り（ハート）ボタン */}
         <button
-          onClick={(e) => onToggleFavorite(selectedImage.id, e)}
-          className="absolute bottom-4 left-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-colors z-20"
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite(selectedImage.id, e); }}
+          className={`absolute bottom-4 left-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-all duration-300 ease-out z-20 ${
+            isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'
+          }`}
         >
           <Heart 
             size={24} 
@@ -435,9 +450,9 @@ export default function ImageViewer({
         {/* 閉じるボタン */}
         <button 
           // 閉じる処理をpropsで受け取った関数に置き換え
-          onClick={handleClose}
-          className={`absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-all duration-300 z-20 ${
-            entranceState === 'closing' ? 'opacity-0' : 'opacity-100'
+          onClick={(e) => { e.stopPropagation(); handleClose(); }}
+          className={`absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-all duration-300 ease-out z-20 ${
+            isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 pointer-events-none'
           }`}
         >
           <X size={24} />
