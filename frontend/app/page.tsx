@@ -74,6 +74,9 @@ export default function Home() {
   // 選択された画像のIDリストを管理するState
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
+  // ビューアーのUI表示状態を管理するState（初期値はtrue）
+  const [isViewerUIVisible, setIsViewerUIVisible] = useState(true);
+
   // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
   const toggleSelection = (id: number) => {
     setSelectedIds((prev) => 
@@ -161,6 +164,12 @@ export default function Home() {
     const savedSort = (localStorage.getItem("sortOrder") as "score" | "favorite" | "newest") || "score";
     setSortOrder(savedSort);
 
+    // localStorageから前回のビューアーUI表示状態を読み込む
+    const savedUIVisible = localStorage.getItem("isViewerUIVisible");
+    if (savedUIVisible !== null) {
+      setIsViewerUIVisible(savedUIVisible === "true");
+    }
+
     // 前回の検索クエリを復元し、初期検索を走らせる
     const restoreLastQuery = () => {
       // localStorageから読み込んで検索を実行する
@@ -232,6 +241,14 @@ export default function Home() {
             onPrev={() => hasPreceding && setSelectedImage(results[currentIndex - 1])}
             hasPreceding={hasPreceding}
             hasSubsequent={hasSubsequent}
+
+            // UIの表示状態と、トグル＆保存を行う関数を渡す
+            isUIVisible={isViewerUIVisible}
+            onToggleUI={() => {
+              const nextState = !isViewerUIVisible;
+              setIsViewerUIVisible(nextState);
+              localStorage.setItem("isViewerUIVisible", String(nextState)); // 変更と同時に保存
+            }}
           />
         );
       })()}

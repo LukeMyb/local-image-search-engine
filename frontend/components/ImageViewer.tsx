@@ -25,6 +25,8 @@ interface ImageViewerProps {
   onPrev?: () => void;
   hasSubsequent?: boolean;
   hasPreceding?: boolean;
+  isUIVisible: boolean;
+  onToggleUI: () => void;
 }
 
 export default function ImageViewer({
@@ -37,6 +39,8 @@ export default function ImageViewer({
   nextImage,
   hasSubsequent = false,
   hasPreceding = false,
+  isUIVisible,
+  onToggleUI,
 }: ImageViewerProps) {
 
   // スワイプ判定用のState
@@ -54,9 +58,6 @@ export default function ImageViewer({
 
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  // UIの表示状態を管理するState
-  const [isUIVisible, setIsUIVisible] = useState(true);
 
   // 展開アニメーションの状態と、起点（座標）を管理するState
   const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done' | 'closing'>('init');
@@ -331,7 +332,7 @@ export default function ImageViewer({
     if (isDetailOpen) {
       setIsDetailOpen(false); // パネルが開いていたら閉じるのを優先
     } else {
-      setIsUIVisible((prev) => !prev); // パネルが閉じていればUIの出し入れを切り替え
+      onToggleUI(); // パネルが閉じていればUIの出し入れを切り替え
     }
   };
 
