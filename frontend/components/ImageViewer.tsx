@@ -438,25 +438,32 @@ export default function ImageViewer({
         {/* お気に入り（ハート）ボタン */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(selectedImage.id, e); }}
-          className={`absolute bottom-4 left-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 transition-all duration-300 ease-out z-20 ${
+          // 外側の button: 透明な大きなパディングを持たせ、画面の左下カドの広範囲を当たり判定にする
+          className={`absolute bottom-0 left-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
             isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'
           }`}
         >
-          <Heart 
-            size={24} 
-            className={selectedImage.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
-          />
+          {/* 内側の div: 実際の見た目 */}
+          <div className="p-3 bg-black/50 text-white group-hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
+            <Heart 
+              size={26} 
+              className={selectedImage.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
+            />
+          </div>
         </button>
 
         {/* 閉じるボタン */}
         <button 
-          // 閉じる処理をpropsで受け取った関数に置き換え
           onClick={(e) => { e.stopPropagation(); handleClose(); }}
-          className={`absolute top-4 right-4 p-2 bg-black/50 text-white hover:bg-black/80 rounded-full transition-all duration-300 ease-out z-20 ${
+          // 外側の button: 画面の右上カドの広範囲を当たり判定にする
+          className={`absolute top-0 right-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
             isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 pointer-events-none'
           }`}
         >
-          <X size={24} />
+          {/* 内側の div: 実際の見た目 */}
+          <div className="p-3 bg-black/50 text-white group-hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
+            <X size={26} />
+          </div>
         </button>
 
         {/* 詳細情報パネル */}
