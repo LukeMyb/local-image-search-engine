@@ -7,9 +7,17 @@ import os
 import json
 import math
 import torch_directml #DirectML用のプラグイン
+
+import time
+
+print(f"[{time.strftime('%H:%M:%S')}] huggingface_hub インポート開始")
 from huggingface_hub import hf_hub_download
+print(f"[{time.strftime('%H:%M:%S')}] transformers インポート開始")
 from transformers import CLIPProcessor, CLIPModel
+print(f"[{time.strftime('%H:%M:%S')}] translators インポート開始")
 import translators as ts
+print(f"[{time.strftime('%H:%M:%S')}] インポート完了・クラス定義開始")
+
 from core.database import ImageDatabase
 
 class TagSearch:
