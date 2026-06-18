@@ -6,8 +6,8 @@ import hashlib # ハッシュ値計算用
 from pathlib import Path
 
 # 元のTARGET_DIRを「読み込み元」と「保存先」に分割
-SOURCE_DIR = r"data\images" # 大元のフォルダ
-TARGET_DIR = r"data\sorted" # 新しく作成してコピーする先のフォルダ
+SOURCE_DIR = r"data\sort\raw_data" # 大元のフォルダ
+TARGET_DIR = r"data\sort\sorted" # 新しく作成してコピーする先のフォルダ
 
 # ファイルのハッシュ値を計算する関数（先頭8文字を使用）
 def get_file_hash(file_path):
