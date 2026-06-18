@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { Heart, ArrowUp, CheckCircle } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
@@ -33,6 +33,8 @@ export default function ImageGrid({
   selectedIds = [],
   toggleSelection,
 }: ImageGridProps) {
+  // PC向けの列数を管理するState（初期値は6列）
+  const [columns, setColumns] = useState(6);
 
   // 監視対象（一番下の透明な要素）への参照
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -42,6 +44,29 @@ export default function ImageGrid({
 
   // 上に戻るボタンを直接操作するための参照
   const scrollToTopBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Shift + ホイールでの列数変更ロジック
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      // Shiftキーが押されている時だけ反応する
+      if (e.shiftKey) {
+        // ブラウザ標準のスクロール（横移動や縦移動）を強制キャンセル
+        e.preventDefault();
+
+        if (e.deltaY > 0) {
+          // 下に回した時（縮小したい＝列数を増やす）: 最大12列くらいで制限
+          setColumns((prev) => Math.min(prev + 1, 12));
+        } else if (e.deltaY < 0) {
+          // 上に回した時（拡大したい＝列数を減らす）: 最小2列で制限
+          setColumns((prev) => Math.max(prev - 1, 2));
+        }
+      }
+    };
+
+    // passive: false にしないと preventDefault() が効かない
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    return () => window.removeEventListener("wheel", handleWheel);
+  }, []);
 
   // スクロール量に応じてボタンの表示/非表示を直接切り替える処理
   useEffect(() => {
@@ -114,7 +139,10 @@ export default function ImageGrid({
 
   return (
     <>
-      <div className="grid grid-cols-3 gap-2 md:grid-cols-6 md:gap-4 mt-4">
+      <div 
+        className="grid gap-2 md:gap-4 mt-4"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      >
         {results.map((item) => {
           // この画像が選択されているかどうかの判定
           const isSelected = selectedIds.includes(item.id);
