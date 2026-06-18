@@ -282,4 +282,4 @@ if __name__ == "__main__":
     
     # 本番実行ブロック
     # force_update=True にすれば、前のタグを全部消して上書きします
-    tagger.process_all(force_update=True)
+    tagger.process_all(force_update=False)
