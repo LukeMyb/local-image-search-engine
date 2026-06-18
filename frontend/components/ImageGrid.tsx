@@ -55,6 +55,60 @@ export default function ImageGrid({
   // 上に戻るボタンを直接操作するための参照
   const scrollToTopBtnRef = useRef<HTMLButtonElement>(null);
 
+  // スマホ向けピンチ操作の計算用Ref
+  const initialDistance = useRef<number | null>(null);
+  const initialCols = useRef<number | null>(null);
+  const currentMobileColsRef = useRef<number>(gridColsMobile);
+  // 親から列数が変わったら Ref も同期しておく
+  useEffect(() => {
+    currentMobileColsRef.current = gridColsMobile;
+  }, [gridColsMobile]);
+
+  // スマホのピンチ操作検知ロジック
+  // 2点間の距離をピクセル単位で計算する関数
+  const getDistance = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // 指が2本触れた時だけ初期値を記録
+    if (e.touches.length === 2 && setGridColsMobile) {
+      initialDistance.current = getDistance(e.touches);
+      initialCols.current = currentMobileColsRef.current;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && initialDistance.current !== null && initialCols.current !== null && setGridColsMobile) {
+      const currentDistance = getDistance(e.touches);
+      const scale = currentDistance / initialDistance.current;
+      
+      // スケールに応じて列数を計算 (拡大 = 列数減, 縮小 = 列数増)
+      let newCols = Math.round(initialCols.current / scale);
+
+      // スマホ向けの列数制限（1列 〜 最大8列くらいに制限）
+      if (newCols < 1) newCols = 1;
+      if (newCols > 8) newCols = 8;
+
+      // 列数が変わったタイミングだけ親のStateを更新する（連続実行の防止）
+      if (currentMobileColsRef.current !== newCols) {
+        setGridColsMobile(newCols);
+        currentMobileColsRef.current = newCols;
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    // 指が離れて2本未満になったら状態をリセット
+    if (e.touches.length < 2) {
+      initialDistance.current = null;
+      initialCols.current = null;
+    }
+  };
+
+
   // Shift + ホイールでのPC向け列数変更ロジック
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -159,7 +213,13 @@ export default function ImageGrid({
         }
       `}</style>
 
-      <div className="grid gap-2 md:gap-4 mt-4 custom-dynamic-grid">
+      <div 
+        className="grid gap-2 md:gap-4 mt-4 custom-dynamic-grid"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd} // スクロールキャンセル時などの安全装置
+      >
         {results.map((item) => {
           // この画像が選択されているかどうかの判定
           const isSelected = selectedIds.includes(item.id);
