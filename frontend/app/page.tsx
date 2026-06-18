@@ -53,6 +53,10 @@ export default function Home() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [sortOrder, setSortOrder] = useState<"score" | "favorite" | "newest">("score");
 
+  // グリッドの列数を管理するState（PC用とスマホ用を分離）
+  const [gridColsPC, setGridColsPC] = useState(6);
+  const [gridColsMobile, setGridColsMobile] = useState(3);
+
   // ソート順をローテーションで切り替える関数
   const toggleSortOrder = () => {
     let nextSort: "score" | "favorite" | "newest";
@@ -170,6 +174,12 @@ export default function Home() {
       setIsViewerUIVisible(savedUIVisible === "true");
     }
 
+    // localStorageから列数の設定を読み込む
+    const savedColsPC = localStorage.getItem("gridColsPC");
+    if (savedColsPC) setGridColsPC(parseInt(savedColsPC, 10));
+    const savedColsMobile = localStorage.getItem("gridColsMobile");
+    if (savedColsMobile) setGridColsMobile(parseInt(savedColsMobile, 10));
+
     // 前回の検索クエリを復元し、初期検索を走らせる
     const restoreLastQuery = () => {
       // localStorageから読み込んで検索を実行する
@@ -216,6 +226,18 @@ export default function Home() {
           isSelectionMode={isSelectionMode}
           selectedIds={selectedIds}
           toggleSelection={toggleSelection}
+
+          // 列数の状態と、変更時にlocalStorageにも保存する更新関数を渡す
+          gridColsPC={gridColsPC}
+          setGridColsPC={(cols) => {
+            setGridColsPC(cols);
+            localStorage.setItem("gridColsPC", String(cols));
+          }}
+          gridColsMobile={gridColsMobile}
+          setGridColsMobile={(cols) => {
+            setGridColsMobile(cols);
+            localStorage.setItem("gridColsMobile", String(cols));
+          }}
         />
       </div>
 

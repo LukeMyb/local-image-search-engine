@@ -21,6 +21,12 @@ interface ImageGridProps {
   isSelectionMode?: boolean;
   selectedIds?: number[];
   toggleSelection?: (id: number) => void;
+
+  // 列数管理用のPropsを受け取る
+  gridColsPC?: number;
+  setGridColsPC?: (cols: number) => void;
+  gridColsMobile?: number;
+  setGridColsMobile?: (cols: number) => void;
 }
 
 export default function ImageGrid({ 
@@ -32,6 +38,10 @@ export default function ImageGrid({
   isSelectionMode = false,
   selectedIds = [],
   toggleSelection,
+  gridColsPC = 6,
+  setGridColsPC,
+  gridColsMobile = 3,
+  setGridColsMobile,
 }: ImageGridProps) {
   // PC向けの列数を管理するState（初期値は6列）
   const [columns, setColumns] = useState(6);
@@ -45,28 +55,26 @@ export default function ImageGrid({
   // 上に戻るボタンを直接操作するための参照
   const scrollToTopBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Shift + ホイールでの列数変更ロジック
+  // Shift + ホイールでのPC向け列数変更ロジック
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      // Shiftキーが押されている時だけ反応する
-      if (e.shiftKey) {
-        // ブラウザ標準のスクロール（横移動や縦移動）を強制キャンセル
-        e.preventDefault();
+      // Shiftキーが押されており、かつ更新関数が渡されている時のみ反応
+      if (e.shiftKey && setGridColsPC) {
+        e.preventDefault(); // デフォルトのスクロールを止める
 
         if (e.deltaY > 0) {
-          // 下に回した時（縮小したい＝列数を増やす）: 最大12列くらいで制限
-          setColumns((prev) => Math.min(prev + 1, 12));
+          // 下に回した時（縮小＝列数を増やす、最大12列）
+          setGridColsPC(Math.min(gridColsPC + 1, 12));
         } else if (e.deltaY < 0) {
-          // 上に回した時（拡大したい＝列数を減らす）: 最小2列で制限
-          setColumns((prev) => Math.max(prev - 1, 2));
+          // 上に回した時（拡大＝列数を減らす、最小2列）
+          setGridColsPC(Math.max(gridColsPC - 1, 2));
         }
       }
     };
 
-    // passive: false にしないと preventDefault() が効かない
     window.addEventListener("wheel", handleWheel, { passive: false });
     return () => window.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [gridColsPC, setGridColsPC]); // ★変更: stateの最新値を依存配列に入れる
 
   // スクロール量に応じてボタンの表示/非表示を直接切り替える処理
   useEffect(() => {
@@ -139,10 +147,19 @@ export default function ImageGrid({
 
   return (
     <>
-      <div 
-        className="grid gap-2 md:gap-4 mt-4"
-        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-      >
+      {/* CSSのメディアクエリを使って、PCとスマホの列数を自動で切り替えるスタイルを定義 */}
+      <style>{`
+        .custom-dynamic-grid {
+          grid-template-columns: repeat(${gridColsMobile}, minmax(0, 1fr));
+        }
+        @media (min-width: 768px) {
+          .custom-dynamic-grid {
+            grid-template-columns: repeat(${gridColsPC}, minmax(0, 1fr));
+          }
+        }
+      `}</style>
+
+      <div className="grid gap-2 md:gap-4 mt-4 custom-dynamic-grid">
         {results.map((item) => {
           // この画像が選択されているかどうかの判定
           const isSelected = selectedIds.includes(item.id);
