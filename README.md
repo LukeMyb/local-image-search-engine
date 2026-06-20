@@ -31,31 +31,38 @@ pip install translators pillow
 
 ```text
 project_root/
-├── app.py                 # UI・メイン実行ファイル
-├── scripts/               # 初回セットアップ
-│   ├── download_assets.py # 翻訳辞書ダウンローダー
-│   ├── vectorize_tags.py  # タグのベクトルインデックス作成
-│   └── sort.py            # 画像の重複排除と年月フォルダへの自動整理 (任意)
-├── tasks/                 # アプリの裏で実行されるバックグラウンド処理群
-│   ├── index.py           # 初期スキャン・サムネイル生成
-│   ├── tagger.py          # 画像解析・タグ付け
-│   └── vectorize_images.py# 絵柄(画風)ベクトルの生成
-├── core/                  # バックエンドロジック
-│   ├── database.py        # SQLite (FTS5) 制御
-│   ├── search.py          # 検索全体のオーケストレーター
-│   ├── tag_search.py      # タグのテキスト・ベクトル検索エンジン
-│   └── style_search.py    # 絵柄(画風)のベクトル検索エンジン
-├── ui/                    # UIコンポーネント
-│   ├── search_bar.py      # 検索窓
-│   ├── gallery.py         # グリッド表示
-│   ├── viewer.py          # 画像拡大・詳細表示
-│   └── drawer.py          # ブックマーク一覧
-└── data/                  # データ保存先 (自動生成)
-    ├── images/            # ★ここに検索したい画像を入れてください
-    ├── db/                # index.dbが生成されます
-    ├── faiss/             # 絵柄検索用のインデックスが生成されます
-    └── thumbnails/        # 縮小画像が生成されます
-
+├── api.py                  # FastAPI エンドポイント (バックエンド)
+├── setup.ps1               # 環境構築用セットアップスクリプト
+├── requirements.txt        # Python依存パッケージ一覧
+│
+├── app/                    # Next.js フロントエンド (UI)
+│   ├── page.tsx            # メインUIレイアウト
+│   ├── components/         # UIコンポーネント (画像グリッド、ビューアー、検索窓など)
+│   ├── hooks/              # カスタムフック (検索ロジック、システム制御など)
+│   └── lib/                # フロントエンド用設定ファイル
+│
+├── core/                   # バックエンド・検索ロジック
+│   ├── database.py         # SQLite (FTS5) 制御
+│   ├── search.py           # 検索全体のオーケストレーター
+│   ├── tag_search.py       # タグのテキスト・ベクトル検索
+│   └── style_search.py     # 絵柄(画風)のベクトル検索
+│
+├── tasks/                  # バックグラウンド処理
+│   ├── index.py            # 初期スキャン・サムネイル生成
+│   ├── tagger.py           # 画像解析・タグ付け
+│   └── vectorize_images.py # 絵柄ベクトルの生成
+│
+├── scripts/                # 初回セットアップ・便利ツール
+│   ├── download_assets.py  # 翻訳辞書ダウンローダー
+│   ├── vectorize_tags.py   # タグのベクトルインデックス作成
+│   └── sort.py             # 画像の重複排除と年月フォルダへの整理
+│
+└── data/                   # データ保存先
+    ├── images/             # ★ここに検索したい画像を入れてください
+    ├── db/                 # index.db (データベース) が生成されます
+    ├── faiss/              # 絵柄検索用のインデックスが生成されます
+    ├── thumbnails/         # 縮小画像(サムネイル)が生成されます
+    └── (csvファイル類)      # 翻訳辞書などが保存されます
 ```
 
 ---
