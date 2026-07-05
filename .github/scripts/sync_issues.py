@@ -11,7 +11,7 @@ with open('issues.txt', 'r', encoding='utf-8') as f:
 try:
     # ghコマンドで全IssueのタイトルをJSON形式で取得
     result = subprocess.run(
-        ['gh', 'issue', 'list', '--state', 'all', '--json', 'title,number,state', '--limit', '1000'],
+        ['gh', 'issue', 'list', '--state', 'all', '--json', 'title,number,state,body', '--limit', '1000'],
         capture_output=True, text=True, check=True
     )
     existing_issues_list = json.loads(result.stdout)
@@ -48,7 +48,14 @@ for block in blocks:
             else:
                 print(f"Skip (Already closed): {actual_title}")
         else:
-            print(f"Skip (Already exists): {actual_title}")
+            remote_body = issue_info.get('body', '').replace('\r\n', '\n').strip()
+            local_body = body.replace('\r\n', '\n').strip()
+
+            if remote_body != local_body:
+                print(f"Updating issue: {actual_title} (#{issue_info['number']})")
+                subprocess.run(['gh', 'issue', 'edit', str(issue_info['number']), '--body', body], check=True)
+            else:
+                print(f"Skip (Already exists and no changes): {actual_title}")
     else:
         if is_closed_marked:
             # 「 closed」が書き込まれているのにGitHubに存在しない場合はスキップ（誤爆防止）
