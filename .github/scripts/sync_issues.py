@@ -18,7 +18,7 @@ try:
     existing_issues = {issue['title']: issue for issue in existing_issues_list}
 except Exception as e:
     print(f"Error fetching issues: {e}")
-    existing_titles = set()
+    existing_issues = {}
 
 # 空行（改行2つ以上）でブロックごとに分割
 blocks = re.split(r'\n\s*\n', content.strip())
