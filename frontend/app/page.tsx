@@ -97,7 +97,7 @@ export default function Home() {
 
   // 検索・画像操作ロジックをフックから取得
   const { 
-    results, statusMessage, handleSearch, toggleFavorite, loadMore, hasMore,
+    results, statusMessage, setStatusMessage, handleSearch, toggleFavorite, loadMore, hasMore,
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
@@ -301,6 +301,7 @@ export default function Home() {
           setIsHighAccuracy={setIsHighAccuracy}
           selectedIds={selectedIds}
           setSelectedIds={setSelectedIds}
+          setStatusMessage={setStatusMessage}
         />
       )}
     </div>

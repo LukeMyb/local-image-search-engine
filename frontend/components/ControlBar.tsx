@@ -13,6 +13,7 @@ interface ControlBarProps {
   setIsHighAccuracy: (accuracy: boolean) => void;
   selectedIds: number[];
   setSelectedIds: (ids: number[]) => void;
+  setStatusMessage: (msg: string) => void;
 }
 
 export default function ControlBar({
@@ -25,6 +26,7 @@ export default function ControlBar({
   setIsHighAccuracy,
   selectedIds,
   setSelectedIds,
+  setStatusMessage,
 }: ControlBarProps) {
   // アクションメニューの開閉状態を管理するState
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -63,11 +65,11 @@ export default function ControlBar({
       setSelectedIds([]);
       setIsSelectionMode(false);
       
-      alert(data.message); 
+      setStatusMessage(data.message); 
       
     } catch (error: any) {
       console.error("タグ作成エラー:", error);
-      alert(error.message || "タグの作成に失敗しました");
+      setStatusMessage(error.message || "タグの作成に失敗しました");
     }
   };
 
