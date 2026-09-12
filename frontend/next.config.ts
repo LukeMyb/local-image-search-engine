@@ -14,7 +14,7 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-const host = process.env.API_HOST || "100.88.57.78";
+const host = process.env.API_HOST || "127.0.0.1";
 const port = process.env.API_PORT || "8715";
 
 const nextConfig: NextConfig = {

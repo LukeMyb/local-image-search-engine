@@ -235,8 +235,9 @@ if __name__ == "__main__":
     # .env ファイルを読み込む
     load_dotenv()
     
-    # API_PORT を取得（デフォルト 8715）
+    # API_HOST と API_PORT を取得
+    host = os.getenv("API_HOST", "127.0.0.1")
     port = int(os.getenv("API_PORT", 8715))
     
     # uvicorn を起動
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host=host, port=port)
