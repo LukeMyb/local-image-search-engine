@@ -136,7 +136,7 @@ python -m tasks.vectorize_images
 python app.py
 ```
 
-ブラウザが起動し、ローカルサーバー（デフォルト: `http://localhost:3020`）でUIが表示されます。
+ブラウザが起動し、ローカルサーバー（デフォルト: `http://localhost:3715`）でUIが表示されます。
 
 ### 基本操作
 

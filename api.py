@@ -226,3 +226,17 @@ def delete_style(style_id: int):
     """
     search_manager.db.delete_style_tag(style_id)
     return {"status": "success", "message": "絵柄タグを削除しました"}
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+    from dotenv import load_dotenv
+
+    # .env ファイルを読み込む
+    load_dotenv()
+    
+    # API_PORT を取得（デフォルト 8715）
+    port = int(os.getenv("API_PORT", 8715))
+    
+    # uvicorn を起動
+    uvicorn.run(app, host="0.0.0.0", port=port)
