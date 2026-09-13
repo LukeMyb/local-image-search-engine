@@ -30,9 +30,23 @@ class SearchManagerLight:
 
         base_query = " ".join(parts[:-1]) + " " if len(parts) > 1 else ""
 
-        # 絵柄検索(style:)のサジェスト処理はサポートしない
+        # 絵柄検索(style:)のサジェスト処理（軽量モードでもDBから取得可能）
         if current_word.lower().startswith("style:"):
-            return []
+            styles = self.db.get_all_styles()
+            candidates = []
+            prefix = current_word.lower()
+            
+            for s in styles:
+                style_name = s['name']
+                if style_name.lower().startswith(prefix):
+                    candidates.append({
+                        "id": s['id'],           # DBから削除するためのID
+                        "is_style": True,        # ゴミ箱ボタンを表示するかどうかのフラグ
+                        "display": style_name,
+                        "query": base_query + style_name,
+                        "count": 0
+                    })
+            return candidates
             
         # 純粋なタグ検索のサジェストに丸投げ
         return self.tag_searcher.get_suggestions(query_text, limit)
