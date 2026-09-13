@@ -57,7 +57,16 @@ export function useImageSearch() {
 
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`);
-      if (!response.ok) throw new Error(`HTTPエラー: ${response.status}`);
+      if (!response.ok) {
+        let errorDetail = `HTTPエラー: ${response.status}`;
+        try {
+          const errData = await response.json();
+          if (errData.detail) errorDetail = errData.detail;
+        } catch (e) {
+          // JSONパースエラー時は無視
+        }
+        throw new Error(errorDetail);
+      }
 
       const data = await response.json();
 
@@ -69,9 +78,9 @@ export function useImageSearch() {
       setAllIds(ids);
       setResults(initialResults);
       setStatusMessage(`${data.total || ids.length}件のヒット`);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setStatusMessage("通信エラーが発生しました。");
+      setStatusMessage(error.message || "通信エラーが発生しました。");
     }
   };
 
