@@ -209,7 +209,14 @@ def create_style_tag(data: StyleTagCreate):
     # データベースに保存
     try:
         search_manager.db.save_style_tag(data.name, centroid)
-        print(f"[{data.name}] の保存が完了しました！")
+        
+        # --- キャッシュの作成を追加 ---
+        print(f"DEBUG: [{data.name}] の検索キャッシュを構築中...")
+        # 閾値0.98で検索結果を算出
+        results = style_searcher.search_by_style_name(data.name, threshold=0.98)
+        search_manager.db.save_style_cache(data.name, results)
+        
+        print(f"[{data.name}] の保存とキャッシュ構築が完了しました！")
         return {
             "status": "success", 
             "message": f"絵柄タグ '{data.name}' を作成しました"

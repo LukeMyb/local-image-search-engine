@@ -106,6 +106,17 @@ class ImageDatabase:
             )
         ''')
 
+        # 絵柄検索の軽量化のためのキャッシュテーブル
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS style_cache (
+                style_name TEXT NOT NULL,
+                image_id INTEGER NOT NULL,
+                score REAL NOT NULL,
+                PRIMARY KEY (style_name, image_id)
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_style_cache_name ON style_cache(style_name)')
+
         # 翻訳キャッシュ用のテーブルとインデックス
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS translation_cache (
@@ -335,6 +346,13 @@ class ImageDatabase:
     def delete_style_tag(self, style_id):
         """絵柄タグの削除"""
         cursor = self.conn.cursor()
+        # 名前を取得してキャッシュも削除する
+        cursor.execute('SELECT name FROM style_tags WHERE id = ?', (style_id,))
+        row = cursor.fetchone()
+        if row:
+            style_name = row['name']
+            cursor.execute('DELETE FROM style_cache WHERE style_name = ?', (style_name,))
+            
         cursor.execute('DELETE FROM style_tags WHERE id = ?', (style_id,))
         self.conn.commit()
         
@@ -347,6 +365,30 @@ class ImageDatabase:
             WHERE name = ?
         ''', (name,))
         self.conn.commit()
+
+    def save_style_cache(self, style_name, results_list):
+        """絵柄タグの検索結果（キャッシュ）を保存する"""
+        cursor = self.conn.cursor()
+        # 古いキャッシュを削除
+        cursor.execute('DELETE FROM style_cache WHERE style_name = ?', (style_name,))
+        
+        # 新しいキャッシュを一括保存
+        if results_list:
+            # results_list は [{'id': 123, 'match_score': 0.99}, ...] の想定
+            data_to_insert = [(style_name, res['id'], res['match_score']) for res in results_list]
+            cursor.executemany('''
+                INSERT INTO style_cache (style_name, image_id, score)
+                VALUES (?, ?, ?)
+            ''', data_to_insert)
+        self.conn.commit()
+
+    def get_style_cache(self, style_name):
+        """保存された絵柄タグの検索結果（キャッシュ）を辞書として取得する"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT image_id, score FROM style_cache WHERE style_name = ?', (style_name,))
+        rows = cursor.fetchall()
+        # {image_id: score} の辞書を返す
+        return {row['image_id']: row['score'] for row in rows}
 
     # ----- 翻訳キャッシュ関連メソッド -----
 

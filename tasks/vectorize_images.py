@@ -138,6 +138,22 @@ class StyleVectorizer:
         faiss.write_index(self.index, str(self.index_path))
         print(f"インデックスを保存しました: {self.index_path}")
 
+        # --- 絵柄キャッシュの自動更新処理 ---
+        print("\n既存の絵柄タグの検索キャッシュを最新状態に更新中...")
+        try:
+            from core.style_search import StyleSearcher
+            # このスクリプトで更新されたばかりのインデックスファイルを読み込ませる
+            style_engine = StyleSearcher(self.db, self.index_path)
+            styles = self.db.get_all_styles()
+            for style in styles:
+                style_name = style["name"]
+                results = style_engine.search_by_style_name(style_name, threshold=0.98)
+                self.db.save_style_cache(style_name, results)
+            print(f"-> {len(styles)}件の絵柄キャッシュを更新完了しました。")
+        except Exception as e:
+            print(f"-> キャッシュの更新中にエラーが発生しました: {e}")
+
+
 if __name__ == "__main__":
     print("=== 絵柄ベクトル生成プロセスを開始します ===")
     
