@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Search, X, Menu, BookmarkPlus, BookmarkCheck, Trash2 } from "lucide-react";
+import { Search, X, Menu, BookmarkPlus, BookmarkCheck, Trash2, Heart } from "lucide-react";
 
 // サジェストの型定義
 interface Suggestion {
@@ -42,6 +42,7 @@ export default function SearchBar({
   // 枠外クリック検知用のRefと、削除ダイアログ用のState
   const searchBarRef = useRef<HTMLDivElement>(null);
   const [styleToDelete, setStyleToDelete] = useState<Suggestion | null>(null);
+  const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
 
   // クエリが変更されたら、少し遅れてAPIを叩く（デバウンス処理）
   useEffect(() => {
@@ -173,6 +174,20 @@ export default function SearchBar({
           ) : (
             <BookmarkPlus size={16} />
           )}
+        </button>
+
+        {/* お気に入りフィルターボタン（モック） */}
+        <button 
+          type="button"
+          onClick={() => setIsFavoriteFilter(!isFavoriteFilter)}
+          className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+            isFavoriteFilter 
+              ? "bg-[#27272a] hover:bg-zinc-700 text-white"
+              : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
+          }`}
+          title="お気に入りのみ表示"
+        >
+          <Heart size={16} className={isFavoriteFilter ? "fill-current" : ""} />
         </button>
       </div>
 
