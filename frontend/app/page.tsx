@@ -146,6 +146,23 @@ export default function Home() {
       "dark brown hair", "dark_brown_hair",
     ];
 
+    // 色に関する明確な目の色タグの辞書（配列）
+    const validEyeColors = [
+      "blue eyes", "blue_eyes",
+      "red eyes", "red_eyes",
+      "brown eyes", "brown_eyes",
+      "green eyes", "green_eyes",
+      "purple eyes", "purple_eyes",
+      "yellow eyes", "yellow_eyes",
+      "pink eyes", "pink_eyes",
+      "black eyes", "black_eyes",
+      "aqua eyes", "aqua_eyes",
+      "orange eyes", "orange_eyes",
+      "grey eyes", "grey_eyes", "gray eyes", "gray_eyes",
+      "white eyes", "white_eyes",
+      "multicolored eyes", "multicolored_eyes",
+    ];
+
     // マルチカラー系のタグ（AND検索にするもの）
     const multicolorKeywords = ["multicolored", "two-tone", "streaked", "colored inner"];
 
@@ -179,6 +196,21 @@ export default function Home() {
     if (normalTags.length > 0) {
       // 通常の髪色タグもOR検索 ( | 区切り )
       queryParts.push(normalTags.join('|'));
+    }
+
+    // 目の色の処理
+    const hasClosedEyes = tags.includes("closed eyes") || tags.includes("closed_eyes");
+    if (hasClosedEyes) {
+      // 目が閉じている場合は目の色による絞り込みはせず、closed_eyesをORグループとして追加
+      queryParts.push("closed_eyes");
+    } else {
+      // 目の色のタグがあれば抽出
+      const eyeTags = tags.filter((t: string) => validEyeColors.includes(t));
+      if (eyeTags.length > 0) {
+        // 目の色のタグも空白をアンダースコアに変換して、複数あれば OR ( | ) で繋ぐ
+        const formattedEyeTags = eyeTags.map((t: string) => t.replace(/\s+/g, '_'));
+        queryParts.push(formattedEyeTags.join('|'));
+      }
     }
 
     const newQuery = queryParts.join(' ').trim();
