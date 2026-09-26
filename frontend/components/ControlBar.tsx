@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckSquare, SortDesc, Zap, Target, X, MoreHorizontal, Tag } from "lucide-react";
+import { CheckSquare, SortDesc, X, MoreHorizontal, Tag, Shuffle } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 // 親（page.tsx）から受け取るプロパティの型定義
@@ -9,8 +9,6 @@ interface ControlBarProps {
   setIsSelectionMode: (mode: boolean) => void;
   sortText: string;
   toggleSortOrder: () => void;
-  isHighAccuracy: boolean;
-  setIsHighAccuracy: (accuracy: boolean) => void;
   selectedIds: number[];
   setSelectedIds: (ids: number[]) => void;
   setStatusMessage: (msg: string) => void;
@@ -22,8 +20,6 @@ export default function ControlBar({
   setIsSelectionMode,
   sortText,
   toggleSortOrder,
-  isHighAccuracy,
-  setIsHighAccuracy,
   selectedIds,
   setSelectedIds,
   setStatusMessage,
@@ -106,14 +102,15 @@ export default function ControlBar({
 
             <div className="w-px h-5 bg-zinc-700 mx-0.5 shrink-0"></div>
 
-            {/* 検索精度切り替えボタン */}
+            {/* ランダム表示ボタン（モック） */}
             <button
-              onClick={() => setIsHighAccuracy(!isHighAccuracy)}
+              onClick={() => {}}
               className="flex flex-row items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-zinc-700 transition-colors text-zinc-300"
+              title="ランダムに画像を表示"
             >
-              {isHighAccuracy ? <Target size={16} /> : <Zap size={16} className="text-yellow-400" />}
+              <Shuffle size={16} />
               <span className="text-sm font-medium whitespace-nowrap">
-                {isHighAccuracy ? "高精度" : "高速"}
+                ランダム
               </span>
             </button>
             

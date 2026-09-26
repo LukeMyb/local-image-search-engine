@@ -93,9 +93,6 @@ export default function Home() {
   // 表示するソート文字列の決定
   const sortText = sortOrder === "score" ? "スコア順" : sortOrder === "favorite" ? "お気に入り" : "新着順";
 
-  // 検索精度モードの見た目切り替え用ステート
-  const [isHighAccuracy, setIsHighAccuracy] = useState(true);
-
   // 選択された画像のIDリストを管理するState
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
@@ -317,8 +314,6 @@ export default function Home() {
           setIsSelectionMode={setIsSelectionMode}
           sortText={sortText}
           toggleSortOrder={toggleSortOrder}
-          isHighAccuracy={isHighAccuracy}
-          setIsHighAccuracy={setIsHighAccuracy}
           selectedIds={selectedIds}
           setSelectedIds={setSelectedIds}
           setStatusMessage={setStatusMessage}
