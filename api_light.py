@@ -63,23 +63,40 @@ def get_thumbnail(image_id: int):
     return FileResponse(image_data['thumbnail_path'])
 
 @app.get("/search")
-def search(q: str, sort: str = "score", favorite_only: bool = False):
+def search(q: str = "", sort: str = "score", favorite_only: bool = False):
     """
     検索クエリ(q)を受け取り、検索結果をJSONで返す
     """
-    try:
-        style_match = re.search(r'style:([^\s|]+)', q)
-        if style_match:
-            style_name = style_match.group(0)
-            search_manager.db.update_style_usage(style_name)
-    except Exception as e:
-        print(f"履歴の保存に失敗しました: {e}")
+    if not q.strip():
+        # クエリが空なら全件検索 (SQLでソート)
+        cursor = search_manager.db.conn.cursor()
+        query_sql = "SELECT * FROM images"
+        if favorite_only:
+            query_sql += " WHERE is_favorite = 1"
+            
+        if sort == "newest":
+            query_sql += " ORDER BY file_mtime DESC"
+        elif sort == "favorite":
+            query_sql += " ORDER BY is_favorite DESC, file_mtime DESC"
+        else:
+            query_sql += " ORDER BY file_mtime DESC"
+            
+        cursor.execute(query_sql)
+        results = [dict(row) for row in cursor.fetchall()]
+    else:
+        try:
+            style_match = re.search(r'style:([^\s|]+)', q)
+            if style_match:
+                style_name = style_match.group(0)
+                search_manager.db.update_style_usage(style_name)
+        except Exception as e:
+            print(f"履歴の保存に失敗しました: {e}")
 
-    results = search_manager.search(q, sort_order=sort)
+        results = search_manager.search(q, sort_order=sort)
 
-    # お気に入りのみフィルターがONの場合は絞り込む
-    if favorite_only:
-        results = [img for img in results if img.get("is_favorite") == 1]
+        # お気に入りのみフィルターがONの場合は絞り込む
+        if favorite_only:
+            results = [img for img in results if img.get("is_favorite") == 1]
 
     all_ids = [img["id"] for img in results]
     initial_results = results[:100]
