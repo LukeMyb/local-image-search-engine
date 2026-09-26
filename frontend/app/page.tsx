@@ -86,6 +86,7 @@ export default function Home() {
   const toggleFavoriteFilter = () => {
     const nextState = !isFavoriteFilter;
     setIsFavoriteFilter(nextState);
+    localStorage.setItem("isFavoriteFilter", String(nextState)); // 切り替えた瞬間にlocalStorageに保存する
     handleSearch(query, sortOrder, undefined, undefined, nextState);
   };
 
@@ -191,12 +192,17 @@ export default function Home() {
     const savedColsMobile = localStorage.getItem("gridColsMobile");
     if (savedColsMobile) setGridColsMobile(parseInt(savedColsMobile, 10));
 
+    // localStorageからお気に入りフィルター状態を読み込む
+    const savedFavoriteFilterStr = localStorage.getItem("isFavoriteFilter");
+    const savedFavoriteFilter = savedFavoriteFilterStr === "true";
+    setIsFavoriteFilter(savedFavoriteFilter);
+
     // 前回の検索クエリを復元し、初期検索を走らせる
     const restoreLastQuery = () => {
       // localStorageから読み込んで検索を実行する
       const lastQuery = localStorage.getItem("lastQuery") || "";
       setQuery(lastQuery);
-      handleSearch(lastQuery, savedSort, undefined, undefined, isFavoriteFilter);
+      handleSearch(lastQuery, savedSort, undefined, undefined, savedFavoriteFilter);
     };
 
     restoreLastQuery();
