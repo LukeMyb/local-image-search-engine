@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import re
+import random
 from pydantic import BaseModel
 from typing import List
 
@@ -106,6 +107,10 @@ def search(q: str = "", sort: str = "score", favorite_only: bool = False):
         # お気に入りのみフィルターがONの場合は絞り込む
         if favorite_only:
             results = [img for img in results if img.get("is_favorite") == 1]
+
+    # ランダム表示が要求された場合はシャッフルする
+    if sort == "random":
+        random.shuffle(results)
 
     # 検索結果からIDだけをすべて抽出し、表示用は最初の100件で切り出す
     all_ids = [img["id"] for img in results]

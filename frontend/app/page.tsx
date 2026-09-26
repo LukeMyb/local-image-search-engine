@@ -90,6 +90,11 @@ export default function Home() {
     handleSearch(query, sortOrder, undefined, undefined, nextState);
   };
 
+  // 現在のクエリとフィルターを維持したまま、並び順をランダムにして再検索する
+  const executeRandomSearch = () => {
+    handleSearch(query, "random", undefined, undefined, isFavoriteFilter);
+  };
+
   // 表示するソート文字列の決定
   const sortText = sortOrder === "score" ? "スコア順" : sortOrder === "favorite" ? "お気に入り" : "新着順";
 
@@ -317,6 +322,7 @@ export default function Home() {
           selectedIds={selectedIds}
           setSelectedIds={setSelectedIds}
           setStatusMessage={setStatusMessage}
+          executeRandomSearch={executeRandomSearch}
         />
       )}
     </div>

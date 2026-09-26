@@ -47,7 +47,12 @@ export function useImageSearch() {
     // クエリをlocalStorageに保存する
     localStorage.setItem("lastQuery", currentQuery);
 
-    const endpoint = `/search?q=${encodeURIComponent(currentQuery)}&sort=${sortOrder}${isFavoriteFilter ? '&favorite_only=true' : ''}`;
+    let endpoint = `/search?q=${encodeURIComponent(currentQuery)}&sort=${sortOrder}${isFavoriteFilter ? '&favorite_only=true' : ''}`;
+    
+    // ランダムソート時はキャッシュを回避して毎回新しいシャッフルを得る
+    if (sortOrder === "random") {
+      endpoint += `&_t=${Date.now()}`;
+    }
 
     setStatusMessage(currentQuery ? `「${currentQuery}」を検索中...` : `全件表示中...`);
     setResults([]); // 検索開始時に前の画像をクリア

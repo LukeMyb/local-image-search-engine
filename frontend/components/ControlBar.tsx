@@ -12,6 +12,7 @@ interface ControlBarProps {
   selectedIds: number[];
   setSelectedIds: (ids: number[]) => void;
   setStatusMessage: (msg: string) => void;
+  executeRandomSearch: () => void;
 }
 
 export default function ControlBar({
@@ -23,6 +24,7 @@ export default function ControlBar({
   selectedIds,
   setSelectedIds,
   setStatusMessage,
+  executeRandomSearch,
 }: ControlBarProps) {
   // アクションメニューの開閉状態を管理するState
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -102,11 +104,11 @@ export default function ControlBar({
 
             <div className="w-px h-5 bg-zinc-700 mx-0.5 shrink-0"></div>
 
-            {/* ランダム表示ボタン（モック） */}
+            {/* ランダム表示ボタン */}
             <button
-              onClick={() => {}}
+              onClick={executeRandomSearch}
               className="flex flex-row items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-zinc-700 transition-colors text-zinc-300"
-              title="ランダムに画像を表示"
+              title="グリッドをランダムに並び替える"
             >
               <Shuffle size={16} />
               <span className="text-sm font-medium whitespace-nowrap">
