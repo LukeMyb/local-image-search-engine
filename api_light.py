@@ -63,7 +63,7 @@ def get_thumbnail(image_id: int):
     return FileResponse(image_data['thumbnail_path'])
 
 @app.get("/search")
-def search(q: str, sort: str = "score"):
+def search(q: str, sort: str = "score", favorite_only: bool = False):
     """
     検索クエリ(q)を受け取り、検索結果をJSONで返す
     """
@@ -76,6 +76,10 @@ def search(q: str, sort: str = "score"):
         print(f"履歴の保存に失敗しました: {e}")
 
     results = search_manager.search(q, sort_order=sort)
+
+    # お気に入りのみフィルターがONの場合は絞り込む
+    if favorite_only:
+        results = [img for img in results if img.get("is_favorite") == 1]
 
     all_ids = [img["id"] for img in results]
     initial_results = results[:100]

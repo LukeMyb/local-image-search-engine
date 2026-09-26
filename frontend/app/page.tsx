@@ -57,6 +57,19 @@ export default function Home() {
   const [gridColsPC, setGridColsPC] = useState(6);
   const [gridColsMobile, setGridColsMobile] = useState(3);
 
+  // ビューアーのUI表示状態を管理するState（初期値はtrue）
+  const [isViewerUIVisible, setIsViewerUIVisible] = useState(true);
+
+  // お気に入りフィルターのON/OFF状態を管理するState
+  const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
+
+  // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
+  const toggleSelection = (id: number) => {
+    setSelectedIds((prev) => 
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
   // ソート順をローテーションで切り替える関数
   const toggleSortOrder = () => {
     let nextSort: "score" | "favorite" | "newest";
@@ -66,7 +79,14 @@ export default function Home() {
     
     setSortOrder(nextSort);
     localStorage.setItem("sortOrder", nextSort); // 切り替えた瞬間にlocalStorageに保存する
-    handleSearch(query, nextSort); // ソートを切り替えた瞬間に再検索を実行
+    handleSearch(query, nextSort, undefined, undefined, isFavoriteFilter); // ソートを切り替えた瞬間に再検索を実行
+  };
+
+  // お気に入りフィルターのトグル処理
+  const toggleFavoriteFilter = () => {
+    const nextState = !isFavoriteFilter;
+    setIsFavoriteFilter(nextState);
+    handleSearch(query, sortOrder, undefined, undefined, nextState);
   };
 
   // 表示するソート文字列の決定
@@ -78,15 +98,6 @@ export default function Home() {
   // 選択された画像のIDリストを管理するState
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  // ビューアーのUI表示状態を管理するState（初期値はtrue）
-  const [isViewerUIVisible, setIsViewerUIVisible] = useState(true);
-
-  // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
-  const toggleSelection = (id: number) => {
-    setSelectedIds((prev) => 
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
 
   // 選択モードがOFFになったら、選択されている画像を自動リセットする
   useEffect(() => {
@@ -185,7 +196,7 @@ export default function Home() {
       // localStorageから読み込んで検索を実行する
       const lastQuery = localStorage.getItem("lastQuery") || "";
       setQuery(lastQuery);
-      handleSearch(lastQuery, savedSort);
+      handleSearch(lastQuery, savedSort, undefined, undefined, isFavoriteFilter);
     };
 
     restoreLastQuery();
@@ -201,7 +212,7 @@ export default function Home() {
         <SearchBar 
           query={query}
           setQuery={setQuery}
-          onSearch={(e) => handleSearch(query, sortOrder, e)}
+          onSearch={(e) => handleSearch(query, sortOrder, e, undefined, isFavoriteFilter)}
           setIsDrawerOpen={setIsDrawerOpen}
           openBookmarkDialog={openBookmarkDialog}
           savedQueries={savedQueries}
@@ -211,6 +222,9 @@ export default function Home() {
           setIsSuggestOpen={setIsSuggestOpen}
           fetchSuggestions={fetchSuggestions}
           deleteStyleTag={deleteStyleTag}
+          // お気に入りフィルター
+          isFavoriteFilter={isFavoriteFilter}
+          onToggleFavoriteFilter={toggleFavoriteFilter}
         />
       </div>
 
@@ -283,7 +297,7 @@ export default function Home() {
         setIsSaveDialogOpen={setIsSaveDialogOpen}
         query={query}
         setQuery={setQuery}
-        handleSearch={(e, oq) => handleSearch(query, sortOrder, e, oq)}
+        handleSearch={(e, oq) => handleSearch(query, sortOrder, e, oq, isFavoriteFilter)}
         allBookmarks={allBookmarks}
         savedQueries={savedQueries}
         refreshSavedQueries={refreshSavedQueries}

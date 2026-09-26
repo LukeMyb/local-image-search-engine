@@ -23,6 +23,9 @@ interface SearchBarProps {
   setIsSuggestOpen: (open: boolean) => void;
   fetchSuggestions: (q: string) => void;
   deleteStyleTag: (id: number) => Promise<void>;
+  // お気に入りフィルター用のProps
+  isFavoriteFilter: boolean;
+  onToggleFavoriteFilter: () => void;
 }
 
 export default function SearchBar({
@@ -38,11 +41,13 @@ export default function SearchBar({
   setIsSuggestOpen,
   fetchSuggestions,
   deleteStyleTag,
+  // お気に入りフィルター
+  isFavoriteFilter,
+  onToggleFavoriteFilter,
 }: SearchBarProps) {
   // 枠外クリック検知用のRefと、削除ダイアログ用のState
   const searchBarRef = useRef<HTMLDivElement>(null);
   const [styleToDelete, setStyleToDelete] = useState<Suggestion | null>(null);
-  const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
 
   // クエリが変更されたら、少し遅れてAPIを叩く（デバウンス処理）
   useEffect(() => {
@@ -179,7 +184,7 @@ export default function SearchBar({
         {/* お気に入りフィルターボタン（モック） */}
         <button 
           type="button"
-          onClick={() => setIsFavoriteFilter(!isFavoriteFilter)}
+          onClick={onToggleFavoriteFilter}
           className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
             isFavoriteFilter 
               ? "bg-[#27272a] hover:bg-zinc-700 text-white"
