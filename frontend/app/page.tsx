@@ -194,8 +194,13 @@ export default function Home() {
       queryParts.push(multiTags.join('|'));
     }
     if (normalTags.length > 0) {
-      // 通常の髪色タグもOR検索 ( | 区切り )
-      queryParts.push(normalTags.join('|'));
+      if (multiTags.length > 0) {
+        // マルチカラーが含まれる場合は、混色を意図していると見なし AND (空白区切り) で繋ぐ
+        queryParts.push(normalTags.join(' '));
+      } else {
+        // 通常の髪色タグのみの場合は、表記揺れや複数キャラ対応のため OR ( | 区切り ) で繋ぐ
+        queryParts.push(normalTags.join('|'));
+      }
     }
 
     // 目の色の処理
