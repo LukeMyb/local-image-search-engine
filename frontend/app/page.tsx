@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSystemUI } from "../hooks/useSystemUI";
 import { useImageSearch } from "../hooks/useImageSearch";
 import { useDrawerSwipe } from "../hooks/useDrawerSwipe";
@@ -90,10 +90,7 @@ export default function Home() {
     handleSearch(query, sortOrder, undefined, undefined, nextState);
   };
 
-  // 現在のクエリとフィルターを維持したまま、並び順をランダムにして再検索する
-  const executeRandomSearch = () => {
-    handleSearch(query, "random", undefined, undefined, isFavoriteFilter);
-  };
+
 
   // 表示するソート文字列の決定
   const sortText = sortOrder === "score" ? "スコア順" : sortOrder === "favorite" ? "お気に入り" : "新着順";
@@ -115,6 +112,59 @@ export default function Home() {
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
+
+  // 現在のクエリとフィルターを維持したまま、並び順をランダムにして再検索する
+  const executeRandomSearch = () => {
+    handleSearch(query, "random", undefined, undefined, isFavoriteFilter);
+  };
+
+  // 類似画像（同じ髪色）を検索する関数
+  const executeSearchSimilar = useCallback((image: any) => {
+    if (!image || !image.tags_combined) {
+      alert("この画像にはタグ情報がありません。");
+      return;
+    }
+
+    // カンマ区切りのタグ文字列を配列に分割
+    const tags = image.tags_combined.split(',').map((t: string) => t.trim().toLowerCase());
+    
+    // hair で終わるタグの中から髪色らしいものを抽出（空白やアンダースコアに対応）
+    const hairTags = tags.filter((t: string) => t.endsWith('_hair') || t.endsWith(' hair'));
+    
+    if (hairTags.length === 0) {
+      alert("この画像には髪色のタグがありません。");
+      return;
+    }
+
+    // マルチカラー系のタグ（AND検索にするもの）
+    const multicolorKeywords = ["multicolored", "two-tone", "streaked", "colored inner"];
+    // 検索窓の仕様（空白はAND、| はOR）に合わせるため、抽出したタグの内部の空白を _ に置換しておく
+    const multiTags = hairTags
+      .filter((t: string) => multicolorKeywords.some(k => t.includes(k)))
+      .map((t: string) => t.replace(/\s+/g, '_'));
+
+    const normalTags = hairTags
+      .filter((t: string) => !multicolorKeywords.some(k => t.includes(k)))
+      .map((t: string) => t.replace(/\s+/g, '_'));
+
+    const queryParts = [];
+    if (multiTags.length > 0) {
+      // マルチカラー系はAND検索 (空白区切り)
+      queryParts.push(multiTags.join(' '));
+    }
+    if (normalTags.length > 0) {
+      // 通常の髪色タグはOR検索 ( | 区切り)
+      queryParts.push(normalTags.join('|'));
+    }
+
+    const newQuery = queryParts.join(' ').trim();
+
+    if (newQuery) {
+      setQuery(newQuery);
+      setSelectedImage(null); // ビューアーを閉じる
+      handleSearch(newQuery, "score", undefined, undefined, isFavoriteFilter);
+    }
+  }, [handleSearch, isFavoriteFilter]);
 
   // システム制御（ズーム禁止・スクロールロック）を有効化
   useSystemUI({ selectedImage, isDrawerOpen });
@@ -281,6 +331,7 @@ export default function Home() {
             nextImage={nextImage}
             onClose={() => setSelectedImage(null)} 
             onToggleFavorite={(id, e) => toggleFavorite(id, e, selectedImage, setSelectedImage)}
+            onSearchSimilar={executeSearchSimilar}
             onNext={() => hasSubsequent && setSelectedImage(results[currentIndex + 1])}
             onPrev={() => hasPreceding && setSelectedImage(results[currentIndex - 1])}
             hasPreceding={hasPreceding}

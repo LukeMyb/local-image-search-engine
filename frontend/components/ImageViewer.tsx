@@ -19,6 +19,7 @@ interface ImageViewerProps {
 
   onClose: () => void;
   onToggleFavorite: (id: number, e: React.MouseEvent) => void;
+  onSearchSimilar?: (image: SearchResult) => void;
 
   // 前後移動用のアクションと判定フラグ
   onNext?: () => void;
@@ -33,6 +34,7 @@ export default function ImageViewer({
   selectedImage,
   onClose,
   onToggleFavorite,
+  onSearchSimilar,
   onNext,
   onPrev,
   prevImage,
@@ -452,14 +454,19 @@ export default function ImageViewer({
           </div>
         </button>
 
-        {/* 類似画像検索ボタン（モック） */}
+        {/* 類似画像検索ボタン */}
         <button
-          onClick={(e) => { e.stopPropagation(); /* TODO: 類似画像検索機能の実装 */ }}
+          onClick={(e) => { 
+            e.stopPropagation();
+            if (onSearchSimilar) {
+              onSearchSimilar(selectedImage);
+            }
+          }}
           // 外側の button: 透明な大きなパディングを持たせ、画面の右下カドの広範囲を当たり判定にする
           className={`absolute bottom-0 right-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
             isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'
           }`}
-          title="類似画像を検索"
+          title="類似画像（同じ髪色）を検索"
         >
           {/* 内側の div: 実際の見た目 */}
           <div className="p-3 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg gap-2">
