@@ -125,19 +125,43 @@ export default function Home() {
       return;
     }
 
+    // 色に関する明確な髪色タグの辞書（配列）
+    const validHairColors = [
+      "blonde hair", "blonde_hair",
+      "brown hair", "brown_hair",
+      "black hair", "black_hair",
+      "blue hair", "blue_hair",
+      "purple hair", "purple_hair",
+      "pink hair", "pink_hair",
+      "white hair", "white_hair",
+      "red hair", "red_hair",
+      "grey hair", "grey_hair", "gray hair", "gray_hair",
+      "green hair", "green_hair",
+      "silver hair", "silver_hair",
+      "orange hair", "orange_hair",
+      "aqua hair", "aqua_hair",
+      "light blue hair", "light_blue_hair",
+      "light green hair", "light_green_hair",
+      "dark blue hair", "dark_blue_hair",
+      "dark brown hair", "dark_brown_hair",
+    ];
+
+    // マルチカラー系のタグ（AND検索にするもの）
+    const multicolorKeywords = ["multicolored", "two-tone", "streaked", "colored inner"];
+
     // カンマ区切りのタグ文字列を配列に分割
     const tags = image.tags_combined.split(',').map((t: string) => t.trim().toLowerCase());
     
-    // hair で終わるタグの中から髪色らしいものを抽出（空白やアンダースコアに対応）
-    const hairTags = tags.filter((t: string) => t.endsWith('_hair') || t.endsWith(' hair'));
+    // 定義した髪色タグに含まれるものだけを抽出（wet_hair 等を除外）
+    const hairTags = tags.filter((t: string) => 
+      validHairColors.includes(t) || multicolorKeywords.some(k => t.includes(k) && (t.endsWith(' hair') || t.endsWith('_hair')))
+    );
     
     if (hairTags.length === 0) {
       alert("この画像には髪色のタグがありません。");
       return;
     }
 
-    // マルチカラー系のタグ（AND検索にするもの）
-    const multicolorKeywords = ["multicolored", "two-tone", "streaked", "colored inner"];
     // 検索窓の仕様（空白はAND、| はOR）に合わせるため、抽出したタグの内部の空白を _ に置換しておく
     const multiTags = hairTags
       .filter((t: string) => multicolorKeywords.some(k => t.includes(k)))
@@ -149,11 +173,11 @@ export default function Home() {
 
     const queryParts = [];
     if (multiTags.length > 0) {
-      // マルチカラー系はAND検索 (空白区切り)
-      queryParts.push(multiTags.join(' '));
+      // マルチカラー系同士はOR検索 ( | 区切り )
+      queryParts.push(multiTags.join('|'));
     }
     if (normalTags.length > 0) {
-      // 通常の髪色タグはOR検索 ( | 区切り)
+      // 通常の髪色タグもOR検索 ( | 区切り )
       queryParts.push(normalTags.join('|'));
     }
 
