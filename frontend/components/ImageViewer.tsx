@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { X, Heart, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Heart, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 // 検索結果のデータ構造を定義
@@ -444,11 +444,27 @@ export default function ImageViewer({
           }`}
         >
           {/* 内側の div: 実際の見た目 */}
-          <div className="p-3 bg-black/50 text-white group-hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
+          <div className="p-3 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
             <Heart 
               size={26} 
               className={selectedImage.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
             />
+          </div>
+        </button>
+
+        {/* 類似画像検索ボタン（モック） */}
+        <button
+          onClick={(e) => { e.stopPropagation(); /* TODO: 類似画像検索機能の実装 */ }}
+          // 外側の button: 透明な大きなパディングを持たせ、画面の右下カドの広範囲を当たり判定にする
+          className={`absolute bottom-0 right-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
+            isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'
+          }`}
+          title="類似画像を検索"
+        >
+          {/* 内側の div: 実際の見た目 */}
+          <div className="p-3 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg gap-2">
+            <Search size={22} />
+            <span className="text-sm font-medium pr-1 hidden sm:inline">類似画像</span>
           </div>
         </button>
 
