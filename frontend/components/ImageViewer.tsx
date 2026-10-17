@@ -440,13 +440,13 @@ export default function ImageViewer({
         {/* お気に入り（ハート）ボタン */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(selectedImage.id, e); }}
-          // 外側の button: 透明な大きなパディングを持たせ、画面の左下カドの広範囲を当たり判定にする
-          className={`absolute bottom-0 left-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
+          // 外側の button: 見た目の位置（左・下パディング）は維持しつつ、上・右に透明な大きなパディングを持たせて左下カドの広範囲を当たり判定にする
+          className={`absolute bottom-0 left-0 pb-4 pl-4 pt-12 pr-12 sm:pb-6 sm:pl-6 sm:pt-16 sm:pr-16 z-20 group cursor-pointer outline-none transition-all duration-300 ease-out ${
             isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'
           }`}
         >
           {/* 内側の div: 実際の見た目 */}
-          <div className="p-3 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
+          <div className="p-3 bg-black/50 text-white group-hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
             <Heart 
               size={26} 
               className={selectedImage.is_favorite === 1 ? "fill-red-500 text-red-500" : "text-white"} 
