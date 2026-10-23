@@ -89,10 +89,10 @@ export default function ImageViewer({
   // アニメーションの重複やタップによる干渉を防ぐためのロック用フラグ
   const isProcessingQueue = useRef(false);
 
-  // バウンス（ラバーバンド）の減衰係数
-  const PAN_RUBBER_FACTOR = 0.3;
-  const ZOOM_RUBBER_FACTOR = 0.35;
-  const MIN_BOUNCE_SCALE = 0.65;
+  // iOSライクな非線形ラバーバンド（出だしは柔らかく、引っ張るほど滑らかに抵抗が増す曲線）のパラメータ
+  const PAN_RUBBER_CONSTANT = 0.55;
+  const ZOOM_RUBBER_CONSTANT = 0.65;
+  const ZOOM_MAX_SHRINK = 0.5; // 等倍から最大0.5倍（1 - 0.5）に向かって漸近的に減衰
 
   // 2本指の距離をピクセル単位で計算する関数
   const getTouchDistance = (touches: React.TouchList) => {
@@ -123,35 +123,51 @@ export default function ImageViewer({
     };
   }, [getPanBounds]);
 
-  // 端を超えた移動に対してラバーバンド（抵抗感）をかけて少しだけはみ出させる関数
+  // 端を超えた移動に対して、非線形ラバーバンド曲線でなめらかに減衰させる関数
   const applyRubberBandPan = useCallback((nextPanX: number, nextPanY: number, scale: number) => {
     const { maxPanX, maxPanY } = getPanBounds(scale);
+    const dimX = typeof window !== "undefined" ? window.innerWidth : 400;
+    const dimY = typeof window !== "undefined" ? window.innerHeight : 800;
 
-    const rubberBand = (val: number, max: number) => {
-      if (val > max) return max + (val - max) * PAN_RUBBER_FACTOR;
-      if (val < -max) return -max + (val + max) * PAN_RUBBER_FACTOR;
+    const rubberBand = (val: number, max: number, dim: number) => {
+      if (val > max) {
+        const overscroll = val - max;
+        return max + (overscroll * dim * PAN_RUBBER_CONSTANT) / (dim + PAN_RUBBER_CONSTANT * overscroll);
+      }
+      if (val < -max) {
+        const overscroll = -max - val;
+        return -max - (overscroll * dim * PAN_RUBBER_CONSTANT) / (dim + PAN_RUBBER_CONSTANT * overscroll);
+      }
       return val;
     };
 
     return {
-      x: rubberBand(nextPanX, maxPanX),
-      y: rubberBand(nextPanY, maxPanY),
+      x: rubberBand(nextPanX, maxPanX, dimX),
+      y: rubberBand(nextPanY, maxPanY, dimY),
     };
   }, [getPanBounds]);
 
-  // ラバーバンド適用済みの座標から、元のドラッグ基準座標を逆算する関数（指の切り替え時のジャンプ防止用）
+  // 非線形ラバーバンド適用済みの座標から、元のドラッグ基準座標を逆算する関数（指の切り替え時のジャンプ防止用）
   const invertRubberBandPan = useCallback((currentPanX: number, currentPanY: number, scale: number) => {
     const { maxPanX, maxPanY } = getPanBounds(scale);
+    const dimX = typeof window !== "undefined" ? window.innerWidth : 400;
+    const dimY = typeof window !== "undefined" ? window.innerHeight : 800;
 
-    const invert = (val: number, max: number) => {
-      if (val > max) return max + (val - max) / PAN_RUBBER_FACTOR;
-      if (val < -max) return -max + (val + max) / PAN_RUBBER_FACTOR;
+    const invert = (val: number, max: number, dim: number) => {
+      if (val > max) {
+        const y = Math.min(val - max, dim * 0.99);
+        return max + (y * dim) / (PAN_RUBBER_CONSTANT * (dim - y));
+      }
+      if (val < -max) {
+        const y = Math.min(-max - val, dim * 0.99);
+        return -max - (y * dim) / (PAN_RUBBER_CONSTANT * (dim - y));
+      }
       return val;
     };
 
     return {
-      x: invert(currentPanX, maxPanX),
-      y: invert(currentPanY, maxPanY),
+      x: invert(currentPanX, maxPanX, dimX),
+      y: invert(currentPanY, maxPanY, dimY),
     };
   }, [getPanBounds]);
 
@@ -348,12 +364,22 @@ export default function ImageViewer({
       const currentDist = getTouchDistance(e.touches);
       const rawScale = pinchStartScaleRef.current * (currentDist / pinchStartDistRef.current);
 
-      // 等倍（1倍）未満に縮小した時はラバーバンド（抵抗感）をかけて少しだけ等倍を通り越させる
+      // 等倍（1倍）未満に縮小した時は非線形ラバーバンド曲線でなめらかに減衰させる
       let newScale: number;
       if (rawScale < 1) {
-        newScale = Math.max(MIN_BOUNCE_SCALE, 1 - (1 - rawScale) * ZOOM_RUBBER_FACTOR);
+        const overshoot = 1 - rawScale;
+        const shrink =
+          (overshoot * ZOOM_MAX_SHRINK * ZOOM_RUBBER_CONSTANT) /
+          (ZOOM_MAX_SHRINK + ZOOM_RUBBER_CONSTANT * overshoot);
+        newScale = 1 - shrink;
+      } else if (rawScale > 5) {
+        const overshoot = rawScale - 5;
+        const extra =
+          (overshoot * 1.5 * ZOOM_RUBBER_CONSTANT) /
+          (1.5 + ZOOM_RUBBER_CONSTANT * overshoot);
+        newScale = 5 + extra;
       } else {
-        newScale = Math.min(rawScale, 5);
+        newScale = rawScale;
       }
 
       const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 0;
@@ -366,7 +392,7 @@ export default function ImageViewer({
       const nextPanX = currentMidX - (pinchStartMidRef.current.x - pinchStartPanRef.current.x) * scaleRatio;
       const nextPanY = currentMidY - (pinchStartMidRef.current.y - pinchStartPanRef.current.y) * scaleRatio;
 
-      // 端を超えた分にはラバーバンドを適用する
+      // 端を超えた分には非線形ラバーバンドを適用する
       const rubberPanned = applyRubberBandPan(nextPanX, nextPanY, newScale);
       setZoomScale(newScale);
       setPanX(rubberPanned.x);
@@ -386,7 +412,7 @@ export default function ImageViewer({
         suppressTapRef.current = true;
       }
 
-      // 画像の端に到達した後はラバーバンド（バウンス用の抵抗）を効かせながら少し移動させる
+      // 画像の端に到達した後はラバーバンド（バウンス用の抵抗）を効かせながらなめらかに移動させる
       const rubberPanned = applyRubberBandPan(
         panStartRef.current.x + diffX,
         panStartRef.current.y + diffY,
@@ -438,10 +464,14 @@ export default function ImageViewer({
     if (e.touches.length === 1) {
       pinchStartDistRef.current = null;
       if (zoomScale > 1.02) {
-        // 残った1本指の位置を新しいパン開始位置として引き継ぎ、ジャンプを防ぐ
+        // 5倍を超えていた場合は5倍へ戻しつつ、残った1本指の位置を新しいパン開始位置として引き継ぐ
+        const targetScale = Math.min(zoomScale, 5);
+        if (targetScale !== zoomScale) {
+          setZoomScale(targetScale);
+        }
         setTouchStartX(e.touches[0].clientX);
         setTouchStartY(e.touches[0].clientY);
-        panStartRef.current = invertRubberBandPan(panX, panY, zoomScale);
+        panStartRef.current = invertRubberBandPan(panX, panY, targetScale);
       } else {
         // 等倍以下まで縮小して片指を離した場合は、なめらかに等倍へバウンス復帰させる
         setTouchStartX(null);
@@ -453,7 +483,7 @@ export default function ImageViewer({
         zoomBounceTimerRef.current = setTimeout(() => {
           setIsZoomAnimating(false);
           zoomBounceTimerRef.current = null;
-        }, 300);
+        }, 380);
       }
       return;
     }
@@ -474,18 +504,20 @@ export default function ImageViewer({
           zoomBounceTimerRef.current = setTimeout(() => {
             setIsZoomAnimating(false);
             zoomBounceTimerRef.current = null;
-          }, 300);
+          }, 380);
         } else {
-          // 拡大中に画像の端を超えてドラッグしていた場合は、端の位置へなめらかにバウンス復帰
-          const clamped = clampPan(panX, panY, zoomScale);
-          if (clamped.x !== panX || clamped.y !== panY) {
+          // 最大倍率（5倍）または画像の端を超えていた場合は、範囲内へなめらかにバウンス復帰
+          const targetScale = Math.min(zoomScale, 5);
+          const clamped = clampPan(panX, panY, targetScale);
+          if (targetScale !== zoomScale || clamped.x !== panX || clamped.y !== panY) {
             setIsZoomAnimating(true);
+            setZoomScale(targetScale);
             setPanX(clamped.x);
             setPanY(clamped.y);
             zoomBounceTimerRef.current = setTimeout(() => {
               setIsZoomAnimating(false);
               zoomBounceTimerRef.current = null;
-            }, 300);
+            }, 380);
           }
         }
 
@@ -663,7 +695,9 @@ export default function ImageViewer({
               src={`${API_BASE_URL}/image/${selectedImage.id}`}
               alt={`Selected ${selectedImage.id}`}
               className={`max-w-full max-h-full object-contain origin-center ${
-                isZoomAnimating ? "transition-transform duration-300 ease-out" : ""
+                isZoomAnimating
+                  ? "transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  : ""
               }`}
               style={{
                 transform: `translate3d(${panX}px, ${panY}px, 0) scale(${zoomScale})`,
