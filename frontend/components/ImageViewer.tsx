@@ -65,10 +65,51 @@ export default function ImageViewer({
   const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done' | 'closing'>('init');
   const [transformOrigin, setTransformOrigin] = useState("center center");
 
+  // ピンチイン・アウトによるズーム倍率とパン（移動量）を管理するState
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isZoomAnimating, setIsZoomAnimating] = useState(false);
+
+  // 現在の画像DOMへの参照（パン範囲の制限計算に使用）
+  const currentImgRef = useRef<HTMLImageElement>(null);
+
+  // ピンチ・パン計算用のRef
+  const pinchStartDistRef = useRef<number | null>(null);
+  const pinchStartScaleRef = useRef<number>(1);
+  const pinchStartPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const pinchStartMidRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isPinchingRef = useRef(false);
+  const suppressTapRef = useRef(false);
+
   // 実行待ちのスワイプ操作を貯めておくキュー（レンダリングに影響を与えないようRefを使用）
   const actionQueue = useRef<('next' | 'prev')[]>([]);
   // アニメーションの重複やタップによる干渉を防ぐためのロック用フラグ
   const isProcessingQueue = useRef(false);
+
+  // 2本指の距離をピクセル単位で計算する関数
+  const getTouchDistance = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  // 拡大時のパン（移動量）が画像の端を超えないように制限する関数
+  const clampPan = useCallback((nextPanX: number, nextPanY: number, scale: number) => {
+    if (scale <= 1) return { x: 0, y: 0 };
+
+    const baseWidth = currentImgRef.current?.clientWidth || (typeof window !== "undefined" ? window.innerWidth : 0);
+    const baseHeight = currentImgRef.current?.clientHeight || (typeof window !== "undefined" ? window.innerHeight : 0);
+
+    const maxPanX = (baseWidth * (scale - 1)) / 2;
+    const maxPanY = (baseHeight * (scale - 1)) / 2;
+
+    return {
+      x: Math.min(Math.max(nextPanX, -maxPanX), maxPanX),
+      y: Math.min(Math.max(nextPanY, -maxPanY), maxPanY),
+    };
+  }, []);
 
   // 初回マウント時（画像を開いた瞬間）のみ、サムネイルの位置を取得してアニメーションを発火
   useEffect(() => {
@@ -94,16 +135,27 @@ export default function ImageViewer({
     });
   }, []); // 空配列なので「一覧から開いた最初の1回」だけ実行される
 
-  // 画像が切り替わった時は、パネルを閉じ、ドラッグ位置も0にリセットする
+  // 画像が切り替わった時は、パネルを閉じ、ドラッグ位置・ズーム状態もリセットする
   useEffect(() => {
     setIsDetailOpen(false);
     setDragX(0);
     setSwipeDirection(null);
+    setZoomScale(1);
+    setPanX(0);
+    setPanY(0);
+    setIsZoomAnimating(false);
+    pinchStartDistRef.current = null;
+    isPinchingRef.current = false;
   }, [selectedImage.id]);
 
   // 閉じるボタンや縦スワイプ時に呼ばれる、アニメーション付きの閉じる関数
   const handleClose = useCallback(() => {
     if (entranceState === 'closing') return;
+
+    // ズーム状態をリセットして縮小アニメーションが自然に行われるようにする
+    setZoomScale(1);
+    setPanX(0);
+    setPanY(0);
 
     // アニメーション開始直前に、useSystemUIによるスクロールロックを先行して解除する
     // これにより、閉じるアニメーションの最中に裏側のスクロールバーやヘッダーのレイアウトが先行して復元される
@@ -190,19 +242,103 @@ export default function ImageViewer({
 
   // タッチイベントのハンドラー群
   const onTouchStart = (e: React.TouchEvent) => {
-    setTouchStartX(e.targetTouches[0].clientX);
-    setTouchStartY(e.targetTouches[0].clientY);
-    setTouchStartTime(Date.now());
+    // 2本指が触れた場合はピンチイン・アウト操作を開始
+    if (e.touches.length === 2) {
+      isPinchingRef.current = true;
+      suppressTapRef.current = true;
+      setIsZoomAnimating(false);
 
-    // ドラッグ開始の初期化
-    if (!isProcessingQueue.current) {
-      setIsAnimating(false);
+      // 1本指スワイプの途中だった場合はリセット
       setDragX(0);
       setSwipeDirection(null);
+      setTouchStartX(null);
+      setTouchStartY(null);
+
+      pinchStartDistRef.current = getTouchDistance(e.touches);
+      pinchStartScaleRef.current = zoomScale;
+      pinchStartPanRef.current = { x: panX, y: panY };
+
+      const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 0;
+      const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 0;
+      pinchStartMidRef.current = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2 - cx,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2 - cy,
+      };
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      suppressTapRef.current = false;
+      setTouchStartX(e.targetTouches[0].clientX);
+      setTouchStartY(e.targetTouches[0].clientY);
+      setTouchStartTime(Date.now());
+
+      // ズーム中（1倍超）の場合は1本指ドラッグによるパン移動を準備
+      if (zoomScale > 1) {
+        setIsZoomAnimating(false);
+        panStartRef.current = { x: panX, y: panY };
+        return;
+      }
+
+      // 通常時（1倍）のドラッグ開始の初期化
+      if (!isProcessingQueue.current) {
+        setIsAnimating(false);
+        setDragX(0);
+        setSwipeDirection(null);
+      }
     }
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
+    // 2本指でのピンチイン・アウト処理
+    if (e.touches.length === 2 && pinchStartDistRef.current !== null) {
+      const currentDist = getTouchDistance(e.touches);
+      const rawScale = pinchStartScaleRef.current * (currentDist / pinchStartDistRef.current);
+      // 1倍〜最大5倍の範囲に制限
+      const newScale = Math.min(Math.max(rawScale, 1), 5);
+
+      const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 0;
+      const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 0;
+      const currentMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - cx;
+      const currentMidY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - cy;
+
+      // ピンチ開始時の2本指の中心位置を基準に拡大・移動する
+      const scaleRatio = newScale / pinchStartScaleRef.current;
+      const nextPanX = currentMidX - (pinchStartMidRef.current.x - pinchStartPanRef.current.x) * scaleRatio;
+      const nextPanY = currentMidY - (pinchStartMidRef.current.y - pinchStartPanRef.current.y) * scaleRatio;
+
+      const clamped = clampPan(nextPanX, nextPanY, newScale);
+      setZoomScale(newScale);
+      setPanX(clamped.x);
+      setPanY(clamped.y);
+      return;
+    }
+
+    // ズーム中（1倍超）の1本指ドラッグによるパン（画像内移動）処理
+    if (zoomScale > 1 && e.touches.length === 1) {
+      if (touchStartX === null || touchStartY === null) return;
+      const currentX = e.targetTouches[0].clientX;
+      const currentY = e.targetTouches[0].clientY;
+      const diffX = currentX - touchStartX;
+      const diffY = currentY - touchStartY;
+
+      if (Math.abs(diffX) > 5 || Math.abs(diffY) > 5) {
+        suppressTapRef.current = true;
+      }
+
+      const clamped = clampPan(
+        panStartRef.current.x + diffX,
+        panStartRef.current.y + diffY,
+        zoomScale
+      );
+      setPanX(clamped.x);
+      setPanY(clamped.y);
+      return;
+    }
+
+    // ピンチ操作で1倍に戻した直後（まだ指が画面に残っている間）はスワイプを発火させない
+    if (isPinchingRef.current) return;
+
     if (touchStartX === null || touchStartY === null) return;
 
     // アニメーション中は指への直接追従をさせない（スライド演出を見せるため）
@@ -237,6 +373,42 @@ export default function ImageViewer({
   };
 
   const onTouchEnd = (e: React.TouchEvent) => {
+    // 2本指から1本指になった瞬間（片方の指だけ離した時）
+    if (e.touches.length === 1) {
+      pinchStartDistRef.current = null;
+      if (zoomScale > 1) {
+        // 残った1本指の位置を新しいパン開始位置として引き継ぎ、ジャンプを防ぐ
+        setTouchStartX(e.touches[0].clientX);
+        setTouchStartY(e.touches[0].clientY);
+        panStartRef.current = { x: panX, y: panY };
+      } else {
+        setTouchStartX(null);
+        setTouchStartY(null);
+      }
+      return;
+    }
+
+    // ピンチ操作またはズーム中のパン操作が終了した時（すべての指が離れた時）
+    if (isPinchingRef.current || zoomScale > 1) {
+      pinchStartDistRef.current = null;
+      isPinchingRef.current = false;
+
+      // 1倍付近まで縮小されていた場合は綺麗に1倍（中央）へ吸着させる
+      if (zoomScale <= 1.02) {
+        setIsZoomAnimating(true);
+        setZoomScale(1);
+        setPanX(0);
+        setPanY(0);
+        setTimeout(() => setIsZoomAnimating(false), 200);
+      }
+
+      setTouchStartX(null);
+      setTouchStartY(null);
+      setTouchStartTime(null);
+      setSwipeDirection(null);
+      return;
+    }
+
     if (touchStartX === null || touchStartY === null) return;
 
     const endX = e.changedTouches[0].clientX;
@@ -331,6 +503,11 @@ export default function ImageViewer({
 
   // 画面の余白や画像のタップでUIを隠す処理
   const handleTap = () => {
+    // ピンチ操作やズーム中のドラッグ直後はタップによるUI切り替えを発火させない
+    if (suppressTapRef.current) {
+      suppressTapRef.current = false;
+      return;
+    }
     if (isDetailOpen) {
       setIsDetailOpen(false); // パネルが開いていたら閉じるのを優先
     } else {
@@ -369,6 +546,7 @@ export default function ImageViewer({
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
         onClick={(e) => {
           e.stopPropagation();
           handleTap();
@@ -391,11 +569,17 @@ export default function ImageViewer({
           )}
 
           {/* 現在の画像（画面中央に配置） */}
-          <div className="w-full h-full flex items-center justify-center">
+          <div className="w-full h-full flex items-center justify-center overflow-hidden">
             <img 
+              ref={currentImgRef}
               src={`${API_BASE_URL}/image/${selectedImage.id}`}
               alt={`Selected ${selectedImage.id}`}
-              className="max-w-full max-h-full object-contain"
+              className={`max-w-full max-h-full object-contain origin-center ${
+                isZoomAnimating ? "transition-transform duration-200 ease-out" : ""
+              }`}
+              style={{
+                transform: `translate3d(${panX}px, ${panY}px, 0) scale(${zoomScale})`,
+              }}
             />
           </div>
 
