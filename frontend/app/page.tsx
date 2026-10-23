@@ -33,6 +33,15 @@ export default function Home() {
 
   // 選択された画像（モーダルで表示する画像）を管理する変数
   const [selectedImage, setSelectedImage] = useState<SearchResult | null>(null);
+  // 最後にビューアーで開いていた画像のIDを保持するRef（ソート順変更時の中心保持用）
+  const lastViewedIdRef = useRef<number | null>(null);
+
+  // ビューアーで画像を開いている間（スワイプ移動を含む）は常に最新のIDを記録する
+  useEffect(() => {
+    if (selectedImage) {
+      lastViewedIdRef.current = selectedImage.id;
+    }
+  }, [selectedImage]);
 
   // ドロワーの開閉状態を管理する変数
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -79,7 +88,8 @@ export default function Home() {
     
     setSortOrder(nextSort);
     localStorage.setItem("sortOrder", nextSort); // 切り替えた瞬間にlocalStorageに保存する
-    handleSearch(query, nextSort, undefined, undefined, isFavoriteFilter); // ソートを切り替えた瞬間に再検索を実行
+    // 最後にビューアーで開いた画像を中心に保持したまま再検索を実行
+    handleSearch(query, nextSort, undefined, undefined, isFavoriteFilter, lastViewedIdRef.current);
   };
 
   // お気に入りフィルターのトグル処理
@@ -108,7 +118,8 @@ export default function Home() {
 
   // 検索・画像操作ロジックをフックから取得
   const { 
-    results, statusMessage, setStatusMessage, handleSearch, toggleFavorite, loadMore, hasMore,
+    results, statusMessage, setStatusMessage, handleSearch, toggleFavorite,
+    loadMore, loadPrev, hasMore, hasPrev, focusRequest,
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
@@ -356,6 +367,9 @@ export default function Home() {
           setSelectedImage={setSelectedImage} 
           loadMore={loadMore}
           hasMore={hasMore}
+          loadPrev={loadPrev}
+          hasPrev={hasPrev}
+          focusRequest={focusRequest}
           isSelectionMode={isSelectionMode}
           selectedIds={selectedIds}
           toggleSelection={toggleSelection}
