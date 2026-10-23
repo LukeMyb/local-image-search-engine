@@ -69,18 +69,19 @@ export default function ImageViewer({
   const [zoomScale, setZoomScale] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
-  const [isZoomAnimating, setIsZoomAnimating] = useState(false);
 
   // 現在の画像DOMへの参照（パン範囲の制限計算に使用）
   const currentImgRef = useRef<HTMLImageElement>(null);
 
-  // ピンチ・パン計算用のRef
+  // ピンチ・パン・バウンスアニメーション計算用のRef
+  const zoomStateRef = useRef<{ scale: number; x: number; y: number }>({ scale: 1, x: 0, y: 0 });
+  const rawPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const zoomRafRef = useRef<number | null>(null);
   const pinchStartDistRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef<number>(1);
   const pinchStartPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const pinchStartMidRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const zoomBounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPinchingRef = useRef(false);
   const suppressTapRef = useRef(false);
 
@@ -93,6 +94,70 @@ export default function ImageViewer({
   const PAN_RUBBER_CONSTANT = 0.55;
   const ZOOM_RUBBER_CONSTANT = 0.65;
   const ZOOM_MAX_SHRINK = 0.5; // 等倍から最大0.5倍（1 - 0.5）に向かって漸近的に減衰
+
+  // StateとRefを同期して更新する関数
+  const updateZoomState = useCallback((scale: number, x: number, y: number) => {
+    zoomStateRef.current = { scale, x, y };
+    setZoomScale(scale);
+    setPanX(x);
+    setPanY(y);
+  }, []);
+
+  // 実行中のバウンスアニメーションを停止する関数
+  const stopZoomAnimation = useCallback(() => {
+    if (zoomRafRef.current !== null) {
+      cancelAnimationFrame(zoomRafRef.current);
+      zoomRafRef.current = null;
+    }
+  }, []);
+
+  // CSS transitionの切り替えによる高倍率時のGPUレイヤー再生成（黒飛び・ちらつき）を防ぐため、
+  // requestAnimationFrameで現在の座標・倍率から目標値へなめらかにバウンス復帰させる関数
+  const animateZoomTo = useCallback(
+    (targetScale: number, targetX: number, targetY: number, duration = 380) => {
+      stopZoomAnimation();
+
+      const startScale = zoomStateRef.current.scale;
+      const startX = zoomStateRef.current.x;
+      const startY = zoomStateRef.current.y;
+
+      rawPanRef.current = { x: targetX, y: targetY };
+
+      if (
+        Math.abs(startScale - targetScale) < 0.001 &&
+        Math.abs(startX - targetX) < 0.5 &&
+        Math.abs(startY - targetY) < 0.5
+      ) {
+        updateZoomState(targetScale, targetX, targetY);
+        return;
+      }
+
+      const startTime = performance.now();
+
+      const step = (now: number) => {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        // 指を離した初速が自然で終端に向かって滑らかに収束するイージング (quartic ease-out)
+        const ease = 1 - Math.pow(1 - progress, 4);
+
+        const nextScale = startScale + (targetScale - startScale) * ease;
+        const nextX = startX + (targetX - startX) * ease;
+        const nextY = startY + (targetY - startY) * ease;
+
+        updateZoomState(nextScale, nextX, nextY);
+
+        if (progress < 1) {
+          zoomRafRef.current = requestAnimationFrame(step);
+        } else {
+          zoomRafRef.current = null;
+          updateZoomState(targetScale, targetX, targetY);
+        }
+      };
+
+      zoomRafRef.current = requestAnimationFrame(step);
+    },
+    [stopZoomAnimation, updateZoomState]
+  );
 
   // 2本指の距離をピクセル単位で計算する関数
   const getTouchDistance = (touches: React.TouchList) => {
@@ -147,30 +212,6 @@ export default function ImageViewer({
     };
   }, [getPanBounds]);
 
-  // 非線形ラバーバンド適用済みの座標から、元のドラッグ基準座標を逆算する関数（指の切り替え時のジャンプ防止用）
-  const invertRubberBandPan = useCallback((currentPanX: number, currentPanY: number, scale: number) => {
-    const { maxPanX, maxPanY } = getPanBounds(scale);
-    const dimX = typeof window !== "undefined" ? window.innerWidth : 400;
-    const dimY = typeof window !== "undefined" ? window.innerHeight : 800;
-
-    const invert = (val: number, max: number, dim: number) => {
-      if (val > max) {
-        const y = Math.min(val - max, dim * 0.99);
-        return max + (y * dim) / (PAN_RUBBER_CONSTANT * (dim - y));
-      }
-      if (val < -max) {
-        const y = Math.min(-max - val, dim * 0.99);
-        return -max - (y * dim) / (PAN_RUBBER_CONSTANT * (dim - y));
-      }
-      return val;
-    };
-
-    return {
-      x: invert(currentPanX, maxPanX, dimX),
-      y: invert(currentPanY, maxPanY, dimY),
-    };
-  }, [getPanBounds]);
-
   // 初回マウント時（画像を開いた瞬間）のみ、サムネイルの位置を取得してアニメーションを発火
   useEffect(() => {
     // 裏側にあるサムネイルのDOM要素を取得
@@ -193,33 +234,32 @@ export default function ImageViewer({
         }, 300);
       });
     });
-  }, []); // 空配列なので「一覧から開いた最初の1回」だけ実行される
+
+    return () => {
+      stopZoomAnimation();
+    };
+  }, [stopZoomAnimation]); // 初回マウント時のみ実行
 
   // 画像が切り替わった時は、パネルを閉じ、ドラッグ位置・ズーム状態もリセットする
   useEffect(() => {
-    if (zoomBounceTimerRef.current) {
-      clearTimeout(zoomBounceTimerRef.current);
-      zoomBounceTimerRef.current = null;
-    }
+    stopZoomAnimation();
     setIsDetailOpen(false);
     setDragX(0);
     setSwipeDirection(null);
-    setZoomScale(1);
-    setPanX(0);
-    setPanY(0);
-    setIsZoomAnimating(false);
+    updateZoomState(1, 0, 0);
+    rawPanRef.current = { x: 0, y: 0 };
     pinchStartDistRef.current = null;
     isPinchingRef.current = false;
-  }, [selectedImage.id]);
+  }, [selectedImage.id, stopZoomAnimation, updateZoomState]);
 
   // 閉じるボタンや縦スワイプ時に呼ばれる、アニメーション付きの閉じる関数
   const handleClose = useCallback(() => {
     if (entranceState === 'closing') return;
 
     // ズーム状態をリセットして縮小アニメーションが自然に行われるようにする
-    setZoomScale(1);
-    setPanX(0);
-    setPanY(0);
+    stopZoomAnimation();
+    updateZoomState(1, 0, 0);
+    rawPanRef.current = { x: 0, y: 0 };
 
     // アニメーション開始直前に、useSystemUIによるスクロールロックを先行して解除する
     // これにより、閉じるアニメーションの最中に裏側のスクロールバーやヘッダーのレイアウトが先行して復元される
@@ -249,7 +289,7 @@ export default function ImageViewer({
     setTimeout(() => {
       onClose();
     }, 300);
-  }, [selectedImage.id, onClose, entranceState]);
+  }, [selectedImage.id, onClose, entranceState, stopZoomAnimation, updateZoomState]);
 
   // スワイプと判定する最低移動距離（ピクセル）
   const minSwipeDistance = 50;
@@ -306,16 +346,12 @@ export default function ImageViewer({
 
   // タッチイベントのハンドラー群
   const onTouchStart = (e: React.TouchEvent) => {
-    if (zoomBounceTimerRef.current) {
-      clearTimeout(zoomBounceTimerRef.current);
-      zoomBounceTimerRef.current = null;
-    }
+    stopZoomAnimation();
 
     // 2本指が触れた場合はピンチイン・アウト操作を開始
     if (e.touches.length === 2) {
       isPinchingRef.current = true;
       suppressTapRef.current = true;
-      setIsZoomAnimating(false);
 
       // 1本指スワイプの途中だった場合はリセット
       setDragX(0);
@@ -324,8 +360,8 @@ export default function ImageViewer({
       setTouchStartY(null);
 
       pinchStartDistRef.current = getTouchDistance(e.touches);
-      pinchStartScaleRef.current = zoomScale;
-      pinchStartPanRef.current = { x: panX, y: panY };
+      pinchStartScaleRef.current = zoomStateRef.current.scale;
+      pinchStartPanRef.current = { x: zoomStateRef.current.x, y: zoomStateRef.current.y };
 
       const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 0;
       const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 0;
@@ -343,9 +379,8 @@ export default function ImageViewer({
       setTouchStartTime(Date.now());
 
       // ズーム中（1倍超）の場合は1本指ドラッグによるパン移動を準備
-      if (zoomScale > 1) {
-        setIsZoomAnimating(false);
-        panStartRef.current = invertRubberBandPan(panX, panY, zoomScale);
+      if (zoomStateRef.current.scale > 1) {
+        panStartRef.current = { x: rawPanRef.current.x, y: rawPanRef.current.y };
         return;
       }
 
@@ -392,16 +427,16 @@ export default function ImageViewer({
       const nextPanX = currentMidX - (pinchStartMidRef.current.x - pinchStartPanRef.current.x) * scaleRatio;
       const nextPanY = currentMidY - (pinchStartMidRef.current.y - pinchStartPanRef.current.y) * scaleRatio;
 
+      rawPanRef.current = { x: nextPanX, y: nextPanY };
+
       // 端を超えた分には非線形ラバーバンドを適用する
       const rubberPanned = applyRubberBandPan(nextPanX, nextPanY, newScale);
-      setZoomScale(newScale);
-      setPanX(rubberPanned.x);
-      setPanY(rubberPanned.y);
+      updateZoomState(newScale, rubberPanned.x, rubberPanned.y);
       return;
     }
 
     // ズーム中（1倍超）の1本指ドラッグによるパン（画像内移動）処理
-    if (zoomScale > 1 && e.touches.length === 1) {
+    if (zoomStateRef.current.scale > 1 && e.touches.length === 1) {
       if (touchStartX === null || touchStartY === null) return;
       const currentX = e.targetTouches[0].clientX;
       const currentY = e.targetTouches[0].clientY;
@@ -412,14 +447,13 @@ export default function ImageViewer({
         suppressTapRef.current = true;
       }
 
+      const nextRawX = panStartRef.current.x + diffX;
+      const nextRawY = panStartRef.current.y + diffY;
+      rawPanRef.current = { x: nextRawX, y: nextRawY };
+
       // 画像の端に到達した後はラバーバンド（バウンス用の抵抗）を効かせながらなめらかに移動させる
-      const rubberPanned = applyRubberBandPan(
-        panStartRef.current.x + diffX,
-        panStartRef.current.y + diffY,
-        zoomScale
-      );
-      setPanX(rubberPanned.x);
-      setPanY(rubberPanned.y);
+      const rubberPanned = applyRubberBandPan(nextRawX, nextRawY, zoomStateRef.current.scale);
+      updateZoomState(zoomStateRef.current.scale, rubberPanned.x, rubberPanned.y);
       return;
     }
 
@@ -460,73 +494,60 @@ export default function ImageViewer({
   };
 
   const onTouchEnd = (e: React.TouchEvent) => {
+    const currentScale = zoomStateRef.current.scale;
+    const currentX = zoomStateRef.current.x;
+    const currentY = zoomStateRef.current.y;
+
     // 2本指から1本指になった瞬間（片方の指だけ離した時）
     if (e.touches.length === 1) {
       pinchStartDistRef.current = null;
-      if (zoomScale > 1.02) {
-        // 5倍を超えていた場合は5倍へ戻しつつ、残った1本指の位置を新しいパン開始位置として引き継ぐ
-        const targetScale = Math.min(zoomScale, 5);
-        if (targetScale !== zoomScale) {
-          setZoomScale(targetScale);
-        }
+      if (currentScale > 1.02 && currentScale <= 5) {
+        // 残った1本指の位置を新しいパン開始位置として引き継ぎ、ジャンプを防ぐ
         setTouchStartX(e.touches[0].clientX);
         setTouchStartY(e.touches[0].clientY);
-        panStartRef.current = invertRubberBandPan(panX, panY, targetScale);
+        panStartRef.current = { x: rawPanRef.current.x, y: rawPanRef.current.y };
       } else {
-        // 等倍以下まで縮小して片指を離した場合は、なめらかに等倍へバウンス復帰させる
+        // 等倍以下または最大倍率超えの状態で片指を離した場合は、残った指での誤移動を防ぎつつバウンス復帰を開始
         setTouchStartX(null);
         setTouchStartY(null);
-        setIsZoomAnimating(true);
-        setZoomScale(1);
-        setPanX(0);
-        setPanY(0);
-        zoomBounceTimerRef.current = setTimeout(() => {
-          setIsZoomAnimating(false);
-          zoomBounceTimerRef.current = null;
-        }, 380);
+        if (currentScale <= 1.02) {
+          animateZoomTo(1, 0, 0);
+        } else {
+          const scaledX = currentX * (5 / currentScale);
+          const scaledY = currentY * (5 / currentScale);
+          const clamped = clampPan(scaledX, scaledY, 5);
+          animateZoomTo(5, clamped.x, clamped.y);
+        }
       }
       return;
     }
 
     // ピンチ操作またはズーム中のパン操作が終了した時（すべての指が離れた時）
-    if (isPinchingRef.current || zoomScale !== 1 || panX !== 0 || panY !== 0) {
-      // 通常のスワイプ操作中（zoomScale === 1 かつ dragX による移動中）は下の通常スワイプ判定へ流す
-      if (isPinchingRef.current || zoomScale !== 1) {
-        pinchStartDistRef.current = null;
-        isPinchingRef.current = false;
+    if (isPinchingRef.current || currentScale !== 1) {
+      pinchStartDistRef.current = null;
+      isPinchingRef.current = false;
 
-        if (zoomScale <= 1.02) {
-          // 等倍を通り越して縮小していた（または1倍付近の）場合は、なめらかに等倍（中央）へバウンス復帰
-          setIsZoomAnimating(true);
-          setZoomScale(1);
-          setPanX(0);
-          setPanY(0);
-          zoomBounceTimerRef.current = setTimeout(() => {
-            setIsZoomAnimating(false);
-            zoomBounceTimerRef.current = null;
-          }, 380);
+      if (currentScale <= 1.02) {
+        // 等倍を通り越して縮小していた（または1倍付近の）場合は、なめらかに等倍（中央）へバウンス復帰
+        animateZoomTo(1, 0, 0);
+      } else {
+        // 最大倍率（5倍）または画像の端を超えていた場合は、範囲内へなめらかにバウンス復帰
+        const targetScale = Math.min(currentScale, 5);
+        const adjustedX = targetScale !== currentScale ? currentX * (targetScale / currentScale) : currentX;
+        const adjustedY = targetScale !== currentScale ? currentY * (targetScale / currentScale) : currentY;
+        const clamped = clampPan(adjustedX, adjustedY, targetScale);
+        if (targetScale !== currentScale || clamped.x !== currentX || clamped.y !== currentY) {
+          animateZoomTo(targetScale, clamped.x, clamped.y);
         } else {
-          // 最大倍率（5倍）または画像の端を超えていた場合は、範囲内へなめらかにバウンス復帰
-          const targetScale = Math.min(zoomScale, 5);
-          const clamped = clampPan(panX, panY, targetScale);
-          if (targetScale !== zoomScale || clamped.x !== panX || clamped.y !== panY) {
-            setIsZoomAnimating(true);
-            setZoomScale(targetScale);
-            setPanX(clamped.x);
-            setPanY(clamped.y);
-            zoomBounceTimerRef.current = setTimeout(() => {
-              setIsZoomAnimating(false);
-              zoomBounceTimerRef.current = null;
-            }, 380);
-          }
+          rawPanRef.current = { x: currentX, y: currentY };
         }
-
-        setTouchStartX(null);
-        setTouchStartY(null);
-        setTouchStartTime(null);
-        setSwipeDirection(null);
-        return;
       }
+
+      setTouchStartX(null);
+      setTouchStartY(null);
+      setTouchStartTime(null);
+      setSwipeDirection(null);
+      return;
     }
 
     if (touchStartX === null || touchStartY === null) return;
@@ -694,11 +715,7 @@ export default function ImageViewer({
               ref={currentImgRef}
               src={`${API_BASE_URL}/image/${selectedImage.id}`}
               alt={`Selected ${selectedImage.id}`}
-              className={`max-w-full max-h-full object-contain origin-center ${
-                isZoomAnimating
-                  ? "transition-transform duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-                  : ""
-              }`}
+              className="max-w-full max-h-full object-contain origin-center will-change-transform"
               style={{
                 transform: `translate3d(${panX}px, ${panY}px, 0) scale(${zoomScale})`,
               }}
