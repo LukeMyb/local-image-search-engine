@@ -65,13 +65,16 @@ export default function ImageViewer({
   const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done' | 'closing'>('init');
   const [transformOrigin, setTransformOrigin] = useState("center center");
 
-  // ピンチイン・アウトによるズーム倍率とパン（移動量）を管理するState
+  // ピンチイン・アウトやPCズームモードによるズーム倍率とパン（移動量）を管理するState
   const [zoomScale, setZoomScale] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
+  // PCズームモード中にマウスホールドでドラッグしているかどうかのState（カーソル表示用）
+  const [isMouseDragging, setIsMouseDragging] = useState(false);
 
-  // 現在の画像DOMへの参照（パン範囲の制限計算に使用）
+  // 現在の画像DOMおよびビューアコンテナへの参照
   const currentImgRef = useRef<HTMLImageElement>(null);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
 
   // ピンチ・パン・バウンスアニメーション計算用のRef
   const zoomStateRef = useRef<{ scale: number; x: number; y: number }>({ scale: 1, x: 0, y: 0 });
@@ -84,6 +87,11 @@ export default function ImageViewer({
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isPinchingRef = useRef(false);
   const suppressTapRef = useRef(false);
+
+  // PCでのマウスドラッグ・ダブルクリック判定用のRef
+  const isMouseDraggingRef = useRef(false);
+  const mouseStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 実行待ちのスワイプ操作を貯めておくキュー（レンダリングに影響を与えないようRefを使用）
   const actionQueue = useRef<('next' | 'prev')[]>([]);
@@ -237,6 +245,9 @@ export default function ImageViewer({
 
     return () => {
       stopZoomAnimation();
+      if (tapTimerRef.current) {
+        clearTimeout(tapTimerRef.current);
+      }
     };
   }, [stopZoomAnimation]); // 初回マウント時のみ実行
 
@@ -250,7 +261,58 @@ export default function ImageViewer({
     rawPanRef.current = { x: 0, y: 0 };
     pinchStartDistRef.current = null;
     isPinchingRef.current = false;
+    isMouseDraggingRef.current = false;
+    setIsMouseDragging(false);
   }, [selectedImage.id, stopZoomAnimation, updateZoomState]);
+
+  // PCでのホイールによるズーム倍率変更（passive: false でブラウザ標準スクロール等を抑止）
+  useEffect(() => {
+    const el = viewerContainerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // ズームモード中（倍率 > 1）のみホイールで倍率を変更する
+      const currentScale = zoomStateRef.current.scale;
+      if (currentScale <= 1) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      stopZoomAnimation();
+
+      // ホイールの回転方向に応じて倍率を増減
+      const zoomFactor = e.deltaY < 0 ? 1.18 : 1 / 1.18;
+      const rawNewScale = currentScale * zoomFactor;
+
+      // ズームアウトし切って等倍（1倍）以下になったらズームモードを終了する
+      if (rawNewScale <= 1.02 && e.deltaY > 0) {
+        isMouseDraggingRef.current = false;
+        setIsMouseDragging(false);
+        animateZoomTo(1, 0, 0, 220);
+        return;
+      }
+
+      const newScale = Math.min(Math.max(rawNewScale, 1), 5);
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      const cursorX = e.clientX - cx;
+      const cursorY = e.clientY - cy;
+
+      // マウスカーソルの位置を基準に拡大・縮小する
+      const scaleRatio = newScale / currentScale;
+      const nextPanX = cursorX - (cursorX - zoomStateRef.current.x) * scaleRatio;
+      const nextPanY = cursorY - (cursorY - zoomStateRef.current.y) * scaleRatio;
+
+      const clamped = clampPan(nextPanX, nextPanY, newScale);
+      rawPanRef.current = { x: clamped.x, y: clamped.y };
+      updateZoomState(newScale, clamped.x, clamped.y);
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handleWheel);
+    };
+  }, [animateZoomTo, clampPan, stopZoomAnimation, updateZoomState]);
 
   // 閉じるボタンや縦スワイプ時に呼ばれる、アニメーション付きの閉じる関数
   const handleClose = useCallback(() => {
@@ -260,6 +322,8 @@ export default function ImageViewer({
     stopZoomAnimation();
     updateZoomState(1, 0, 0);
     rawPanRef.current = { x: 0, y: 0 };
+    isMouseDraggingRef.current = false;
+    setIsMouseDragging(false);
 
     // アニメーション開始直前に、useSystemUIによるスクロールロックを先行して解除する
     // これにより、閉じるアニメーションの最中に裏側のスクロールバーやヘッダーのレイアウトが先行して復元される
@@ -624,6 +688,90 @@ export default function ImageViewer({
     setSwipeDirection(null);
   };
 
+  // PCでのダブルクリックによるズームモード切り替え処理
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // ダブルクリック時にシングルクリックのUI表示切り替えが発火しないようキャンセル
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current);
+      tapTimerRef.current = null;
+    }
+
+    const currentScale = zoomStateRef.current.scale;
+    if (currentScale > 1) {
+      // すでにズームモード中なら再度ダブルクリックで等倍に戻して終了
+      isMouseDraggingRef.current = false;
+      setIsMouseDragging(false);
+      animateZoomTo(1, 0, 0, 280);
+    } else {
+      // 等倍の状態でダブルクリックされたら、クリック位置を中心に2倍でズームモードに入る
+      const targetScale = 2;
+      const cx = typeof window !== "undefined" ? window.innerWidth / 2 : 0;
+      const cy = typeof window !== "undefined" ? window.innerHeight / 2 : 0;
+      const cursorX = e.clientX - cx;
+      const cursorY = e.clientY - cy;
+
+      const nextPanX = -cursorX * (targetScale - 1);
+      const nextPanY = -cursorY * (targetScale - 1);
+      const clamped = clampPan(nextPanX, nextPanY, targetScale);
+
+      animateZoomTo(targetScale, clamped.x, clamped.y, 280);
+    }
+  };
+
+  // PCでのマウスホールド（ドラッグ）による座標移動開始
+  const onMouseDown = (e: React.MouseEvent) => {
+    // 左クリックかつズームモード中（倍率 > 1）のみ有効
+    if (e.button !== 0 || zoomStateRef.current.scale <= 1) return;
+
+    e.preventDefault();
+    stopZoomAnimation();
+    isMouseDraggingRef.current = true;
+    setIsMouseDragging(true);
+    mouseStartRef.current = { x: e.clientX, y: e.clientY };
+    panStartRef.current = { x: rawPanRef.current.x, y: rawPanRef.current.y };
+  };
+
+  // PCでのマウスホールド中の座標移動
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isMouseDraggingRef.current || zoomStateRef.current.scale <= 1) return;
+
+    const diffX = e.clientX - mouseStartRef.current.x;
+    const diffY = e.clientY - mouseStartRef.current.y;
+
+    if (Math.abs(diffX) > 4 || Math.abs(diffY) > 4) {
+      suppressTapRef.current = true;
+    }
+
+    const nextRawX = panStartRef.current.x + diffX;
+    const nextRawY = panStartRef.current.y + diffY;
+    rawPanRef.current = { x: nextRawX, y: nextRawY };
+
+    // 端を超えた場合はラバーバンド減衰を効かせる
+    const rubberPanned = applyRubberBandPan(nextRawX, nextRawY, zoomStateRef.current.scale);
+    updateZoomState(zoomStateRef.current.scale, rubberPanned.x, rubberPanned.y);
+  };
+
+  // PCでのマウスホールド解除時の処理（端を超えていたらバウンス復帰）
+  const onMouseUpOrLeave = () => {
+    if (!isMouseDraggingRef.current) return;
+
+    isMouseDraggingRef.current = false;
+    setIsMouseDragging(false);
+
+    const currentScale = zoomStateRef.current.scale;
+    const currentX = zoomStateRef.current.x;
+    const currentY = zoomStateRef.current.y;
+    const clamped = clampPan(currentX, currentY, currentScale);
+
+    if (clamped.x !== currentX || clamped.y !== currentY) {
+      animateZoomTo(currentScale, clamped.x, clamped.y);
+    } else {
+      rawPanRef.current = { x: currentX, y: currentY };
+    }
+  };
+
   // キーボード操作（← →）を検知して画像を切り替える処理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -651,9 +799,16 @@ export default function ImageViewer({
     }
     if (isDetailOpen) {
       setIsDetailOpen(false); // パネルが開いていたら閉じるのを優先
-    } else {
-      onToggleUI(); // パネルが閉じていればUIの出し入れを切り替え
+      return;
     }
+    // ダブルクリック判定と干渉してUIが点滅するのを防ぐため、わずかに遅延させて実行
+    if (tapTimerRef.current) {
+      clearTimeout(tapTimerRef.current);
+    }
+    tapTimerRef.current = setTimeout(() => {
+      onToggleUI();
+      tapTimerRef.current = null;
+    }, 220);
   };
 
   // ファイルパスからファイル名だけを抽出する便利関数
@@ -677,17 +832,25 @@ export default function ImageViewer({
 
       {/* 画像を中央に配置するコンテナ */}
       <div
+        ref={viewerContainerRef}
         // アニメーションの状態（scaleとopacity）を制御し、サムネイルの座標を中心に拡大させる
-        className={`relative w-full h-full flex flex-col items-center overflow-hidden ${
+        className={`relative w-full h-full flex flex-col items-center overflow-hidden select-none ${
           entranceState === 'init' || entranceState === 'closing' ? 'scale-50 opacity-0' : 'scale-100 opacity-100'
         } ${
           entranceState !== 'done' ? 'transition-all duration-300 ease-out' : ''
+        } ${
+          zoomScale > 1 ? (isMouseDragging ? 'cursor-grabbing' : 'cursor-grab') : ''
         }`}
         style={{ transformOrigin }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUpOrLeave}
+        onMouseLeave={onMouseUpOrLeave}
+        onDoubleClick={handleDoubleClick}
         onClick={(e) => {
           e.stopPropagation();
           handleTap();
@@ -705,7 +868,7 @@ export default function ImageViewer({
           {/* 前の画像（画面左外に配置） */}
           {prevImage && (
             <div className="absolute -left-full w-full h-full flex items-center justify-center">
-              <img src={`${API_BASE_URL}/image/${prevImage.id}`} className="max-w-full max-h-full object-contain" alt="Previous" />
+              <img src={`${API_BASE_URL}/image/${prevImage.id}`} draggable={false} className="max-w-full max-h-full object-contain" alt="Previous" />
             </div>
           )}
 
@@ -715,6 +878,7 @@ export default function ImageViewer({
               ref={currentImgRef}
               src={`${API_BASE_URL}/image/${selectedImage.id}`}
               alt={`Selected ${selectedImage.id}`}
+              draggable={false}
               className="max-w-full max-h-full object-contain origin-center will-change-transform"
               style={{
                 transform: `translate3d(${panX}px, ${panY}px, 0) scale(${zoomScale})`,
@@ -725,17 +889,17 @@ export default function ImageViewer({
           {/* 次の画像（画面右外に配置） */}
           {nextImage && (
             <div className="absolute -right-full w-full h-full flex items-center justify-center">
-              <img src={`${API_BASE_URL}/image/${nextImage.id}`} className="max-w-full max-h-full object-contain" alt="Next" />
+              <img src={`${API_BASE_URL}/image/${nextImage.id}`} draggable={false} className="max-w-full max-h-full object-contain" alt="Next" />
             </div>
           )}
         </div>
 
-        {/* 左移動ボタン (PCでのみ表示) */}
+        {/* 左移動ボタン (PCでのみ表示・ズームモード中はドラッグやダブルクリックを妨げないよう無効化) */}
         {hasPreceding && onPrev && (
           <button
             onClick={(e) => { e.stopPropagation(); executePrev(); }}
             className={`absolute left-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-start pl-4 outline-none group cursor-pointer transition-opacity duration-300 ${
-              isUIVisible && entranceState !== 'closing' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              isUIVisible && entranceState !== 'closing' && zoomScale <= 1 ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           >
             {/* アイコンの背景の丸い部分を div に分離し、group-hover で反応させる */}
@@ -745,12 +909,12 @@ export default function ImageViewer({
           </button>
         )}
 
-        {/* 右移動ボタン (PCでのみ表示) */}
+        {/* 右移動ボタン (PCでのみ表示・ズームモード中はドラッグやダブルクリックを妨げないよう無効化) */}
         {hasSubsequent && onNext && (
           <button
             onClick={(e) => { e.stopPropagation(); executeNext(); }}
             className={`absolute right-0 top-0 bottom-0 w-1/4 z-10 hidden md:flex items-center justify-end pr-4 outline-none group cursor-pointer transition-opacity duration-300 ${
-              isUIVisible && entranceState !== 'closing' ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              isUIVisible && entranceState !== 'closing' && zoomScale <= 1 ? 'opacity-100' : 'opacity-0 pointer-events-none'
             }`}
           >
             {/* アイコンの背景部分 */}
