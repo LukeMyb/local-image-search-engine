@@ -61,6 +61,8 @@ export default function Home() {
   // 選択モードとソート順のステート
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [sortOrder, setSortOrder] = useState<"score" | "favorite" | "newest">("score");
+  // 直前のソートがランダム表示だったかどうかを管理するステート
+  const [isRandomSorted, setIsRandomSorted] = useState(false);
 
   // グリッドの列数を管理するState（PC用とスマホ用を分離）
   const [gridColsPC, setGridColsPC] = useState(6);
@@ -81,6 +83,13 @@ export default function Home() {
 
   // ソート順をローテーションで切り替える関数
   const toggleSortOrder = () => {
+    // 直前のソートがランダムだった場合は、ボタンの表示は変えずに現在表示されているソート順をそのまま適用する
+    if (isRandomSorted) {
+      setIsRandomSorted(false);
+      handleSearch(query, sortOrder, undefined, undefined, isFavoriteFilter, lastViewedIdRef.current);
+      return;
+    }
+
     let nextSort: "score" | "favorite" | "newest";
     if (sortOrder === "score") nextSort = "favorite";
     else if (sortOrder === "favorite") nextSort = "newest";
@@ -96,6 +105,7 @@ export default function Home() {
   const toggleFavoriteFilter = () => {
     const nextState = !isFavoriteFilter;
     setIsFavoriteFilter(nextState);
+    setIsRandomSorted(false);
     localStorage.setItem("isFavoriteFilter", String(nextState)); // 切り替えた瞬間にlocalStorageに保存する
     handleSearch(query, sortOrder, undefined, undefined, nextState);
   };
@@ -126,6 +136,7 @@ export default function Home() {
 
   // 現在のクエリとフィルターを維持したまま、並び順をランダムにして再検索する
   const executeRandomSearch = () => {
+    setIsRandomSorted(true);
     handleSearch(query, "random", undefined, undefined, isFavoriteFilter);
   };
 
@@ -234,6 +245,7 @@ export default function Home() {
     if (newQuery) {
       setQuery(newQuery);
       setSelectedImage(null); // ビューアーを閉じる
+      setIsRandomSorted(false);
       handleSearch(newQuery, "score", undefined, undefined, isFavoriteFilter);
     }
   }, [handleSearch, isFavoriteFilter]);
@@ -342,7 +354,10 @@ export default function Home() {
         <SearchBar 
           query={query}
           setQuery={setQuery}
-          onSearch={(e) => handleSearch(query, sortOrder, e, undefined, isFavoriteFilter)}
+          onSearch={(e) => {
+            setIsRandomSorted(false);
+            handleSearch(query, sortOrder, e, undefined, isFavoriteFilter);
+          }}
           setIsDrawerOpen={setIsDrawerOpen}
           openBookmarkDialog={openBookmarkDialog}
           savedQueries={savedQueries}
@@ -431,7 +446,10 @@ export default function Home() {
         setIsSaveDialogOpen={setIsSaveDialogOpen}
         query={query}
         setQuery={setQuery}
-        handleSearch={(e, oq) => handleSearch(query, sortOrder, e, oq, isFavoriteFilter)}
+        handleSearch={(e, oq) => {
+          setIsRandomSorted(false);
+          return handleSearch(query, sortOrder, e, oq, isFavoriteFilter);
+        }}
         allBookmarks={allBookmarks}
         savedQueries={savedQueries}
         refreshSavedQueries={refreshSavedQueries}
