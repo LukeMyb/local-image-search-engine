@@ -131,12 +131,12 @@ export function useImageSearch() {
           setFocusRequest({ id: focusImageId, key: Date.now() });
         } else {
           // 後半にある場合は、列ズレを防ぐため120の倍数に揃えた開始位置から十分な前後幅を切り出して取得する
-          const winStart = targetIndex < 150
+          const winStart = targetIndex < 240
             ? 0
-            : Math.max(0, Math.floor((targetIndex - 90) / BATCH_SIZE) * BATCH_SIZE);
+            : Math.max(0, Math.floor((targetIndex - 180) / BATCH_SIZE) * BATCH_SIZE);
           const winEnd = Math.min(
             ids.length,
-            Math.max(winStart + BATCH_SIZE * 2, Math.ceil((targetIndex + 90) / BATCH_SIZE) * BATCH_SIZE)
+            Math.max(winStart + BATCH_SIZE * 3, Math.ceil((targetIndex + 120) / BATCH_SIZE) * BATCH_SIZE)
           );
           const windowIds = ids.slice(winStart, winEnd);
 

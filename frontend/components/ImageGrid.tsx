@@ -22,6 +22,9 @@ interface ImageGridProps {
   // ソート変更時に特定画像を画面中央へ配置するためのリクエスト
   focusRequest?: { id: number; key: number } | null;
 
+  // 先頭追加時などのプログラム的なスクロール補正量を親へ通知するコールバック
+  onProgrammaticScroll?: (addedHeight: number) => void;
+
   // 選択モード用のProps
   isSelectionMode?: boolean;
   selectedIds?: number[];
@@ -43,6 +46,7 @@ export default function ImageGrid({
   loadPrev,
   hasPrev,
   focusRequest,
+  onProgrammaticScroll,
   isSelectionMode = false,
   selectedIds = [],
   toggleSelection,
@@ -81,6 +85,9 @@ export default function ImageGrid({
     currentMobileColsRef.current = gridColsMobile;
   }, [gridColsMobile]);
 
+  // 上端へ到達する十分手前（約2画面分＝1800px手前）で先行読み込みを開始する閾値
+  const TOP_PRELOAD_MARGIN = 1800;
+
   // 指定した画像IDの要素が画面の縦方向の中央に来るようスクロールする関数
   const scrollImageToCenter = useCallback((imageId: number) => {
     const el = document.getElementById(`grid-image-${imageId}`);
@@ -89,9 +96,11 @@ export default function ImageGrid({
     const rect = el.getBoundingClientRect();
     const elementCenterY = window.scrollY + rect.top + rect.height / 2;
     const targetScrollY = Math.max(0, elementCenterY - window.innerHeight / 2);
+    const delta = targetScrollY - window.scrollY;
     window.scrollTo({ top: targetScrollY, behavior: "instant" as ScrollBehavior });
+    onProgrammaticScroll?.(delta);
     return true;
-  }, []);
+  }, [onProgrammaticScroll]);
 
   // ソート変更時の初期中央配置と、上方向への無限スクロール（前の120件を先頭に追加）時のスクロール位置維持をペイント前に同期実行する
   useLayoutEffect(() => {
@@ -133,17 +142,29 @@ export default function ImageGrid({
         const addedHeight = oldFirstEl.getBoundingClientRect().top - newFirstEl.getBoundingClientRect().top;
         if (addedHeight > 0) {
           window.scrollBy({ top: addedHeight, behavior: "instant" as ScrollBehavior });
+          onProgrammaticScroll?.(addedHeight);
         }
       }
+      isPrependingRef.current = false;
       requestAnimationFrame(() => {
-        isPrependingRef.current = false;
+        // 高速な上スクロール中で補正後もまだ先行読み込み範囲内にある場合は、途切れず次のバッチを読み込む
+        if (
+          hasPrev &&
+          loadPrev &&
+          !isCenteringRef.current &&
+          !isPrependingRef.current &&
+          window.scrollY < TOP_PRELOAD_MARGIN
+        ) {
+          isPrependingRef.current = true;
+          loadPrev();
+        }
       });
     } else {
       isPrependingRef.current = false;
     }
 
     prevFirstIdRef.current = currentFirstId;
-  }, [results, focusRequest, scrollImageToCenter]);
+  }, [results, focusRequest, scrollImageToCenter, hasPrev, loadPrev, onProgrammaticScroll]);
 
   // スマホのピンチ操作検知ロジック
   // 2点間の距離をピクセル単位で計算する関数
@@ -280,31 +301,40 @@ export default function ImageGrid({
     };
   }, [hasMore, loadMore]);
 
-  // 上方向の無限スクロール検知ロジック（途中から表示を開始した場合に前の画像を読み込む）
+  // 上方向の無限スクロール検知ロジック（一番上に到達する十分手前で先行読み込みして滑らかに繋げる）
   useEffect(() => {
     if (!hasPrev || !loadPrev) return;
 
+    const tryLoadPrev = () => {
+      if (
+        hasPrev &&
+        loadPrev &&
+        !isCenteringRef.current &&
+        !isPrependingRef.current &&
+        window.scrollY < TOP_PRELOAD_MARGIN
+      ) {
+        isPrependingRef.current = true;
+        loadPrev();
+      }
+    };
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          hasPrev &&
-          loadPrev &&
-          !isCenteringRef.current &&
-          !isPrependingRef.current
-        ) {
-          isPrependingRef.current = true;
-          loadPrev();
+        if (entries[0].isIntersecting) {
+          tryLoadPrev();
         }
       },
-      { rootMargin: "200px" }
+      { rootMargin: `${TOP_PRELOAD_MARGIN}px 0px 0px 0px` }
     );
 
     if (topObserverTarget.current) {
       observer.observe(topObserverTarget.current);
     }
 
+    window.addEventListener("scroll", tryLoadPrev, { passive: true });
+
     return () => {
+      window.removeEventListener("scroll", tryLoadPrev);
       if (topObserverTarget.current) {
         observer.unobserve(topObserverTarget.current);
       }
