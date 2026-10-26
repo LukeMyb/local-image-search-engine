@@ -15,6 +15,9 @@ interface Suggestion {
   count: number;
 }
 
+// グリッドの列数（1, 2, 3, 4, 5, 6, 8, 10, 12列）で割り切れるバッチ単位
+const BATCH_SIZE = 120;
+
 /**
  * 検索ロジックと検索結果の状態を管理するカスタムフック
  */
@@ -26,8 +29,13 @@ export function useImageSearch() {
   const [allIds, setAllIds] = useState<number[]>([]);
   const [startIndex, setStartIndex] = useState(0);
   const [endIndex, setEndIndex] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [isLoadingPrev, setIsLoadingPrev] = useState(false);
+
+  // スクロールによる親の再レンダリング時にもコールバック参照を固定するためのRef
+  const allIdsRef = useRef<number[]>([]);
+  const startIndexRef = useRef(0);
+  const endIndexRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
+  const isLoadingPrevRef = useRef(false);
 
   // ソート変更時などに中央へフォーカスさせる対象のリクエスト情報
   const [focusRequest, setFocusRequest] = useState<{ id: number; key: number } | null>(null);
@@ -38,6 +46,16 @@ export function useImageSearch() {
   // サジェスト関連の状態管理
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
+
+  // スライス範囲と全IDリストをState・Ref双方へ同期するヘルパー
+  const applyWindowState = useCallback((ids: number[], start: number, end: number) => {
+    allIdsRef.current = ids;
+    startIndexRef.current = start;
+    endIndexRef.current = end;
+    setAllIds(ids);
+    setStartIndex(start);
+    setEndIndex(end);
+  }, []);
 
   // 検索実行ロジック
   const handleSearch = async (
@@ -57,6 +75,8 @@ export function useImageSearch() {
     }
 
     const currentSeq = ++searchSeqRef.current;
+    isLoadingMoreRef.current = false;
+    isLoadingPrevRef.current = false;
 
     // 直接渡されたキーワードがあればそれを使い、なければ検索窓(query)の値を使う
     const currentQuery = overrideQuery !== undefined ? overrideQuery : query;
@@ -76,9 +96,7 @@ export function useImageSearch() {
       setFocusRequest(null);
     }
     setResults([]); // 検索開始時に前の画像をクリア
-    setAllIds([]); // 前の検索結果のIDリストも同時にクリア
-    setStartIndex(0);
-    setEndIndex(0);
+    applyWindowState([], 0, 0);
 
     setIsSuggestOpen(false); // 検索実行時はサジェストを閉じる
 
@@ -108,15 +126,18 @@ export function useImageSearch() {
       if (targetIndex !== -1 && focusImageId != null) {
         if (targetIndex < 60) {
           // 先頭付近にある場合は最初の100件をそのまま使って中央へスクロールさせる
-          setAllIds(ids);
-          setStartIndex(0);
-          setEndIndex(initialResults.length);
+          applyWindowState(ids, 0, initialResults.length);
           setResults(initialResults);
           setFocusRequest({ id: focusImageId, key: Date.now() });
         } else {
-          // 後半にある場合は、対象画像の前後50件（計100件）のウィンドウを取得して即座に表示する
-          const winStart = Math.max(0, Math.min(targetIndex - 50, ids.length - 100));
-          const winEnd = Math.min(ids.length, winStart + 100);
+          // 後半にある場合は、列ズレを防ぐため120の倍数に揃えた開始位置から十分な前後幅を切り出して取得する
+          const winStart = targetIndex < 150
+            ? 0
+            : Math.max(0, Math.floor((targetIndex - 90) / BATCH_SIZE) * BATCH_SIZE);
+          const winEnd = Math.min(
+            ids.length,
+            Math.max(winStart + BATCH_SIZE * 2, Math.ceil((targetIndex + 90) / BATCH_SIZE) * BATCH_SIZE)
+          );
           const windowIds = ids.slice(winStart, winEnd);
 
           const batchRes = await fetch(`${API_BASE_URL}/images/batch`, {
@@ -129,25 +150,19 @@ export function useImageSearch() {
 
           if (batchRes.ok) {
             const batchData = await batchRes.json();
-            setAllIds(ids);
-            setStartIndex(winStart);
-            setEndIndex(winEnd);
+            applyWindowState(ids, winStart, winEnd);
             setResults(batchData.results);
             setFocusRequest({ id: focusImageId, key: Date.now() });
           } else {
             // フォールバック：初期100件を表示
-            setAllIds(ids);
-            setStartIndex(0);
-            setEndIndex(initialResults.length);
+            applyWindowState(ids, 0, initialResults.length);
             setResults(initialResults);
           }
         }
       } else {
         // 通常の検索またはランダムソート時は先頭100件を表示し、一番上へ戻す
         setFocusRequest(null);
-        setAllIds(ids);
-        setStartIndex(0);
-        setEndIndex(initialResults.length);
+        applyWindowState(ids, 0, initialResults.length);
         setResults(initialResults);
         if (typeof window !== "undefined") {
           window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
@@ -162,14 +177,16 @@ export function useImageSearch() {
     }
   };
 
-  // 下スクロール時に次の100件を取得するロジック
-  const loadMore = async () => {
-    // 読み込み中、または末尾まで読み込み済みの場合は何もしない
-    if (isLoadingMore || endIndex >= allIds.length) return;
+  // 下スクロール時に次のバッチを取得するロジック（参照を安定化してObserver再生成を防ぐ）
+  const loadMore = useCallback(async () => {
+    const currentEnd = endIndexRef.current;
+    const ids = allIdsRef.current;
+    if (isLoadingMoreRef.current || currentEnd >= ids.length) return;
 
-    setIsLoadingMore(true);
-    const nextEnd = Math.min(allIds.length, endIndex + 100);
-    const nextIds = allIds.slice(endIndex, nextEnd);
+    isLoadingMoreRef.current = true;
+    const currentSeq = searchSeqRef.current;
+    const nextEnd = Math.min(ids.length, currentEnd + BATCH_SIZE);
+    const nextIds = ids.slice(currentEnd, nextEnd);
 
     try {
       const response = await fetch(`${API_BASE_URL}/images/batch`, {
@@ -181,22 +198,30 @@ export function useImageSearch() {
       if (!response.ok) throw new Error("追加画像の取得に失敗しました");
 
       const data = await response.json();
-      setResults((prev) => [...prev, ...data.results]);
+      if (currentSeq !== searchSeqRef.current) return;
+
+      endIndexRef.current = nextEnd;
       setEndIndex(nextEnd);
+      setResults((prev) => [...prev, ...data.results]);
     } catch (error) {
       console.error(error);
     } finally {
-      setIsLoadingMore(false);
+      if (currentSeq === searchSeqRef.current) {
+        isLoadingMoreRef.current = false;
+      }
     }
-  };
+  }, []);
 
-  // 途中から表示を開始した場合に、上スクロールで前の100件を取得するロジック
-  const loadPrev = async () => {
-    if (isLoadingPrev || startIndex <= 0) return;
+  // 途中から表示を開始した場合に、上スクロールで前のバッチ（120件単位）を取得するロジック
+  const loadPrev = useCallback(async () => {
+    const currentStart = startIndexRef.current;
+    const ids = allIdsRef.current;
+    if (isLoadingPrevRef.current || currentStart <= 0) return;
 
-    setIsLoadingPrev(true);
-    const nextStart = Math.max(0, startIndex - 100);
-    const prevIds = allIds.slice(nextStart, startIndex);
+    isLoadingPrevRef.current = true;
+    const currentSeq = searchSeqRef.current;
+    const nextStart = Math.max(0, currentStart - BATCH_SIZE);
+    const prevIds = ids.slice(nextStart, currentStart);
 
     try {
       const response = await fetch(`${API_BASE_URL}/images/batch`, {
@@ -208,14 +233,19 @@ export function useImageSearch() {
       if (!response.ok) throw new Error("前の画像の取得に失敗しました");
 
       const data = await response.json();
-      setResults((prev) => [...data.results, ...prev]);
+      if (currentSeq !== searchSeqRef.current) return;
+
+      startIndexRef.current = nextStart;
       setStartIndex(nextStart);
+      setResults((prev) => [...data.results, ...prev]);
     } catch (error) {
       console.error(error);
     } finally {
-      setIsLoadingPrev(false);
+      if (currentSeq === searchSeqRef.current) {
+        isLoadingPrevRef.current = false;
+      }
     }
-  };
+  }, []);
 
   // お気に入り切り替えロジック
   const toggleFavorite = async (image_id: number, e: React.MouseEvent, selectedImage: any, setSelectedImage: any) => {

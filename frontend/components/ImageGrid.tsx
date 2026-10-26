@@ -63,10 +63,10 @@ export default function ImageGrid({
 
   // ソート変更による中央フォーカス処理中かどうかのロック用Ref
   const isCenteringRef = useRef(false);
-  const activeFocusIdRef = useRef<number | null>(null);
+  const lastHandledFocusKeyRef = useRef<number | null>(null);
 
-  // 上方向への無限スクロール（loadPrev）時にスクロール位置を維持するためのアンカー情報
-  const prependAnchorRef = useRef<{ id: number; top: number } | null>(null);
+  // 上方向への無限スクロール（loadPrev）時にスクロール位置を維持するためのRef
+  const isPrependingRef = useRef(false);
   const prevFirstIdRef = useRef<number | null>(null);
 
   // 上に戻るボタンを直接操作するための参照
@@ -93,84 +93,57 @@ export default function ImageGrid({
     return true;
   }, []);
 
-  // ソート変更時に、最後にビューアーで開いた画像を中心に配置・維持する処理
-  useEffect(() => {
-    if (!focusRequest) {
-      isCenteringRef.current = false;
-      activeFocusIdRef.current = null;
+  // ソート変更時の初期中央配置と、上方向への無限スクロール（前の120件を先頭に追加）時のスクロール位置維持をペイント前に同期実行する
+  useLayoutEffect(() => {
+    if (results.length === 0) {
+      prevFirstIdRef.current = null;
+      isPrependingRef.current = false;
       return;
     }
 
-    const targetId = focusRequest.id;
-    activeFocusIdRef.current = targetId;
-    isCenteringRef.current = true;
+    const currentFirstId = results[0].id;
 
-    // 初回描画直後に中央へ移動
-    requestAnimationFrame(() => {
-      scrollImageToCenter(targetId);
-    });
+    // 1. ソート変更による新しいfocusRequestが届いた場合は、描画前に即座に中央へ配置する
+    if (focusRequest && focusRequest.key !== lastHandledFocusKeyRef.current) {
+      lastHandledFocusKeyRef.current = focusRequest.key;
+      isCenteringRef.current = true;
+      isPrependingRef.current = false;
+      prevFirstIdRef.current = currentFirstId;
 
-    const gridEl = gridRef.current;
-    if (!gridEl) return;
+      scrollImageToCenter(focusRequest.id);
+      const rafId = requestAnimationFrame(() => {
+        scrollImageToCenter(focusRequest.id);
+        isCenteringRef.current = false;
+      });
+      return () => {
+        cancelAnimationFrame(rafId);
+        isCenteringRef.current = false;
+      };
+    }
 
-    // サムネイル画像の非同期ロードでグリッドの高さが変わるたびに中央位置を再補正する
-    const resizeObserver = new ResizeObserver(() => {
-      if (isCenteringRef.current && activeFocusIdRef.current === targetId) {
-        scrollImageToCenter(targetId);
-      }
-    });
-    resizeObserver.observe(gridEl);
-
-    // ユーザーが自分でスクロール・タッチ・ホイール操作を始めたら即座に中央固定を解除する
-    const stopCentering = () => {
-      isCenteringRef.current = false;
-      activeFocusIdRef.current = null;
-      resizeObserver.disconnect();
-    };
-
-    window.addEventListener("wheel", stopCentering, { passive: true });
-    window.addEventListener("touchmove", stopCentering, { passive: true });
-    window.addEventListener("keydown", stopCentering, { passive: true });
-
-    // 一定時間（700ms）経過後に自動で中央固定ロックを解除し、通常のスクロールへ移行する
-    const timer = setTimeout(() => {
-      if (isCenteringRef.current && activeFocusIdRef.current === targetId) {
-        scrollImageToCenter(targetId);
-      }
-      stopCentering();
-    }, 700);
-
-    return () => {
-      clearTimeout(timer);
-      resizeObserver.disconnect();
-      window.removeEventListener("wheel", stopCentering);
-      window.removeEventListener("touchmove", stopCentering);
-      window.removeEventListener("keydown", stopCentering);
-    };
-  }, [focusRequest, scrollImageToCenter]);
-
-  // 上方向への無限スクロール（前の100件を先頭に追加）時に、見ていた位置がズレないよう補正する
-  useLayoutEffect(() => {
-    const currentFirstId = results.length > 0 ? results[0].id : null;
+    // 2. 先頭IDが変わり、かつ以前の先頭IDが配列の2番目以降に存在する場合は「先頭への追加（loadPrev）」と判定して高さを補正する
     if (
-      prependAnchorRef.current &&
-      currentFirstId !== null &&
       prevFirstIdRef.current !== null &&
-      currentFirstId !== prevFirstIdRef.current
+      currentFirstId !== prevFirstIdRef.current &&
+      results.some((item, idx) => idx > 0 && item.id === prevFirstIdRef.current)
     ) {
-      const anchor = prependAnchorRef.current;
-      const el = document.getElementById(`grid-image-${anchor.id}`);
-      if (el) {
-        const newTop = el.getBoundingClientRect().top;
-        const diff = newTop - anchor.top;
-        if (Math.abs(diff) > 1) {
-          window.scrollBy({ top: diff, behavior: "instant" as ScrollBehavior });
+      const newFirstEl = document.getElementById(`grid-image-${currentFirstId}`);
+      const oldFirstEl = document.getElementById(`grid-image-${prevFirstIdRef.current}`);
+      if (newFirstEl && oldFirstEl) {
+        const addedHeight = oldFirstEl.getBoundingClientRect().top - newFirstEl.getBoundingClientRect().top;
+        if (addedHeight > 0) {
+          window.scrollBy({ top: addedHeight, behavior: "instant" as ScrollBehavior });
         }
       }
-      prependAnchorRef.current = null;
+      requestAnimationFrame(() => {
+        isPrependingRef.current = false;
+      });
+    } else {
+      isPrependingRef.current = false;
     }
+
     prevFirstIdRef.current = currentFirstId;
-  }, [results]);
+  }, [results, focusRequest, scrollImageToCenter]);
 
   // スマホのピンチ操作検知ロジック
   // 2点間の距離をピクセル単位で計算する関数
@@ -313,18 +286,14 @@ export default function ImageGrid({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasPrev && loadPrev && !isCenteringRef.current) {
-          // 読み込み前の先頭要素の位置を記録しておき、追加後のスクロールジャンプを防ぐ
-          if (results.length > 0) {
-            const firstId = results[0].id;
-            const firstEl = document.getElementById(`grid-image-${firstId}`);
-            if (firstEl) {
-              prependAnchorRef.current = {
-                id: firstId,
-                top: firstEl.getBoundingClientRect().top,
-              };
-            }
-          }
+        if (
+          entries[0].isIntersecting &&
+          hasPrev &&
+          loadPrev &&
+          !isCenteringRef.current &&
+          !isPrependingRef.current
+        ) {
+          isPrependingRef.current = true;
           loadPrev();
         }
       },
@@ -340,7 +309,7 @@ export default function ImageGrid({
         observer.unobserve(topObserverTarget.current);
       }
     };
-  }, [hasPrev, loadPrev, results]);
+  }, [hasPrev, loadPrev]);
 
   return (
     <>
@@ -361,6 +330,7 @@ export default function ImageGrid({
 
       <div 
         ref={gridRef}
+        style={{ overflowAnchor: "none" }}
         className="grid gap-2 md:gap-4 mt-4 custom-dynamic-grid"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -372,8 +342,8 @@ export default function ImageGrid({
           const isSelected = selectedIds.includes(item.id);
 
           return (
-            // 画像とボタンを重ねるため、relative を持った div で囲む
-            <div key={item.id} className="relative group">
+            // 画像とボタンを重ねるため、relative を持った正方形(aspect-square)の div で囲む
+            <div key={item.id} className="relative group aspect-square">
               {/* 選択時はパディング(白枠)をつけるためのラッパー */}
               <div 
                 className={`relative w-full h-full rounded-md overflow-hidden transition-all duration-200 ${
@@ -386,13 +356,6 @@ export default function ImageGrid({
                   // Python側の画像のエンドポイントを呼び出し
                   src={`${API_BASE_URL}/thumbnail/${item.id}`}
                   alt={`Image ${item.id}`}
-
-                  // サムネイル読み込み完了時、ソート変更直後の中央固定中であれば位置を再補正する
-                  onLoad={() => {
-                    if (isCenteringRef.current && activeFocusIdRef.current !== null) {
-                      scrollImageToCenter(activeFocusIdRef.current);
-                    }
-                  }}
 
                   // 選択モードONの時は選択切り替え、OFFの時はビューアを開く
                   onClick={() => {
