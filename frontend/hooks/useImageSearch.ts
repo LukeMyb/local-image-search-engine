@@ -32,6 +32,7 @@ export function useImageSearch() {
 
   // スクロールによる親の再レンダリング時にもコールバック参照を固定するためのRef
   const allIdsRef = useRef<number[]>([]);
+  const initialResultsRef = useRef<SearchResult[]>([]);
   const startIndexRef = useRef(0);
   const endIndexRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
@@ -96,6 +97,7 @@ export function useImageSearch() {
       setFocusRequest(null);
     }
     setResults([]); // 検索開始時に前の画像をクリア
+    initialResultsRef.current = [];
     applyWindowState([], 0, 0);
 
     setIsSuggestOpen(false); // 検索実行時はサジェストを閉じる
@@ -119,6 +121,7 @@ export function useImageSearch() {
       // お気に入り(/favorites)など従来形式が返ってきた時もエラーにならないようフォールバックを設定
       const ids: number[] = data.all_ids || data.results.map((r: any) => r.id);
       const initialResults: SearchResult[] = data.results.slice(0, 100);
+      initialResultsRef.current = initialResults;
 
       // フォーカス対象の画像IDが指定されており、かつ検索結果内に存在する場合
       const targetIndex = focusImageId != null ? ids.indexOf(focusImageId) : -1;
@@ -247,6 +250,19 @@ export function useImageSearch() {
     }
   }, []);
 
+  // 途中から表示している状態（startIndex > 0）で「一番上に戻る」が押された際、先頭スライスへ即座に復帰する関数
+  const resetToTop = useCallback(() => {
+    const ids = allIdsRef.current;
+    const topItems = initialResultsRef.current;
+    if (startIndexRef.current > 0 && topItems.length > 0) {
+      isLoadingPrevRef.current = false;
+      isLoadingMoreRef.current = false;
+      setFocusRequest(null);
+      applyWindowState(ids, 0, topItems.length);
+      setResults(topItems);
+    }
+  }, [applyWindowState]);
+
   // お気に入り切り替えロジック
   const toggleFavorite = async (image_id: number, e: React.MouseEvent, selectedImage: any, setSelectedImage: any) => {
     // 画像自体のクリック判定（モーダルを開く）が発動するのを防ぐ
@@ -263,6 +279,9 @@ export function useImageSearch() {
       // 一覧側の状態を更新
       setResults((prev) => 
         prev.map(item => item.id === image_id ? { ...item, is_favorite: data.is_favorite } : item)
+      );
+      initialResultsRef.current = initialResultsRef.current.map((item) =>
+        item.id === image_id ? { ...item, is_favorite: data.is_favorite } : item
       );
       
       // モーダル側の状態も同期
@@ -323,6 +342,7 @@ export function useImageSearch() {
     toggleFavorite,
     loadMore,
     loadPrev,
+    resetToTop,
     hasMore: endIndex < allIds.length,
     hasPrev: startIndex > 0,
     focusRequest,

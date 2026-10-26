@@ -136,7 +136,7 @@ export default function Home() {
   // 検索・画像操作ロジックをフックから取得
   const { 
     results, statusMessage, setStatusMessage, handleSearch, toggleFavorite,
-    loadMore, loadPrev, hasMore, hasPrev, focusRequest,
+    loadMore, loadPrev, resetToTop, hasMore, hasPrev, focusRequest,
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
@@ -399,6 +399,7 @@ export default function Home() {
           hasMore={hasMore}
           loadPrev={loadPrev}
           hasPrev={hasPrev}
+          resetToTop={resetToTop}
           focusRequest={focusRequest}
           onProgrammaticScroll={handleProgrammaticScroll}
           isSelectionMode={isSelectionMode}

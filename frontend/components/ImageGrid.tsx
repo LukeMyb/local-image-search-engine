@@ -18,6 +18,7 @@ interface ImageGridProps {
   hasMore?: boolean;
   loadPrev?: () => void;
   hasPrev?: boolean;
+  resetToTop?: () => void;
 
   // ソート変更時に特定画像を画面中央へ配置するためのリクエスト
   focusRequest?: { id: number; key: number } | null;
@@ -45,6 +46,7 @@ export default function ImageGrid({
   hasMore,
   loadPrev,
   hasPrev,
+  resetToTop,
   focusRequest,
   onProgrammaticScroll,
   isSelectionMode = false,
@@ -433,7 +435,18 @@ export default function ImageGrid({
       {/* 一番上に戻るボタン */}
       <button
         ref={scrollToTopBtnRef}
-        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        onClick={() => {
+          if (hasPrev && resetToTop) {
+            prevFirstIdRef.current = null;
+            isPrependingRef.current = false;
+            resetToTop();
+            requestAnimationFrame(() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            });
+          } else {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }}
         className="fixed bottom-6 right-6 p-3 bg-zinc-800/50 text-white rounded-full shadow-lg backdrop-blur-md transition-all duration-300 hover:bg-zinc-700/80 z-40 opacity-0 pointer-events-none translate-y-2 border border-zinc-700/50"
       >
         <ArrowUp size={24} />
