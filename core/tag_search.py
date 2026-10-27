@@ -366,7 +366,7 @@ class TagSearch:
                 
         return total_score, matched_details
 
-    def search(self, user_query, is_bookmarked=False):
+    def search(self, user_query):
         # | (パイプ記号) の前後の空白を詰め、純粋な | だけに統一する
         # これにより "A | B" も "A|B" として扱われ、後続の空白分割で千切れるのを防ぐ
         query = re.sub(r'\s*\|\s*', '|', user_query)
@@ -493,11 +493,7 @@ class TagSearch:
             row['matched_tags'] = matches
             scored_results.append(row)
             
-        # ブックマーク済みの時だけお気に入り(is_favorite)を最優先にし、それ以外は純粋なスコア順にする
-        if is_bookmarked:
-            scored_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
-        else:
-            scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
+        scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
 
         #複検索結果を返す
         return scored_results

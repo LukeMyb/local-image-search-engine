@@ -67,7 +67,7 @@ export default function Home() {
 
   // 選択モードとソート順のステート
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [sortOrder, setSortOrder] = useState<"score" | "favorite" | "newest">("score");
+  const [sortOrder, setSortOrder] = useState<"score" | "newest">("score");
   // 直前のソートがランダム表示だったかどうかを管理するステート
   const [isRandomSorted, setIsRandomSorted] = useState(false);
 
@@ -97,10 +97,7 @@ export default function Home() {
       return;
     }
 
-    let nextSort: "score" | "favorite" | "newest";
-    if (sortOrder === "score") nextSort = "favorite";
-    else if (sortOrder === "favorite") nextSort = "newest";
-    else nextSort = "score";
+    const nextSort: "score" | "newest" = sortOrder === "score" ? "newest" : "score";
     
     setSortOrder(nextSort);
     localStorage.setItem("sortOrder", nextSort); // 切り替えた瞬間にlocalStorageに保存する
@@ -120,7 +117,7 @@ export default function Home() {
 
 
   // 表示するソート文字列の決定
-  const sortText = sortOrder === "score" ? "スコア順" : sortOrder === "favorite" ? "お気に入り" : "新着順";
+  const sortText = sortOrder === "score" ? "スコア順" : "新着順";
 
   // 選択された画像のIDリストを管理するState
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -327,8 +324,9 @@ export default function Home() {
   useEffect(() => {
     refreshSavedQueries();
 
-    // localStorageから前回のソート順を読み込む（無い場合は "score" にする）
-    const savedSort = (localStorage.getItem("sortOrder") as "score" | "favorite" | "newest") || "score";
+    // localStorageから前回のソート順を読み込む（無い場合や無効な値の場合は "score" にする）
+    const rawSavedSort = localStorage.getItem("sortOrder");
+    const savedSort: "score" | "newest" = rawSavedSort === "newest" ? "newest" : "score";
     setSortOrder(savedSort);
 
     // localStorageから前回のビューアーUI表示状態を読み込む

@@ -118,8 +118,7 @@ export function useImageSearch() {
       const data = await response.json();
       if (currentSeq !== searchSeqRef.current) return;
 
-      // お気に入り(/favorites)など従来形式が返ってきた時もエラーにならないようフォールバックを設定
-      const ids: number[] = data.all_ids || data.results.map((r: any) => r.id);
+      const ids: number[] = data.all_ids;
       const initialResults: SearchResult[] = data.results.slice(0, 100);
       initialResultsRef.current = initialResults;
 

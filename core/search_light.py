@@ -51,7 +51,7 @@ class SearchManagerLight:
         # 純粋なタグ検索のサジェストに丸投げ
         return self.tag_searcher.get_suggestions(query_text, limit)
 
-    def search(self, user_query, is_bookmarked=False, sort_order="score"):
+    def search(self, user_query, sort_order="score"):
         # 絵柄タグ(style:xxx)が含まれているかチェック
         style_match = re.search(r'style:([^\s|]+)', user_query)
         style_name = None
@@ -60,9 +60,7 @@ class SearchManagerLight:
 
         # ソートの共通処理用の内部関数
         def sort_by_order(res_list):
-            if sort_order == "favorite":
-                res_list.sort(key=lambda x: (x.get('is_favorite', 0), x.get('match_score', 0), x['file_mtime']), reverse=True)
-            elif sort_order == "newest":
+            if sort_order == "newest":
                 res_list.sort(key=lambda x: (x['file_mtime'], x.get('match_score', 0)), reverse=True)
             else: # "score"
                 res_list.sort(key=lambda x: (x.get('match_score', 0), x['file_mtime']), reverse=True)
@@ -107,7 +105,7 @@ class SearchManagerLight:
                 return sort_by_order(style_results)
 
         # タグ検索の実行
-        tag_results = self.tag_searcher.search(user_query, is_bookmarked=False)
+        tag_results = self.tag_searcher.search(user_query)
 
         if not style_name:
             return sort_by_order(tag_results)

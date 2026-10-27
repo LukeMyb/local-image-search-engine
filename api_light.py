@@ -75,12 +75,7 @@ def search(q: str = "", sort: str = "score", favorite_only: bool = False):
         if favorite_only:
             query_sql += " WHERE is_favorite = 1"
             
-        if sort == "newest":
-            query_sql += " ORDER BY file_mtime DESC"
-        elif sort == "favorite":
-            query_sql += " ORDER BY is_favorite DESC, file_mtime DESC"
-        else:
-            query_sql += " ORDER BY file_mtime DESC"
+        query_sql += " ORDER BY file_mtime DESC"
             
         cursor.execute(query_sql)
         results = [dict(row) for row in cursor.fetchall()]
@@ -128,14 +123,6 @@ def suggest(q: str):
     """
     suggestions = search_manager.get_suggestions(q)
     return {"query": q, "suggestions": suggestions}
-
-@app.get("/favorites")
-def get_favorites():
-    """
-    お気に入り画像の一覧を取得し、検索結果と同じフォーマットで返す
-    """
-    results = search_manager.db.get_favorite_images()
-    return {"query": "", "results": results}
 
 @app.post("/favorite/{image_id}")
 def toggle_favorite(image_id: int):

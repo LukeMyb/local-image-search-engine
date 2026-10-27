@@ -174,7 +174,7 @@ class TagSearchLight:
                 
         return total_score, matched_details
 
-    def search(self, user_query, is_bookmarked=False):
+    def search(self, user_query):
         query = re.sub(r'\s*\|\s*', '|', user_query)
 
         words = re.split(r'[ \u3000,]+', query)
@@ -282,10 +282,7 @@ class TagSearchLight:
             row['matched_tags'] = matches
             scored_results.append(row)
             
-        if is_bookmarked:
-            scored_results.sort(key=lambda x: (x.get('is_favorite', 0), x['match_score'], x['file_mtime']), reverse=True)
-        else:
-            scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
+        scored_results.sort(key=lambda x: (x['match_score'], x['file_mtime']), reverse=True)
 
         return scored_results
 

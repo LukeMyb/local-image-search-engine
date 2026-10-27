@@ -43,7 +43,7 @@ class SearchManager:
         # それ以外は純粋なタグ検索のサジェストに丸投げ
         return self.tag_searcher.get_suggestions(query_text, limit)
 
-    def search(self, user_query, is_bookmarked=False, sort_order="score"):
+    def search(self, user_query, sort_order="score"):
         # 絵柄タグ(style:xxx)の抽出と分離処理（tag_searchから移植）
         style_match = re.search(r'style:([^\s|]+)', user_query)
         style_name = None
@@ -52,9 +52,7 @@ class SearchManager:
 
         # ソートの共通処理用の内部関数
         def sort_by_order(res_list):
-            if sort_order == "favorite":
-                res_list.sort(key=lambda x: (x.get('is_favorite', 0), x.get('match_score', 0), x['file_mtime']), reverse=True)
-            elif sort_order == "newest":
+            if sort_order == "newest":
                 res_list.sort(key=lambda x: (x['file_mtime'], x.get('match_score', 0)), reverse=True)
             else: # "score"
                 res_list.sort(key=lambda x: (x.get('match_score', 0), x['file_mtime']), reverse=True)
@@ -87,7 +85,7 @@ class SearchManager:
 
         # タグ検索の実行
         # タグ検索エンジンには純粋なテキストクエリだけを投げる
-        tag_results = self.tag_searcher.search(user_query, is_bookmarked=False) # ソートは後で行うためここではFalse
+        tag_results = self.tag_searcher.search(user_query)
 
         # 結果のAND結合と最終スコア計算
         if not style_name:
@@ -121,5 +119,4 @@ class SearchManager:
             })
             scored_results.append(row)
 
-        # ブックマーク済みの時だけお気に入り(is_favorite)を最優先にし、それ以外は純粋なスコア順にする
         return sort_by_order(scored_results)
