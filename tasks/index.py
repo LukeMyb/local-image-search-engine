@@ -125,23 +125,31 @@ class ThumbnailGenerator:
 
         print(f"サムネイル生成完了 成功: {success_count}枚 / 失敗: {total_count - success_count}枚")
 
-# --- ここから単体テスト用コード ---
+# --- ここから単体テスト・CLI実行用コード ---
 if __name__ == "__main__":
+    import sys
+
     # スキャン設定
     TEST_DIR = r"data\images" #画像のディレクトリパス
+
+    args = set(sys.argv[1:])
+    scan_only = "--scan-only" in args
+    thumb_only = "--thumb-only" in args
 
     print("=== インデックス構築プロセスを開始します ===")
     db = ImageDatabase()
     
-    # ステップ1: ファイルスキャン
-    print("\n[Step 1] ファイルスキャン実行中...")
-    indexer = ImageIndexer(db, TEST_DIR)
-    indexer.scan_and_register()
+    # ステップ1: ファイルスキャン (--thumb-only 指定時はスキップ)
+    if not thumb_only:
+        print("\n[Step 1] ファイルスキャン実行中...")
+        indexer = ImageIndexer(db, TEST_DIR)
+        indexer.scan_and_register()
     
-    # ステップ2: サムネイル生成
-    print("\n[Step 2] サムネイル生成実行中...")
-    generator = ThumbnailGenerator(db)
-    generator.process_all()
+    # ステップ2: サムネイル生成 (--scan-only 指定時はスキップ)
+    if not scan_only:
+        print("\n[Step 2] サムネイル生成実行中...")
+        generator = ThumbnailGenerator(db)
+        generator.process_all()
     
     db.close()
     print("\n=== 全プロセス完了 ===")

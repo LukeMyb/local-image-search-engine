@@ -10,8 +10,9 @@ class ImageDatabase:
         #データベースへの接続と初期化
         os.makedirs(os.path.dirname(db_path), exist_ok=True) #dbの存在を確認(無ければ生成)
 
-        # FastAPIからのマルチスレッドアクセスを許可し、ロック待機時間を設定
-        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10.0)
+        # FastAPIからのマルチスレッドアクセスやバッチ並列実行を許可し、ロック待機時間とWALモードを設定
+        self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=60.0)
+        self.conn.execute("PRAGMA journal_mode=WAL;")
 
         self.conn.row_factory = sqlite3.Row #tupleをdictのように扱えるようになる
         self._create_tables()
