@@ -66,7 +66,8 @@ export function useImageSearch() {
     e?: React.FormEvent,
     overrideQuery?: string,
     isFavoriteFilter: boolean = false,
-    focusImageId?: number | null
+    focusImageId?: number | null,
+    isTrashFilter: boolean = false
   ) => {
     // フォーム送信によるページリロードを阻止する
     if (e) e.preventDefault();
@@ -86,14 +87,18 @@ export function useImageSearch() {
     // クエリをlocalStorageに保存する
     localStorage.setItem("lastQuery", currentQuery);
 
-    let endpoint = `/search?q=${encodeURIComponent(currentQuery)}&sort=${sortOrder}${isFavoriteFilter ? '&favorite_only=true' : ''}`;
+    let endpoint = `/search?q=${encodeURIComponent(currentQuery)}&sort=${sortOrder}${isFavoriteFilter ? '&favorite_only=true' : ''}${isTrashFilter ? '&trash_only=true' : ''}`;
     
     // ランダムソート時はキャッシュを回避して毎回新しいシャッフルを得る
     if (sortOrder === "random") {
       endpoint += `&_t=${Date.now()}`;
     }
 
-    setStatusMessage(currentQuery ? `「${currentQuery}」を検索中...` : `全件表示中...`);
+    if (isTrashFilter) {
+      setStatusMessage(currentQuery ? `ゴミ箱内「${currentQuery}」を検索中...` : `ゴミ箱を表示中...`);
+    } else {
+      setStatusMessage(currentQuery ? `「${currentQuery}」を検索中...` : `全件表示中...`);
+    }
     if (!focusImageId) {
       setFocusRequest(null);
     }
@@ -172,7 +177,8 @@ export function useImageSearch() {
         }
       }
 
-      setStatusMessage(`${data.total || ids.length}件のヒット`);
+      const hitCount = data.total ?? ids.length;
+      setStatusMessage(isTrashFilter ? `ゴミ箱: ${hitCount}件` : `${hitCount}件のヒット`);
     } catch (error: any) {
       if (currentSeq !== searchSeqRef.current) return;
       console.error(error);
@@ -293,6 +299,34 @@ export function useImageSearch() {
     }
   };
 
+  // 現在の表示リスト・スライス範囲から指定ID群を即座に除外する共通ヘルパー
+  const removeIdsFromView = useCallback((targetIds: number[]) => {
+    const targetSet = new Set<number>(targetIds);
+    const oldIds = allIdsRef.current;
+    const oldStart = startIndexRef.current;
+    const oldEnd = endIndexRef.current;
+
+    let removedBeforeStart = 0;
+    let removedInWindow = 0;
+    for (let i = 0; i < oldIds.length; i++) {
+      if (targetSet.has(oldIds[i])) {
+        if (i < oldStart) {
+          removedBeforeStart++;
+        } else if (i < oldEnd) {
+          removedInWindow++;
+        }
+      }
+    }
+
+    const newAllIds = oldIds.filter((id) => !targetSet.has(id));
+    const newStart = Math.max(0, oldStart - removedBeforeStart);
+    const newEnd = Math.max(newStart, oldEnd - removedBeforeStart - removedInWindow);
+
+    applyWindowState(newAllIds, newStart, newEnd);
+    initialResultsRef.current = initialResultsRef.current.filter((item) => !targetSet.has(item.id));
+    setResults((prev) => prev.filter((item) => !targetSet.has(item.id)));
+  }, [applyWindowState]);
+
   // 指定した画像IDリストを論理削除（data/trash/ へ移動）し、現在の表示リストから即座に除外する関数
   const trashImages = useCallback(async (imageIds: number[]): Promise<number[]> => {
     if (!imageIds || imageIds.length === 0) return [];
@@ -312,31 +346,7 @@ export function useImageSearch() {
       const trashedIds: number[] = data.trashed_ids || [];
       if (trashedIds.length === 0) return [];
 
-      const trashedSet = new Set<number>(trashedIds);
-      const oldIds = allIdsRef.current;
-      const oldStart = startIndexRef.current;
-      const oldEnd = endIndexRef.current;
-
-      // スライス範囲のインデックス補正値を計算
-      let removedBeforeStart = 0;
-      let removedInWindow = 0;
-      for (let i = 0; i < oldIds.length; i++) {
-        if (trashedSet.has(oldIds[i])) {
-          if (i < oldStart) {
-            removedBeforeStart++;
-          } else if (i < oldEnd) {
-            removedInWindow++;
-          }
-        }
-      }
-
-      const newAllIds = oldIds.filter((id) => !trashedSet.has(id));
-      const newStart = Math.max(0, oldStart - removedBeforeStart);
-      const newEnd = Math.max(newStart, oldEnd - removedBeforeStart - removedInWindow);
-
-      applyWindowState(newAllIds, newStart, newEnd);
-      initialResultsRef.current = initialResultsRef.current.filter((item) => !trashedSet.has(item.id));
-      setResults((prev) => prev.filter((item) => !trashedSet.has(item.id)));
+      removeIdsFromView(trashedIds);
       setStatusMessage(`${trashedIds.length}枚をゴミ箱に移動しました`);
 
       return trashedIds;
@@ -345,7 +355,37 @@ export function useImageSearch() {
       setStatusMessage(error.message || "画像の削除に失敗しました");
       return [];
     }
-  }, [applyWindowState]);
+  }, [removeIdsFromView]);
+
+  // 指定した画像IDリストをゴミ箱から復元（data/images/ へ移動）し、現在のゴミ箱表示リストから即座に除外する関数
+  const restoreImages = useCallback(async (imageIds: number[]): Promise<number[]> => {
+    if (!imageIds || imageIds.length === 0) return [];
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/images/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: imageIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error("画像の復元に失敗しました");
+      }
+
+      const data = await response.json();
+      const restoredIds: number[] = data.restored_ids || [];
+      if (restoredIds.length === 0) return [];
+
+      removeIdsFromView(restoredIds);
+      setStatusMessage(`${restoredIds.length}枚を復元しました`);
+
+      return restoredIds;
+    } catch (error: any) {
+      console.error("復元エラー:", error);
+      setStatusMessage(error.message || "画像の復元に失敗しました");
+      return [];
+    }
+  }, [removeIdsFromView]);
 
   // バックエンドからサジェスト候補を取得する関数
   const fetchSuggestions = useCallback(async (inputQuery: string) => {
@@ -395,6 +435,7 @@ export function useImageSearch() {
     handleSearch,
     toggleFavorite,
     trashImages,
+    restoreImages,
     loadMore,
     loadPrev,
     resetToTop,

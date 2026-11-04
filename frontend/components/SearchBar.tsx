@@ -26,6 +26,9 @@ interface SearchBarProps {
   // お気に入りフィルター用のProps
   isFavoriteFilter: boolean;
   onToggleFavoriteFilter: () => void;
+  // ゴミ箱フィルター用のProps
+  isTrashFilter: boolean;
+  onToggleTrashFilter: () => void;
 }
 
 export default function SearchBar({
@@ -44,6 +47,9 @@ export default function SearchBar({
   // お気に入りフィルター
   isFavoriteFilter,
   onToggleFavoriteFilter,
+  // ゴミ箱フィルター
+  isTrashFilter,
+  onToggleTrashFilter,
 }: SearchBarProps) {
   // 枠外クリック検知用のRefと、削除ダイアログ用のState
   const searchBarRef = useRef<HTMLDivElement>(null);
@@ -95,7 +101,7 @@ export default function SearchBar({
                 setQuery(e.target.value);
                 setIsSuggestOpen(true);
               }}
-              placeholder="タグやキーワードを入力..."
+              placeholder={isTrashFilter ? "ゴミ箱内を検索..." : "タグやキーワードを入力..."}
               className="p-3 pr-10 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 w-full min-w-0"
             />
 
@@ -181,7 +187,7 @@ export default function SearchBar({
           )}
         </button>
 
-        {/* お気に入りフィルターボタン（モック） */}
+        {/* お気に入りフィルターボタン */}
         <button 
           type="button"
           onClick={onToggleFavoriteFilter}
@@ -193,6 +199,20 @@ export default function SearchBar({
           title="お気に入りのみ表示"
         >
           <Heart size={16} className={isFavoriteFilter ? "fill-current" : ""} />
+        </button>
+
+        {/* ゴミ箱フィルターボタン */}
+        <button
+          type="button"
+          onClick={onToggleTrashFilter}
+          className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+            isTrashFilter
+              ? "bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30"
+              : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
+          }`}
+          title={isTrashFilter ? "ゴミ箱表示中（クリックで通常表示に戻る）" : "ゴミ箱を表示"}
+        >
+          <Trash2 size={16} />
         </button>
       </div>
 

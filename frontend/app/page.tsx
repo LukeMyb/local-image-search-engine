@@ -81,6 +81,9 @@ export default function Home() {
   // お気に入りフィルターのON/OFF状態を管理するState
   const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
 
+  // ゴミ箱フィルターのON/OFF状態を管理するState
+  const [isTrashFilter, setIsTrashFilter] = useState(false);
+
   // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
   const toggleSelection = (id: number) => {
     setSelectedIds((prev) => 
@@ -93,7 +96,7 @@ export default function Home() {
     // 直前のソートがランダムだった場合は、ボタンの表示は変えずに現在表示されているソート順をそのまま適用する
     if (isRandomSorted) {
       setIsRandomSorted(false);
-      handleSearch(query, sortOrder, undefined, undefined, isFavoriteFilter, lastViewedIdRef.current);
+      handleSearch(query, sortOrder, undefined, undefined, isFavoriteFilter, lastViewedIdRef.current, isTrashFilter);
       return;
     }
 
@@ -102,7 +105,7 @@ export default function Home() {
     setSortOrder(nextSort);
     localStorage.setItem("sortOrder", nextSort); // 切り替えた瞬間にlocalStorageに保存する
     // 最後にビューアーで開いた画像を中心に保持したまま再検索を実行
-    handleSearch(query, nextSort, undefined, undefined, isFavoriteFilter, lastViewedIdRef.current);
+    handleSearch(query, nextSort, undefined, undefined, isFavoriteFilter, lastViewedIdRef.current, isTrashFilter);
   };
 
   // お気に入りフィルターのトグル処理
@@ -111,7 +114,16 @@ export default function Home() {
     setIsFavoriteFilter(nextState);
     setIsRandomSorted(false);
     localStorage.setItem("isFavoriteFilter", String(nextState)); // 切り替えた瞬間にlocalStorageに保存する
-    handleSearch(query, sortOrder, undefined, undefined, nextState);
+    handleSearch(query, sortOrder, undefined, undefined, nextState, null, isTrashFilter);
+  };
+
+  // ゴミ箱フィルターのトグル処理
+  const toggleTrashFilter = () => {
+    const nextState = !isTrashFilter;
+    setIsTrashFilter(nextState);
+    setIsRandomSorted(false);
+    setIsSelectionMode(false);
+    handleSearch(query, sortOrder, undefined, undefined, isFavoriteFilter, null, nextState);
   };
 
 
@@ -132,7 +144,7 @@ export default function Home() {
 
   // 検索・画像操作ロジックをフックから取得
   const { 
-    results, statusMessage, setStatusMessage, handleSearch, toggleFavorite, trashImages,
+    results, statusMessage, setStatusMessage, handleSearch, toggleFavorite, trashImages, restoreImages,
     loadMore, loadPrev, resetToTop, hasMore, hasPrev, focusRequest,
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
@@ -164,10 +176,36 @@ export default function Home() {
     }
   }, [selectedIds, trashImages]);
 
+  // ゴミ箱表示中：ビューアーから1枚の画像を復元し、前後の画像へ切り替える処理
+  const handleRestoreInViewer = useCallback(async (imageId: number) => {
+    const currentIndex = results.findIndex((item) => item.id === imageId);
+    const nextCandidate =
+      currentIndex !== -1 && currentIndex < results.length - 1
+        ? results[currentIndex + 1]
+        : currentIndex > 0
+        ? results[currentIndex - 1]
+        : null;
+
+    const restored = await restoreImages([imageId]);
+    if (restored.length > 0) {
+      setSelectedImage(nextCandidate);
+    }
+  }, [results, restoreImages]);
+
+  // ゴミ箱表示中：選択モードで選択された複数画像を一括で復元する処理
+  const handleRestoreSelected = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+    const restored = await restoreImages(selectedIds);
+    if (restored.length > 0) {
+      setSelectedIds([]);
+      setIsSelectionMode(false);
+    }
+  }, [selectedIds, restoreImages]);
+
   // 現在のクエリとフィルターを維持したまま、並び順をランダムにして再検索する
   const executeRandomSearch = () => {
     setIsRandomSorted(true);
-    handleSearch(query, "random", undefined, undefined, isFavoriteFilter);
+    handleSearch(query, "random", undefined, undefined, isFavoriteFilter, null, isTrashFilter);
   };
 
   // 類似画像（同じ髪色）を検索する関数
@@ -276,9 +314,9 @@ export default function Home() {
       setQuery(newQuery);
       setSelectedImage(null); // ビューアーを閉じる
       setIsRandomSorted(false);
-      handleSearch(newQuery, "score", undefined, undefined, isFavoriteFilter);
+      handleSearch(newQuery, "score", undefined, undefined, isFavoriteFilter, null, isTrashFilter);
     }
-  }, [handleSearch, isFavoriteFilter]);
+  }, [handleSearch, isFavoriteFilter, isTrashFilter]);
 
   // システム制御（ズーム禁止・スクロールロック）を有効化
   useSystemUI({ selectedImage, isDrawerOpen });
@@ -395,7 +433,7 @@ export default function Home() {
           setQuery={setQuery}
           onSearch={(e) => {
             setIsRandomSorted(false);
-            handleSearch(query, sortOrder, e, undefined, isFavoriteFilter);
+            handleSearch(query, sortOrder, e, undefined, isFavoriteFilter, null, isTrashFilter);
           }}
           setIsDrawerOpen={setIsDrawerOpen}
           openBookmarkDialog={openBookmarkDialog}
@@ -409,6 +447,9 @@ export default function Home() {
           // お気に入りフィルター
           isFavoriteFilter={isFavoriteFilter}
           onToggleFavoriteFilter={toggleFavoriteFilter}
+          // ゴミ箱フィルター
+          isTrashFilter={isTrashFilter}
+          onToggleTrashFilter={toggleTrashFilter}
         />
       </div>
 
@@ -463,7 +504,9 @@ export default function Home() {
             onClose={() => setSelectedImage(null)} 
             onToggleFavorite={(id, e) => toggleFavorite(id, e, selectedImage, setSelectedImage)}
             onSearchSimilar={executeSearchSimilar}
+            isTrashMode={isTrashFilter}
             onTrash={handleTrashInViewer}
+            onRestore={handleRestoreInViewer}
             onNext={() => hasSubsequent && setSelectedImage(results[currentIndex + 1])}
             onPrev={() => hasPreceding && setSelectedImage(results[currentIndex - 1])}
             hasPreceding={hasPreceding}
@@ -490,7 +533,7 @@ export default function Home() {
         setQuery={setQuery}
         handleSearch={(e, oq) => {
           setIsRandomSorted(false);
-          return handleSearch(query, sortOrder, e, oq, isFavoriteFilter);
+          return handleSearch(query, sortOrder, e, oq, isFavoriteFilter, null, isTrashFilter);
         }}
         allBookmarks={allBookmarks}
         savedQueries={savedQueries}
@@ -509,7 +552,9 @@ export default function Home() {
           setSelectedIds={setSelectedIds}
           setStatusMessage={setStatusMessage}
           executeRandomSearch={executeRandomSearch}
+          isTrashMode={isTrashFilter}
           onTrashSelected={handleTrashSelected}
+          onRestoreSelected={handleRestoreSelected}
         />
       )}
     </div>
