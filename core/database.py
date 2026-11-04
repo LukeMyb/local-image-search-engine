@@ -1,6 +1,8 @@
 import sqlite3
 import os
+import shutil
 import json
+from pathlib import Path
 import numpy as np
 
 class ImageDatabase:
@@ -30,14 +32,22 @@ class ImageDatabase:
                 is_thumbnail_created INTEGER DEFAULT 0,
                 is_processed_vector INTEGER DEFAULT 0,
                 is_processed_tag INTEGER DEFAULT 0,
-                is_favorite INTEGER DEFAULT 0
+                is_favorite INTEGER DEFAULT 0,
+                is_deleted INTEGER DEFAULT 0
             )
         ''')
+
+        # 既存DBへの自動マイグレーション（is_deleted カラムが存在しない場合は追加）
+        cursor.execute('PRAGMA table_info(images)')
+        existing_columns = [row['name'] for row in cursor.fetchall()]
+        if 'is_deleted' not in existing_columns:
+            cursor.execute('ALTER TABLE images ADD COLUMN is_deleted INTEGER DEFAULT 0')
 
         #未処理画像を瞬時に見つけるためのインデックス
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_thumb ON images(is_thumbnail_created)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_vector ON images(is_processed_vector)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_unprocessed_tag ON images(is_processed_tag)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_is_deleted ON images(is_deleted)')
 
         # ---------------------------------------------------------
         # 以下、FTS5（全文検索）用の仮想テーブルと自動同期ロジックの追加
@@ -440,32 +450,158 @@ class ImageDatabase:
         
         return sorted_results
 
+    # ----- 論理削除（ゴミ箱移動）・復元関連メソッド -----
+
+    def get_trash_path(self, file_path: str) -> str:
+        """
+        元画像のパス（例: data/images/202409/xxx.jpg）から、
+        ディレクトリ階層を維持したゴミ箱パス（例: data/trash/202409/xxx.jpg）を返す
+        """
+        src_path = Path(file_path)
+        try:
+            rel_to_images = src_path.relative_to("data/images")
+        except ValueError:
+            # 万が一 data/images 配下でないパス形式の場合は親フォルダ名＋ファイル名で階層を維持
+            rel_to_images = Path(src_path.parent.name) / src_path.name
+        return (Path("data/trash") / rel_to_images).as_posix()
+
+    def trash_images(self, image_ids: list[int]) -> list[int]:
+        """
+        指定されたIDリストの元画像を data/trash/ に階層維持で移動し、
+        DBの is_deleted フラグを 1 に更新する（サムネイルとDB解析データは温存）
+        """
+        if not image_ids:
+            return []
+
+        cursor = self.conn.cursor()
+        placeholders = ','.join(['?'] * len(image_ids))
+        cursor.execute(f"SELECT id, file_path, is_deleted FROM images WHERE id IN ({placeholders})", image_ids)
+        rows = cursor.fetchall()
+
+        trashed_ids = []
+        for row in rows:
+            img_id = row['id']
+            src_path = Path(row['file_path'])
+            dst_path = Path(self.get_trash_path(row['file_path']))
+
+            try:
+                if src_path.exists():
+                    dst_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(src_path), str(dst_path))
+
+                if dst_path.exists():
+                    cursor.execute("UPDATE images SET is_deleted = 1 WHERE id = ?", (img_id,))
+                    trashed_ids.append(img_id)
+                else:
+                    print(f"警告: 移動対象のファイルが見つかりません (id={img_id}, path={src_path})")
+            except Exception as e:
+                print(f"論理削除エラー (id={img_id}): {e}")
+
+        self.conn.commit()
+        return trashed_ids
+
+    def restore_images(self, image_ids: list[int]) -> list[int]:
+        """
+        指定されたIDリストの元画像を data/trash/ から data/images/ の元の階層に戻し、
+        DBの is_deleted フラグを 0 に更新する
+        """
+        if not image_ids:
+            return []
+
+        cursor = self.conn.cursor()
+        placeholders = ','.join(['?'] * len(image_ids))
+        cursor.execute(f"SELECT id, file_path, is_deleted FROM images WHERE id IN ({placeholders})", image_ids)
+        rows = cursor.fetchall()
+
+        restored_ids = []
+        for row in rows:
+            img_id = row['id']
+            dst_path = Path(row['file_path'])
+            src_path = Path(self.get_trash_path(row['file_path']))
+
+            try:
+                if src_path.exists():
+                    dst_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(src_path), str(dst_path))
+                    # 移動後に data/trash/ 側のサブフォルダが空になったら片付ける
+                    try:
+                        if src_path.parent != Path("data/trash") and not any(src_path.parent.iterdir()):
+                            src_path.parent.rmdir()
+                    except OSError:
+                        pass
+
+                if dst_path.exists():
+                    cursor.execute("UPDATE images SET is_deleted = 0 WHERE id = ?", (img_id,))
+                    restored_ids.append(img_id)
+                else:
+                    print(f"警告: 復元対象のファイルが見つかりません (id={img_id}, trash_path={src_path})")
+            except Exception as e:
+                print(f"復元エラー (id={img_id}): {e}")
+
+        self.conn.commit()
+        return restored_ids
+
 # --- ここから単体テスト用コード ---
 if __name__ == "__main__":
-    import time
-    
-    print("=== データベースの単体テストを開始します ===")
-    
-    # 1. データベースの初期化（この瞬間に index.db が作られます）
+    import sys
+
+    print("=== データベースの論理削除・復元テスト ===")
     db = ImageDatabase(db_path="data/db/index.db")
-    print("データベースに接続し、テーブルの初期化を完了しました。")
 
-    # 2. ダミーデータの登録テスト
-    # 現在のUNIXタイムスタンプを取得して、ミリ秒のズレをシミュレートします
-    current_time = time.time()
-    dummy_data = [
-        ("C:/dummy/test_image_1.jpg", current_time),
-        ("C:/dummy/test_image_2.jpg", current_time + 0.123)
-    ]
-    db.register_images(dummy_data)
-    print(f"{len(dummy_data)}件のダミー画像を登録しました。")
+    cursor = db.conn.cursor()
+    cursor.execute("PRAGMA table_info(images)")
+    cols = [r["name"] for r in cursor.fetchall()]
+    print(f"1. imagesテーブルのカラム確認: {'is_deleted' in cols} (columns: {cols})")
 
-    # 3. データの取得テスト（辞書型のようにアクセスできるかの確認）
-    unprocessed = db.get_unprocessed_images('is_processed_vector')
-    print("未処理の画像一覧（ベクトル解析待ち）:")
-    for row in unprocessed:
-        print(f" - ID: {row['id']}, Path: {row['file_path']}")
+    # コマンドライン引数:
+    #   python -m core.database trash <id>    -> 指定IDを論理削除（data/trash へ移動）
+    #   python -m core.database restore <id>  -> 指定IDを復元（data/images へ戻す）
+    #   引数なし                              -> 先頭1件を使って自動で「論理削除 -> 復元」の往復テストを実行
+    if len(sys.argv) >= 3 and sys.argv[1] in ("trash", "restore"):
+        action = sys.argv[1]
+        target_id = int(sys.argv[2])
+        if action == "trash":
+            res = db.trash_images([target_id])
+            row = db.get_image_by_id(target_id)
+            trash_p = db.get_trash_path(row["file_path"]) if row else ""
+            print(f"[trash完了] ID={res}, is_deleted={row['is_deleted'] if row else None}")
+            print(f"  元パス実在: {os.path.exists(row['file_path'])}, trashパス実在({trash_p}): {os.path.exists(trash_p)}")
+        else:
+            res = db.restore_images([target_id])
+            row = db.get_image_by_id(target_id)
+            trash_p = db.get_trash_path(row["file_path"]) if row else ""
+            print(f"[restore完了] ID={res}, is_deleted={row['is_deleted'] if row else None}")
+            print(f"  元パス実在({row['file_path']}): {os.path.exists(row['file_path'])}, trashパス実在: {os.path.exists(trash_p)}")
+    else:
+        cursor.execute("SELECT id, file_path FROM images WHERE is_deleted = 0 LIMIT 1")
+        sample = cursor.fetchone()
+        if sample:
+            test_id = sample["id"]
+            orig_path = sample["file_path"]
+            trash_path = db.get_trash_path(orig_path)
+            print(f"\n2. サンプル画像 (ID={test_id}) で往復テストを実行します")
+            print(f"   元パス  : {orig_path}")
+            print(f"   Trash先 : {trash_path}")
 
-    # 4. 安全に閉じる
+            # 論理削除
+            db.trash_images([test_id])
+            after_trash = db.get_image_by_id(test_id)
+            print(f"\n[Step A: trash_images 実行後]")
+            print(f"   DB is_deleted       : {after_trash['is_deleted']}")
+            print(f"   data/images に存在? : {os.path.exists(orig_path)}")
+            print(f"   data/trash  に存在? : {os.path.exists(trash_path)}")
+            print(f"   サムネイル温存?     : {os.path.exists(after_trash['thumbnail_path'])}")
+
+            # 復元
+            db.restore_images([test_id])
+            after_restore = db.get_image_by_id(test_id)
+            print(f"\n[Step B: restore_images 実行後]")
+            print(f"   DB is_deleted       : {after_restore['is_deleted']}")
+            print(f"   data/images に存在? : {os.path.exists(orig_path)}")
+            print(f"   data/trash  に存在? : {os.path.exists(trash_path)}")
+            print(f"   タグ情報の温存確認  : {bool(after_restore['tags_combined'])}")
+        else:
+            print("テスト対象の画像がDBに登録されていません。")
+
     db.close()
-    print("=== テストが正常に完了しました ===")
+    print("\n=== テストが正常に完了しました ===")
