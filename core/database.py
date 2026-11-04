@@ -624,6 +624,92 @@ class ImageDatabase:
         print(f"  [ゴミ箱を空にする] data/trash/ から元画像 {deleted_file_count}枚 を消去しました。")
         return self.purge_images(ids_to_purge, faiss_index_path=faiss_index_path)
 
+    def sync_filesystem_states(
+        self,
+        active_paths: set[str] | None = None,
+        images_dir: str = "data/images",
+        faiss_index_path: str = "data/faiss/style.index",
+    ):
+        """
+        DB内の全レコードとディスク上の実在ファイル（data/images および data/trash）を照合し、
+        以下の3状態を自動同期する（アプリ起動時および index.py 実行時に呼ばれる）：
+          状態① data/images に実在する -> is_deleted = 0（以前1なら自動復元）
+          状態② data/trash  に実在する -> is_deleted = 1（以前0なら論理削除に更新）
+          状態③ どちらにも存在しない   -> 完全削除（サムネイル・DB・FAISSから自動消去）
+        """
+        if active_paths is None:
+            if not os.path.exists(images_dir):
+                return
+            active_paths = set()
+            for root, _, files in os.walk(images_dir):
+                for f in files:
+                    active_paths.add(os.path.join(root, f).replace("\\", "/"))
+
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, file_path, is_deleted FROM images")
+        rows = cursor.fetchall()
+        if not rows:
+            return
+
+        restored_ids = []
+        trashed_ids = []
+        purged_ids = []
+
+        for row in rows:
+            img_id = row['id']
+            file_path = row['file_path']
+            is_deleted = row['is_deleted']
+
+            if file_path in active_paths:
+                # 状態①: data/images に存在する
+                if is_deleted == 1:
+                    restored_ids.append(img_id)
+            else:
+                # data/images に無い場合、data/trash 側にあるか確認
+                trash_path = Path(self.get_trash_path(file_path))
+                if trash_path.exists():
+                    # 状態②: data/trash に存在する
+                    if is_deleted == 0:
+                        trashed_ids.append(img_id)
+                else:
+                    # 状態③: data/images にも data/trash にも存在しない（完全削除対象）
+                    purged_ids.append(img_id)
+
+        chunk_size = 900
+        if restored_ids:
+            for i in range(0, len(restored_ids), chunk_size):
+                chunk = restored_ids[i:i + chunk_size]
+                placeholders = ','.join(['?'] * len(chunk))
+                cursor.execute(f"UPDATE images SET is_deleted = 0 WHERE id IN ({placeholders})", chunk)
+            self.conn.commit()
+            print(f"  -> [自動復元] data/images に戻された {len(restored_ids)}件 の画像を復元しました（再計算なし）。")
+
+        if trashed_ids:
+            for i in range(0, len(trashed_ids), chunk_size):
+                chunk = trashed_ids[i:i + chunk_size]
+                placeholders = ','.join(['?'] * len(chunk))
+                cursor.execute(f"UPDATE images SET is_deleted = 1 WHERE id IN ({placeholders})", chunk)
+            self.conn.commit()
+            print(f"  -> [自動論理削除] data/trash に移動された {len(trashed_ids)}件 の画像をゴミ箱状態に更新しました。")
+
+        if purged_ids:
+            print(f"  -> [ゴースト・完全削除検知] どちらのフォルダにも存在しない {len(purged_ids)}件 のデータをクリーンアップします...")
+            self.purge_images(purged_ids, faiss_index_path=faiss_index_path)
+
+        # data/trash 内の空になったサブフォルダがあれば掃除する
+        trash_root = Path("data/trash")
+        if trash_root.exists():
+            for sub in sorted(trash_root.rglob('*'), key=lambda p: len(p.parts), reverse=True):
+                if sub.is_dir():
+                    try:
+                        if not any(sub.iterdir()):
+                            sub.rmdir()
+                    except OSError:
+                        pass
+
+        if not restored_ids and not trashed_ids and not purged_ids:
+            print("  -> [3状態同期] ゴーストデータや状態変更はありませんでした。")
+
 # --- ここから単体テスト用コード ---
 if __name__ == "__main__":
     import sys

@@ -11,6 +11,8 @@ class SearchManagerLight:
     def __init__(self, db_path="data/db/index.db"):
         print("  [SearchManagerLight] 初期化中...")
         self.db = ImageDatabase(db_path)
+        # 起動時にエクスプローラーで削除・移動された画像の3状態同期（ゴーストデータのクリーンアップ）を実行
+        self.db.sync_filesystem_states()
         
         # タグ検索エンジン(軽量版)を初期化
         self.tag_searcher = TagSearchLight(db_path)
