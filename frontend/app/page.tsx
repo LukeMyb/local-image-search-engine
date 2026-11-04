@@ -132,11 +132,37 @@ export default function Home() {
 
   // 検索・画像操作ロジックをフックから取得
   const { 
-    results, statusMessage, setStatusMessage, handleSearch, toggleFavorite,
+    results, statusMessage, setStatusMessage, handleSearch, toggleFavorite, trashImages,
     loadMore, loadPrev, resetToTop, hasMore, hasPrev, focusRequest,
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
+
+  // ビューアーから1枚の画像を論理削除し、前後の画像へ切り替える処理
+  const handleTrashInViewer = useCallback(async (imageId: number) => {
+    const currentIndex = results.findIndex((item) => item.id === imageId);
+    const nextCandidate =
+      currentIndex !== -1 && currentIndex < results.length - 1
+        ? results[currentIndex + 1]
+        : currentIndex > 0
+        ? results[currentIndex - 1]
+        : null;
+
+    const trashed = await trashImages([imageId]);
+    if (trashed.length > 0) {
+      setSelectedImage(nextCandidate);
+    }
+  }, [results, trashImages]);
+
+  // 選択モードで選択された複数画像を一括で論理削除する処理
+  const handleTrashSelected = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+    const trashed = await trashImages(selectedIds);
+    if (trashed.length > 0) {
+      setSelectedIds([]);
+      setIsSelectionMode(false);
+    }
+  }, [selectedIds, trashImages]);
 
   // 現在のクエリとフィルターを維持したまま、並び順をランダムにして再検索する
   const executeRandomSearch = () => {
@@ -437,6 +463,7 @@ export default function Home() {
             onClose={() => setSelectedImage(null)} 
             onToggleFavorite={(id, e) => toggleFavorite(id, e, selectedImage, setSelectedImage)}
             onSearchSimilar={executeSearchSimilar}
+            onTrash={handleTrashInViewer}
             onNext={() => hasSubsequent && setSelectedImage(results[currentIndex + 1])}
             onPrev={() => hasPreceding && setSelectedImage(results[currentIndex - 1])}
             hasPreceding={hasPreceding}
@@ -482,6 +509,7 @@ export default function Home() {
           setSelectedIds={setSelectedIds}
           setStatusMessage={setStatusMessage}
           executeRandomSearch={executeRandomSearch}
+          onTrashSelected={handleTrashSelected}
         />
       )}
     </div>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CheckSquare, SortDesc, X, MoreHorizontal, Tag, Shuffle } from "lucide-react";
+import { CheckSquare, SortDesc, X, MoreHorizontal, Tag, Shuffle, Trash2 } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 // 親（page.tsx）から受け取るプロパティの型定義
@@ -13,6 +13,7 @@ interface ControlBarProps {
   setSelectedIds: (ids: number[]) => void;
   setStatusMessage: (msg: string) => void;
   executeRandomSearch: () => void;
+  onTrashSelected?: () => Promise<void> | void;
 }
 
 export default function ControlBar({
@@ -25,6 +26,7 @@ export default function ControlBar({
   setSelectedIds,
   setStatusMessage,
   executeRandomSearch,
+  onTrashSelected,
 }: ControlBarProps) {
   // アクションメニューの開閉状態を管理するState
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -136,7 +138,19 @@ export default function ControlBar({
                   <Tag size={18} className="text-blue-400" />
                   <span className="text-sm font-medium">絵柄タグを作成</span>
                 </button>
-                {/* 将来的に他の機能を追加する場合はここにボタンを並べる */}
+
+                {onTrashSelected && (
+                  <button
+                    onClick={async () => {
+                      setIsActionMenuOpen(false);
+                      await onTrashSelected();
+                    }}
+                    className="w-full flex flex-row items-center gap-3 px-4 py-3 hover:bg-zinc-700 transition-colors text-red-400 text-left border-t border-zinc-700/50"
+                  >
+                    <Trash2 size={18} className="text-red-400" />
+                    <span className="text-sm font-medium">ゴミ箱へ移動</span>
+                  </button>
+                )}
               </div>
             )}
 

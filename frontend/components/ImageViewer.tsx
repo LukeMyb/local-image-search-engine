@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { X, Heart, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { X, Heart, ChevronLeft, ChevronRight, Search, Trash2 } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 // 検索結果のデータ構造を定義
@@ -20,6 +20,7 @@ interface ImageViewerProps {
   onClose: () => void;
   onToggleFavorite: (id: number, e: React.MouseEvent) => void;
   onSearchSimilar?: (image: SearchResult) => void;
+  onTrash?: (id: number) => void;
 
   // 前後移動用のアクションと判定フラグ
   onNext?: () => void;
@@ -35,6 +36,7 @@ export default function ImageViewer({
   onClose,
   onToggleFavorite,
   onSearchSimilar,
+  onTrash,
   onNext,
   onPrev,
   prevImage,
@@ -961,6 +963,24 @@ export default function ImageViewer({
             <span className="text-sm font-medium pr-1 hidden sm:inline">類似画像</span>
           </div>
         </button>
+
+        {/* 論理削除（ゴミ箱へ移動）ボタン */}
+        {onTrash && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onTrash(selectedImage.id);
+            }}
+            className={`absolute top-0 left-0 p-4 sm:p-6 z-20 group cursor-pointer outline-none transition-all duration-300 ease-out ${
+              isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 pointer-events-none'
+            }`}
+            title="ゴミ箱へ移動"
+          >
+            <div className="p-3 bg-black/50 text-white group-hover:bg-red-600/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
+              <Trash2 size={24} />
+            </div>
+          </button>
+        )}
 
         {/* 閉じるボタン */}
         <button 

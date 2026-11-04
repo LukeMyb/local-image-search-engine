@@ -4,6 +4,7 @@ import { API_BASE_URL } from "../lib/config";
 interface SearchResult {
   id: number;
   is_favorite?: number;
+  is_deleted?: number;
 }
 
 // サジェスト候補のデータ構造を定義
@@ -292,6 +293,60 @@ export function useImageSearch() {
     }
   };
 
+  // 指定した画像IDリストを論理削除（data/trash/ へ移動）し、現在の表示リストから即座に除外する関数
+  const trashImages = useCallback(async (imageIds: number[]): Promise<number[]> => {
+    if (!imageIds || imageIds.length === 0) return [];
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/images/trash`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: imageIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error("画像の削除に失敗しました");
+      }
+
+      const data = await response.json();
+      const trashedIds: number[] = data.trashed_ids || [];
+      if (trashedIds.length === 0) return [];
+
+      const trashedSet = new Set<number>(trashedIds);
+      const oldIds = allIdsRef.current;
+      const oldStart = startIndexRef.current;
+      const oldEnd = endIndexRef.current;
+
+      // スライス範囲のインデックス補正値を計算
+      let removedBeforeStart = 0;
+      let removedInWindow = 0;
+      for (let i = 0; i < oldIds.length; i++) {
+        if (trashedSet.has(oldIds[i])) {
+          if (i < oldStart) {
+            removedBeforeStart++;
+          } else if (i < oldEnd) {
+            removedInWindow++;
+          }
+        }
+      }
+
+      const newAllIds = oldIds.filter((id) => !trashedSet.has(id));
+      const newStart = Math.max(0, oldStart - removedBeforeStart);
+      const newEnd = Math.max(newStart, oldEnd - removedBeforeStart - removedInWindow);
+
+      applyWindowState(newAllIds, newStart, newEnd);
+      initialResultsRef.current = initialResultsRef.current.filter((item) => !trashedSet.has(item.id));
+      setResults((prev) => prev.filter((item) => !trashedSet.has(item.id)));
+      setStatusMessage(`${trashedIds.length}枚をゴミ箱に移動しました`);
+
+      return trashedIds;
+    } catch (error: any) {
+      console.error("論理削除エラー:", error);
+      setStatusMessage(error.message || "画像の削除に失敗しました");
+      return [];
+    }
+  }, [applyWindowState]);
+
   // バックエンドからサジェスト候補を取得する関数
   const fetchSuggestions = useCallback(async (inputQuery: string) => {
     if (!inputQuery.trim()) {
@@ -339,6 +394,7 @@ export function useImageSearch() {
     setStatusMessage,
     handleSearch,
     toggleFavorite,
+    trashImages,
     loadMore,
     loadPrev,
     resetToTop,
