@@ -15,41 +15,69 @@
 
 ## 環境構築
 
-### 1. 必要なライブラリのインストール
-Python環境（3.10以上推奨）で、以下のパッケージをインストールしてください。
+### 1. Python仮想環境の作成とライブラリのインストール
+プロジェクトルートでPython仮想環境（`.venv`、Python 3.10以上推奨）を作成し、必要なパッケージをインストールしてください。
 
 ```bash
-pip install flet opencv-python pandas numpy faiss-cpu
+python -m venv .venv
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+# または個別にインストールする場合:
+pip install fastapi uvicorn python-dotenv requests opencv-python pandas numpy faiss-cpu
 pip install torch torch-directml torchvision
 pip install onnxruntime-directml huggingface-hub transformers
 pip install translators pillow
 ```
 
-### 2. ディレクトリ構成
+### 2. 環境設定 (.envの作成) とフロントエンドのビルド
+
+プロジェクトのルートディレクトリに `.env` ファイルを作成し、通信用のポート番号とIPアドレスを設定します。
+
+```ini
+API_PORT=8715
+API_HOST=127.0.0.1
+```
+※ `API_HOST` にはお使いのPCのIPアドレス（または `127.0.0.1`）を指定してください。
+
+続いて、`frontend` ディレクトリで依存パッケージのインストールと本番ビルドを実行します（設定を変更した場合も必ず `npm run build` を再実行してください）。
+
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+### 3. ディレクトリ構成
 
 実行前に、画像を入れるためのフォルダを準備します。デフォルトでは `data/images` フォルダ直下、およびサブフォルダをスキャン対象とします。事前にフォルダを作成し、検索したい画像を配置してください。
 
 ```text
 project_root/
-├── api.py                  # FastAPI エンドポイント (バックエンド)
-├── setup.ps1               # 環境構築用セットアップスクリプト
+├── api.py                  # FastAPI エンドポイント (通常モード)
+├── api_light.py            # FastAPI エンドポイント (軽量モード)
+├── setup.bat               # 初回データ構築の一括実行バッチ (CPU/GPU並列)
 ├── requirements.txt        # Python依存パッケージ一覧
 │
-├── app/                    # Next.js フロントエンド (UI)
-│   ├── page.tsx            # メインUIレイアウト
+├── frontend/               # Next.js フロントエンド (UI)
+│   ├── app/                # メインUIレイアウト (page.tsx 等)
 │   ├── components/         # UIコンポーネント (画像グリッド、ビューアー、検索窓など)
 │   ├── hooks/              # カスタムフック (検索ロジック、システム制御など)
 │   └── lib/                # フロントエンド用設定ファイル
 │
 ├── core/                   # バックエンド・検索ロジック
-│   ├── database.py         # SQLite (FTS5) 制御
-│   ├── search.py           # 検索全体のオーケストレーター
-│   ├── tag_search.py       # タグのテキスト・ベクトル検索
+│   ├── database.py         # SQLite (FTS5) 制御・3状態ファイル同期
+│   ├── search.py           # 検索全体のオーケストレーター (通常版)
+│   ├── search_light.py     # 検索全体のオーケストレーター (軽量版)
+│   ├── tag_search.py       # タグのテキスト・ベクトル検索 (通常版)
+│   ├── tag_search_light.py # タグのテキスト検索 (軽量版)
 │   └── style_search.py     # 絵柄(画風)のベクトル検索
 │
-├── tasks/                  # バックグラウンド処理
-│   ├── index.py            # 初期スキャン・サムネイル生成
-│   ├── tagger.py           # 画像解析・タグ付け
+├── tasks/                  # バックグラウンド・インデックス処理
+│   ├── update_images.bat   # 画像追加時の一括更新バッチ (CPU/GPU並列)
+│   ├── index.py            # スキャン・DB登録・サムネイル生成
+│   ├── tagger.py           # 画像解析・AIタグ付け
 │   └── vectorize_images.py # 絵柄ベクトルの生成
 │
 ├── scripts/                # 初回セットアップ・便利ツール
@@ -59,6 +87,7 @@ project_root/
 │
 └── data/                   # データ保存先
     ├── images/             # ★ここに検索したい画像を入れてください
+    ├── trash/              # ゴミ箱 (論理削除された画像の退避先)
     ├── db/                 # index.db (データベース) が生成されます
     ├── faiss/              # 絵柄検索用のインデックスが生成されます
     ├── thumbnails/         # 縮小画像(サムネイル)が生成されます
@@ -67,19 +96,7 @@ project_root/
 
 ---
 
-## 使い方 (初期セットアップ)
-
-初回のインデックス構築手順です。順番にスクリプトを実行してください。
-
-### 準備: 環境設定 (.envの作成)
-
-プロジェクトのルートディレクトリに `.env` ファイルを作成し、通信用のポート番号とIPアドレスを設定します。
-
-```ini
-API_PORT=8715
-API_HOST=127.0.0.1
-```
-※ `API_HOST` にはお使いのPCのIPアドレス（または `127.0.0.1`）を指定してください。設定を変更した場合は、必ずフロントエンド側で `npm run build` を再実行して設定を反映させる必要があります。
+## 使い方 (初期セットアップ・画像追加)
 
 ### Step 0: 画像の整理と重複排除 (任意)
 
@@ -89,13 +106,45 @@ iPhoneなどから取り込んだ雑多な画像群を、撮影年月（YYYYMM�
 このスクリプトは元の画像（`data/images/` など）を移動するのではなく、新しいフォルダ（`data/sorted/` など）へ「コピー」する仕様になっています。そのため、数万枚の処理中に万が一エラーで中断されたりPCの電源が落ちたりしても、**元のデータが消えたり破損したりする心配はありません。**
 また、再実行した際もハッシュ値によって既にコピー済みの画像は自動でスキップされるため、安心して続きから再開できます。
 
-※実行前に scripts/sort.py 内の SOURCE_DIR（元の画像場所）と TARGET_DIR（整理後の保存先）が、自身の環境（data/images など）を指しているか確認してください。
+※実行前に `scripts/sort.py` 内の `SOURCE_DIR`（元の画像場所）と `TARGET_DIR`（整理後の保存先）が、自身の環境（`data/images` など）を指しているか確認してください。
 
 ```bash
 python -m scripts.sort
 ```
 
-### Step 1: 辞書のダウンロード
+---
+
+### 🚀 初回の一括セットアップ (`setup.bat` の実行)
+
+`data/images` に画像を配置したら、プロジェクトルートにある **`setup.bat`** を実行（またはダブルクリック）するだけで、以下の **Step 1 〜 Step 5** がすべて自動で実行されます（初回のみネット接続が必要です）。
+
+```bash
+.\setup.bat
+```
+
+**⚡ CPU / GPU 並列パイプライン**
+`setup.bat` は最初に新規画像のファイルスキャンとDB初期化（`tasks.index --scan-only`）を完了させた後、自動的に2つのウィンドウに分かれて並列処理を行います。
+- **CPUウィンドウ**: 翻訳辞書のダウンロード（Step 1） → サムネイル生成（Step 3後半）
+- **GPUウィンドウ**: タグリストのベクトル化（Step 2） → AIタグ付け（Step 4） → 絵柄ベクトル生成（Step 5）
+
+---
+
+### 🔄 普段の画像追加・更新 (`tasks/update_images.bat` の実行)
+
+2回目以降に `data/images` へ新しい画像を追加した際は、**`tasks/update_images.bat`** を実行（またはダブルクリック）してください。
+初回専用の辞書ダウンロード等を省き、追加された画像に対する **DB登録 → サムネイル生成（CPU）＆ AIタグ付け・絵柄ベクトル化（GPU）** を別ウィンドウで並列実行します。
+
+```bash
+.\tasks\update_images.bat
+```
+
+---
+
+### 個別スクリプトの詳細 (手動で順番に実行する場合)
+
+バッチファイルを使わず、各ステップを個別に実行したい場合は以下のコマンドを使用します。
+
+#### Step 1: 辞書のダウンロード
 
 10万語規模の英日翻訳辞書を取得します。（初回のみネット接続が必要です）
 
@@ -103,7 +152,7 @@ python -m scripts.sort
 python -m scripts.download_assets
 ```
 
-### Step 2: タグリストのベクトル化
+#### Step 2: タグリストのベクトル化
 
 AIの出力タグを意味のベクトルに変換し、検索用のインデックスを作成します。（初回のみネット接続が必要です）
 
@@ -111,15 +160,15 @@ AIの出力タグを意味のベクトルに変換し、検索用のインデッ
 python -m scripts.vectorize_tags
 ```
 
-### Step 3: 画像のスキャンとサムネイル生成
+#### Step 3: 画像のスキャンとサムネイル生成
 
-`data/images` フォルダ内の画像をデータベースに登録し、表示用の軽いサムネイルを作成します。
+`data/images` フォルダ内の画像をデータベースに登録し、表示用の軽いサムネイルを作成します。（`--scan-only` でDB登録のみ、`--thumb-only` でサムネイル生成のみを実行することも可能です）
 
 ```bash
 python -m tasks.index
 ```
 
-### Step 4: AIによる画像解析（タグ付け）
+#### Step 4: AIによる画像解析（タグ付け）
 
 データベースに登録された画像に対して、AIが自動で内容を判別しタグを付与します。
 *(※ 枚数が多い場合は時間がかかります。DirectMLによるGPU支援が効いているかターミナルで確認してください)*
@@ -128,7 +177,7 @@ python -m tasks.index
 python -m tasks.tagger
 ```
 
-### Step 5: 絵柄ベクトルの生成
+#### Step 5: 絵柄ベクトルの生成
 
 VGG16モデルを使用して、全画像から画風（平均・標準偏差）を抽出し、検索用のFAISSインデックスを作成します。
 
