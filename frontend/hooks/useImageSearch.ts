@@ -33,6 +33,7 @@ export function useImageSearch() {
 
   // スクロールによる親の再レンダリング時にもコールバック参照を固定するためのRef
   const allIdsRef = useRef<number[]>([]);
+  const resultsRef = useRef<SearchResult[]>([]);
   const initialResultsRef = useRef<SearchResult[]>([]);
   const startIndexRef = useRef(0);
   const endIndexRef = useRef(0);
@@ -41,6 +42,12 @@ export function useImageSearch() {
 
   // ソート変更時などに中央へフォーカスさせる対象のリクエスト情報
   const [focusRequest, setFocusRequest] = useState<{ id: number; key: number } | null>(null);
+  // 一括削除・復元時に最後に選択した画像の位置へスクロール補正するためのリクエスト情報
+  const [anchorScrollRequest, setAnchorScrollRequest] = useState<{
+    id: number;
+    viewportTop: number;
+    key: number;
+  } | null>(null);
 
   // 非同期競合防止用のリクエストID
   const searchSeqRef = useRef(0);
@@ -48,6 +55,18 @@ export function useImageSearch() {
   // サジェスト関連の状態管理
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isSuggestOpen, setIsSuggestOpen] = useState(false);
+
+  // results の state と Ref を同時に更新するヘルパー
+  const updateResults = useCallback(
+    (updater: SearchResult[] | ((prev: SearchResult[]) => SearchResult[])) => {
+      setResults((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        resultsRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
 
   // スライス範囲と全IDリストをState・Ref双方へ同期するヘルパー
   const applyWindowState = useCallback((ids: number[], start: number, end: number) => {
@@ -102,7 +121,8 @@ export function useImageSearch() {
     if (!focusImageId) {
       setFocusRequest(null);
     }
-    setResults([]); // 検索開始時に前の画像をクリア
+    setAnchorScrollRequest(null);
+    updateResults([]); // 検索開始時に前の画像をクリア
     initialResultsRef.current = [];
     applyWindowState([], 0, 0);
 
@@ -135,7 +155,7 @@ export function useImageSearch() {
         if (targetIndex < 60) {
           // 先頭付近にある場合は最初の100件をそのまま使って中央へスクロールさせる
           applyWindowState(ids, 0, initialResults.length);
-          setResults(initialResults);
+          updateResults(initialResults);
           setFocusRequest({ id: focusImageId, key: Date.now() });
         } else {
           // 後半にある場合は、列ズレを防ぐため120の倍数に揃えた開始位置から十分な前後幅を切り出して取得する
@@ -159,19 +179,19 @@ export function useImageSearch() {
           if (batchRes.ok) {
             const batchData = await batchRes.json();
             applyWindowState(ids, winStart, winEnd);
-            setResults(batchData.results);
+            updateResults(batchData.results);
             setFocusRequest({ id: focusImageId, key: Date.now() });
           } else {
             // フォールバック：初期100件を表示
             applyWindowState(ids, 0, initialResults.length);
-            setResults(initialResults);
+            updateResults(initialResults);
           }
         }
       } else {
         // 通常の検索またはランダムソート時は先頭100件を表示し、一番上へ戻す
         setFocusRequest(null);
         applyWindowState(ids, 0, initialResults.length);
-        setResults(initialResults);
+        updateResults(initialResults);
         if (typeof window !== "undefined") {
           window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
         }
@@ -211,7 +231,7 @@ export function useImageSearch() {
 
       endIndexRef.current = nextEnd;
       setEndIndex(nextEnd);
-      setResults((prev) => [...prev, ...data.results]);
+      updateResults((prev) => [...prev, ...data.results]);
     } catch (error) {
       console.error(error);
     } finally {
@@ -219,7 +239,7 @@ export function useImageSearch() {
         isLoadingMoreRef.current = false;
       }
     }
-  }, []);
+  }, [updateResults]);
 
   // 途中から表示を開始した場合に、上スクロールで前のバッチ（120件単位）を取得するロジック
   const loadPrev = useCallback(async () => {
@@ -246,7 +266,7 @@ export function useImageSearch() {
 
       startIndexRef.current = nextStart;
       setStartIndex(nextStart);
-      setResults((prev) => [...data.results, ...prev]);
+      updateResults((prev) => [...data.results, ...prev]);
     } catch (error) {
       console.error(error);
     } finally {
@@ -254,7 +274,7 @@ export function useImageSearch() {
         isLoadingPrevRef.current = false;
       }
     }
-  }, []);
+  }, [updateResults]);
 
   // 途中から表示している状態（startIndex > 0）で「一番上に戻る」が押された際、先頭スライスへ即座に復帰する関数
   const resetToTop = useCallback(() => {
@@ -264,10 +284,11 @@ export function useImageSearch() {
       isLoadingPrevRef.current = false;
       isLoadingMoreRef.current = false;
       setFocusRequest(null);
+      setAnchorScrollRequest(null);
       applyWindowState(ids, 0, topItems.length);
-      setResults(topItems);
+      updateResults(topItems);
     }
-  }, [applyWindowState]);
+  }, [applyWindowState, updateResults]);
 
   // お気に入り切り替えロジック
   const toggleFavorite = async (image_id: number, e: React.MouseEvent, selectedImage: any, setSelectedImage: any) => {
@@ -283,7 +304,7 @@ export function useImageSearch() {
       const data = await response.json();
 
       // 一覧側の状態を更新
-      setResults((prev) => 
+      updateResults((prev) => 
         prev.map(item => item.id === image_id ? { ...item, is_favorite: data.is_favorite } : item)
       );
       initialResultsRef.current = initialResultsRef.current.map((item) =>
@@ -299,9 +320,52 @@ export function useImageSearch() {
     }
   };
 
-  // 現在の表示リスト・スライス範囲から指定ID群を即座に除外する共通ヘルパー
-  const removeIdsFromView = useCallback((targetIds: number[]) => {
+  // 現在の表示リスト・スライス範囲から指定ID群を即座に除外し、最後に選択した画像の位置へスクロールを補正する共通ヘルパー
+  const removeIdsFromView = useCallback((targetIds: number[], lastSelectedId?: number) => {
     const targetSet = new Set<number>(targetIds);
+    const currentResults = resultsRef.current;
+    const referenceId = lastSelectedId ?? targetIds[targetIds.length - 1];
+
+    // 最後に選択していた画像の位置を基準に、削除後にその場所へ詰まる残存画像（anchorId）と画面上のY座標を特定する
+    if (referenceId !== undefined && typeof window !== "undefined") {
+      const lastIdx = currentResults.findIndex((item) => item.id === referenceId);
+      if (lastIdx !== -1) {
+        let anchorId: number | null = null;
+        // 最後に選択した画像の直後から、削除対象ではない最初の画像を探す（上に詰まってその位置に来る画像）
+        for (let i = lastIdx + 1; i < currentResults.length; i++) {
+          if (!targetSet.has(currentResults[i].id)) {
+            anchorId = currentResults[i].id;
+            break;
+          }
+        }
+        // 後ろに残存画像がない場合（末尾まで全て選択した場合など）は、直前の残存画像を探す
+        if (anchorId === null) {
+          for (let i = lastIdx - 1; i >= 0; i--) {
+            if (!targetSet.has(currentResults[i].id)) {
+              anchorId = currentResults[i].id;
+              break;
+            }
+          }
+        }
+
+        if (anchorId !== null) {
+          const lastEl = document.getElementById(`grid-image-${referenceId}`);
+          let viewportTop = window.innerHeight / 3;
+          if (lastEl) {
+            const rect = lastEl.getBoundingClientRect();
+            const isVisible = rect.bottom > 0 && rect.top < window.innerHeight;
+            // 画面内に見えていた場合はそのY座標を維持し、画面外だった場合は画面中央付近へ移動させる
+            viewportTop = isVisible ? rect.top : Math.max(80, (window.innerHeight - rect.height) / 2);
+          }
+          setAnchorScrollRequest({
+            id: anchorId,
+            viewportTop,
+            key: Date.now(),
+          });
+        }
+      }
+    }
+
     const oldIds = allIdsRef.current;
     const oldStart = startIndexRef.current;
     const oldEnd = endIndexRef.current;
@@ -324,12 +388,13 @@ export function useImageSearch() {
 
     applyWindowState(newAllIds, newStart, newEnd);
     initialResultsRef.current = initialResultsRef.current.filter((item) => !targetSet.has(item.id));
-    setResults((prev) => prev.filter((item) => !targetSet.has(item.id)));
-  }, [applyWindowState]);
+    updateResults((prev) => prev.filter((item) => !targetSet.has(item.id)));
+  }, [applyWindowState, updateResults]);
 
   // 指定した画像IDリストを論理削除（data/trash/ へ移動）し、現在の表示リストから即座に除外する関数
   const trashImages = useCallback(async (imageIds: number[]): Promise<number[]> => {
     if (!imageIds || imageIds.length === 0) return [];
+    const lastSelectedId = imageIds[imageIds.length - 1];
 
     try {
       const response = await fetch(`${API_BASE_URL}/images/trash`, {
@@ -346,7 +411,7 @@ export function useImageSearch() {
       const trashedIds: number[] = data.trashed_ids || [];
       if (trashedIds.length === 0) return [];
 
-      removeIdsFromView(trashedIds);
+      removeIdsFromView(trashedIds, lastSelectedId);
       setStatusMessage(`${trashedIds.length}枚をゴミ箱に移動しました`);
 
       return trashedIds;
@@ -360,6 +425,7 @@ export function useImageSearch() {
   // 指定した画像IDリストをゴミ箱から復元（data/images/ へ移動）し、現在のゴミ箱表示リストから即座に除外する関数
   const restoreImages = useCallback(async (imageIds: number[]): Promise<number[]> => {
     if (!imageIds || imageIds.length === 0) return [];
+    const lastSelectedId = imageIds[imageIds.length - 1];
 
     try {
       const response = await fetch(`${API_BASE_URL}/images/restore`, {
@@ -376,7 +442,7 @@ export function useImageSearch() {
       const restoredIds: number[] = data.restored_ids || [];
       if (restoredIds.length === 0) return [];
 
-      removeIdsFromView(restoredIds);
+      removeIdsFromView(restoredIds, lastSelectedId);
       setStatusMessage(`${restoredIds.length}枚を復元しました`);
 
       return restoredIds;
@@ -443,6 +509,8 @@ export function useImageSearch() {
     hasPrev: startIndex > 0,
     focusRequest,
     setFocusRequest,
+    anchorScrollRequest,
+    setAnchorScrollRequest,
     suggestions,
     isSuggestOpen,
     setIsSuggestOpen,

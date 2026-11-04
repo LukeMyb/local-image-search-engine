@@ -145,10 +145,17 @@ export default function Home() {
   // 検索・画像操作ロジックをフックから取得
   const { 
     results, statusMessage, setStatusMessage, handleSearch, toggleFavorite, trashImages, restoreImages,
-    loadMore, loadPrev, resetToTop, hasMore, hasPrev, focusRequest,
+    loadMore, loadPrev, resetToTop, hasMore, hasPrev, focusRequest, anchorScrollRequest,
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
+
+  // 一括削除・復元でアンカー位置が更新された場合は、ソート変更時の中心保持IDにも反映する
+  useEffect(() => {
+    if (anchorScrollRequest) {
+      lastViewedIdRef.current = anchorScrollRequest.id;
+    }
+  }, [anchorScrollRequest]);
 
   // ビューアーから1枚の画像を論理削除し、前後の画像へ切り替える処理
   const handleTrashInViewer = useCallback(async (imageId: number) => {
@@ -466,6 +473,7 @@ export default function Home() {
           hasPrev={hasPrev}
           resetToTop={resetToTop}
           focusRequest={focusRequest}
+          anchorScrollRequest={anchorScrollRequest}
           onProgrammaticScroll={handleProgrammaticScroll}
           isSelectionMode={isSelectionMode}
           selectedIds={selectedIds}

@@ -23,6 +23,9 @@ interface ImageGridProps {
   // ソート変更時に特定画像を画面中央へ配置するためのリクエスト
   focusRequest?: { id: number; key: number } | null;
 
+  // 一括削除・復元時に最後に選択した画像の位置へスクロールを補正するリクエスト
+  anchorScrollRequest?: { id: number; viewportTop: number; key: number } | null;
+
   // 先頭追加時などのプログラム的なスクロール補正量を親へ通知するコールバック
   onProgrammaticScroll?: (addedHeight: number) => void;
 
@@ -48,6 +51,7 @@ export default function ImageGrid({
   hasPrev,
   resetToTop,
   focusRequest,
+  anchorScrollRequest,
   onProgrammaticScroll,
   isSelectionMode = false,
   selectedIds = [],
@@ -70,6 +74,7 @@ export default function ImageGrid({
   // ソート変更による中央フォーカス処理中かどうかのロック用Ref
   const isCenteringRef = useRef(false);
   const lastHandledFocusKeyRef = useRef<number | null>(null);
+  const lastHandledAnchorKeyRef = useRef<number | null>(null);
 
   // 上方向への無限スクロール（loadPrev）時にスクロール位置を維持するためのRef
   const isPrependingRef = useRef(false);
@@ -132,6 +137,26 @@ export default function ImageGrid({
       };
     }
 
+    // 1.5. 一括削除・復元によるアンカースクロール補正リクエストが届いた場合は、描画前に即座に該当位置へスクロール補正する
+    if (anchorScrollRequest && anchorScrollRequest.key !== lastHandledAnchorKeyRef.current) {
+      lastHandledAnchorKeyRef.current = anchorScrollRequest.key;
+      isPrependingRef.current = false;
+      prevFirstIdRef.current = currentFirstId;
+
+      const el = document.getElementById(`grid-image-${anchorScrollRequest.id}`);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const delta = rect.top - anchorScrollRequest.viewportTop;
+        const targetScrollY = Math.max(0, window.scrollY + delta);
+        const appliedDelta = targetScrollY - window.scrollY;
+        if (Math.abs(appliedDelta) > 1) {
+          window.scrollTo({ top: targetScrollY, behavior: "instant" as ScrollBehavior });
+          onProgrammaticScroll?.(appliedDelta);
+        }
+      }
+      return;
+    }
+
     // 2. 先頭IDが変わり、かつ以前の先頭IDが配列の2番目以降に存在する場合は「先頭への追加（loadPrev）」と判定して高さを補正する
     if (
       prevFirstIdRef.current !== null &&
@@ -166,7 +191,7 @@ export default function ImageGrid({
     }
 
     prevFirstIdRef.current = currentFirstId;
-  }, [results, focusRequest, scrollImageToCenter, hasPrev, loadPrev, onProgrammaticScroll]);
+  }, [results, focusRequest, anchorScrollRequest, scrollImageToCenter, hasPrev, loadPrev, onProgrammaticScroll]);
 
   // スマホのピンチ操作検知ロジック
   // 2点間の距離をピクセル単位で計算する関数
