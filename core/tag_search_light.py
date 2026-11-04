@@ -39,10 +39,10 @@ class TagSearchLight:
         return combined
     
     def _build_tag_counts(self):
-        """DB内の全画像から存在するタグとその件数を集計してメモリに保持する"""
+        """DB内の全画像（未削除のみ）から存在するタグとその件数を集計してメモリに保持する"""
         self.tag_counts = {}
         cursor = self.db.conn.cursor()
-        cursor.execute("SELECT tags_combined FROM images")
+        cursor.execute("SELECT tags_combined FROM images WHERE is_deleted = 0")
 
         rows = cursor.fetchall()
         self.total_images = len(rows)
@@ -56,6 +56,27 @@ class TagSearchLight:
                 self.tag_counts[t] = self.tag_counts.get(t, 0) + 1
                 
         print(f"  [System] Cached {len(self.tag_counts)} unique tags from DB.")
+
+    def adjust_tag_counts(self, image_ids: list[int], delta: int):
+        """論理削除(delta=-1)や復元(delta=+1)時に、対象画像のタグ件数のみを高速に差分更新する"""
+        if not image_ids:
+            return
+        cursor = self.db.conn.cursor()
+        placeholders = ','.join(['?'] * len(image_ids))
+        cursor.execute(f"SELECT tags_combined FROM images WHERE id IN ({placeholders})", image_ids)
+        rows = cursor.fetchall()
+        self.total_images = max(0, self.total_images + delta * len(rows))
+        for row in rows:
+            tags_str = row[0]
+            if not tags_str:
+                continue
+            tags = [t.strip().lower() for t in tags_str.split(',')]
+            for t in tags:
+                new_count = self.tag_counts.get(t, 0) + delta
+                if new_count > 0:
+                    self.tag_counts[t] = new_count
+                else:
+                    self.tag_counts.pop(t, None)
 
     def get_suggestions(self, query_text, limit=10):
         if not query_text: return []
@@ -174,7 +195,7 @@ class TagSearchLight:
                 
         return total_score, matched_details
 
-    def search(self, user_query):
+    def search(self, user_query, trash_only=False):
         query = re.sub(r'\s*\|\s*', '|', user_query)
 
         words = re.split(r'[ \u3000,]+', query)
@@ -253,15 +274,16 @@ class TagSearchLight:
 
         print(f"  [FTS5 Query] {match_query}")
 
+        deleted_flag = 1 if trash_only else 0
         full_sql = '''
-            SELECT i.id, i.file_path, i.tags_combined, i.tag_scores, i.file_mtime, i.thumbnail_path, i.is_favorite
+            SELECT i.id, i.file_path, i.tags_combined, i.tag_scores, i.file_mtime, i.thumbnail_path, i.is_favorite, i.is_deleted
             FROM images i
             INNER JOIN images_fts f ON i.id = f.id
-            WHERE images_fts MATCH ?
+            WHERE images_fts MATCH ? AND i.is_deleted = ?
         '''
         
         cursor = self.db.conn.cursor()
-        cursor.execute(full_sql, (match_query,))
+        cursor.execute(full_sql, (match_query, deleted_flag))
         raw_results = [dict(row) for row in cursor.fetchall()]
         
         print(f"  -> DB Hits: {len(raw_results)} (Scoring...)")

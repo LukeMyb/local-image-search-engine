@@ -43,7 +43,7 @@ class SearchManager:
         # それ以外は純粋なタグ検索のサジェストに丸投げ
         return self.tag_searcher.get_suggestions(query_text, limit)
 
-    def search(self, user_query, sort_order="score"):
+    def search(self, user_query, sort_order="score", trash_only=False):
         # 絵柄タグ(style:xxx)の抽出と分離処理（tag_searchから移植）
         style_match = re.search(r'style:([^\s|]+)', user_query)
         style_name = None
@@ -71,7 +71,7 @@ class SearchManager:
             print(f" Style Search: '{style_name}'")
             print(f"{'='*60}")
             
-            style_results = self.style_engine.search_by_style_name(style_name, threshold=0.98)
+            style_results = self.style_engine.search_by_style_name(style_name, threshold=0.98, trash_only=trash_only)
             style_scores_map = {res['id']: res['match_score'] for res in style_results}
             
             if not user_query:
@@ -85,7 +85,7 @@ class SearchManager:
 
         # タグ検索の実行
         # タグ検索エンジンには純粋なテキストクエリだけを投げる
-        tag_results = self.tag_searcher.search(user_query)
+        tag_results = self.tag_searcher.search(user_query, trash_only=trash_only)
 
         # 結果のAND結合と最終スコア計算
         if not style_name:

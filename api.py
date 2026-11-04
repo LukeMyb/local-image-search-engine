@@ -45,12 +45,19 @@ def get_image(image_id: int):
     if not image_data or not image_data['file_path']:
         raise HTTPException(status_code=404, detail="Image not found in database")
         
+    file_path = image_data['file_path']
+    # 論理削除されている画像、または元パスにない場合は data/trash/ 側も確認する
+    if image_data.get('is_deleted') == 1 or not os.path.exists(file_path):
+        trash_path = search_manager.db.get_trash_path(file_path)
+        if os.path.exists(trash_path):
+            return FileResponse(trash_path)
+
     # PC(ディスク)上にファイルが実在するか確認（移動・削除対策）
-    if not os.path.exists(image_data['file_path']):
+    if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
         
     # 安全に画像データそのものをブラウザへ配達する
-    return FileResponse(image_data['file_path'])
+    return FileResponse(file_path)
 
 @app.get("/thumbnail/{image_id}")
 def get_thumbnail(image_id: int):
@@ -71,16 +78,17 @@ def get_thumbnail(image_id: int):
     return FileResponse(image_data['thumbnail_path'])
 
 @app.get("/search")
-def search(q: str = "", sort: str = "score", favorite_only: bool = False):
+def search(q: str = "", sort: str = "score", favorite_only: bool = False, trash_only: bool = False):
     """
     検索クエリ(q)を受け取り、検索結果をJSONで返す
     """
     if not q.strip():
         # クエリが空なら全件検索 (SQLでソート)
         cursor = search_manager.db.conn.cursor()
-        query_sql = "SELECT * FROM images"
+        deleted_flag = 1 if trash_only else 0
+        query_sql = f"SELECT * FROM images WHERE is_deleted = {deleted_flag}"
         if favorite_only:
-            query_sql += " WHERE is_favorite = 1"
+            query_sql += " AND is_favorite = 1"
             
         query_sql += " ORDER BY file_mtime DESC"
             
@@ -97,7 +105,7 @@ def search(q: str = "", sort: str = "score", favorite_only: bool = False):
         except Exception as e:
             print(f"履歴の保存に失敗しました: {e}")
 
-        results = search_manager.search(q, sort_order=sort)
+        results = search_manager.search(q, sort_order=sort, trash_only=trash_only)
 
         # お気に入りのみフィルターがONの場合は絞り込む
         if favorite_only:
@@ -127,6 +135,26 @@ def get_images_batch(request: BatchImageRequest):
     # SearchManagerが持っているdbインスタンスの新しいメソッドを呼び出す
     results = search_manager.db.get_images_by_ids(request.ids)
     return {"results": results}
+
+@app.post("/images/trash")
+def trash_images(request: BatchImageRequest):
+    """
+    指定されたIDリストの画像を論理削除（data/trash/ へ移動）する
+    """
+    trashed_ids = search_manager.db.trash_images(request.ids)
+    if trashed_ids:
+        search_manager.tag_searcher.adjust_tag_counts(trashed_ids, delta=-1)
+    return {"status": "success", "trashed_ids": trashed_ids}
+
+@app.post("/images/restore")
+def restore_images(request: BatchImageRequest):
+    """
+    指定されたIDリストの画像をゴミ箱から復元（data/images/ へ移動）する
+    """
+    restored_ids = search_manager.db.restore_images(request.ids)
+    if restored_ids:
+        search_manager.tag_searcher.adjust_tag_counts(restored_ids, delta=1)
+    return {"status": "success", "restored_ids": restored_ids}
 
 @app.get("/suggest")
 def suggest(q: str):
@@ -222,7 +250,7 @@ def create_style_tag(data: StyleTagCreate):
         # --- キャッシュの作成を追加 ---
         print(f"DEBUG: [{data.name}] の検索キャッシュを構築中...")
         # 閾値0.98で検索結果を算出
-        results = style_searcher.search_by_style_name(data.name, threshold=0.98)
+        results = style_searcher.search_by_style_name(data.name, threshold=0.98, include_deleted=True)
         search_manager.db.save_style_cache(data.name, results)
         
         print(f"[{data.name}] の保存とキャッシュ構築が完了しました！")

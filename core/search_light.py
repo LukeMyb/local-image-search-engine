@@ -51,12 +51,13 @@ class SearchManagerLight:
         # 純粋なタグ検索のサジェストに丸投げ
         return self.tag_searcher.get_suggestions(query_text, limit)
 
-    def search(self, user_query, sort_order="score"):
+    def search(self, user_query, sort_order="score", trash_only=False):
         # 絵柄タグ(style:xxx)が含まれているかチェック
         style_match = re.search(r'style:([^\s|]+)', user_query)
         style_name = None
         style_scores_map = {}
         style_results = []
+        deleted_flag = 1 if trash_only else 0
 
         # ソートの共通処理用の内部関数
         def sort_by_order(res_list):
@@ -89,7 +90,8 @@ class SearchManagerLight:
                 # 絵柄指定のみの場合は、キャッシュに存在するIDから画像情報を取得して返す
                 # 軽量モードでは生のDBアクセスで対応
                 image_ids = list(style_scores_map.keys())
-                style_results = self.db.get_images_by_ids(image_ids)
+                raw_style_results = self.db.get_images_by_ids(image_ids)
+                style_results = [row for row in raw_style_results if row.get('is_deleted', 0) == deleted_flag]
                 
                 # スコアを当て直す
                 for row in style_results:
@@ -105,7 +107,7 @@ class SearchManagerLight:
                 return sort_by_order(style_results)
 
         # タグ検索の実行
-        tag_results = self.tag_searcher.search(user_query)
+        tag_results = self.tag_searcher.search(user_query, trash_only=trash_only)
 
         if not style_name:
             return sort_by_order(tag_results)

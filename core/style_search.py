@@ -76,7 +76,7 @@ class StyleSearcher:
         mean_vec = np.mean(valid_vectors, axis=0)
         return mean_vec
 
-    def search_by_style_name(self, style_name, threshold=0.98):
+    def search_by_style_name(self, style_name, threshold=0.98, trash_only=False, include_deleted=False):
         """【機能2】DBに保存された絵柄名（style:xxx）から検索を実行する"""
         if self.index is None:
             print("エラー: 検索インデックスがロードされていません。")
@@ -99,6 +99,7 @@ class StyleSearcher:
         # 検索の実行 (distances=スコア, indices=DB上の画像ID)
         distances, indices = self.index.search(query_vector, top_k)
 
+        deleted_flag = 1 if trash_only else 0
         results = []
         for i in range(top_k):
             score = float(distances[0][i])
@@ -113,6 +114,8 @@ class StyleSearcher:
             # DBからサムネイルパスなどの画像情報を取得
             image_data = self.db.get_image_by_id(image_id)
             if image_data:
+                if not include_deleted and image_data.get('is_deleted', 0) != deleted_flag:
+                    continue
                 # 既存のタグ検索（tag_search.py）の結果フォーマットと互換性を持たせるため、
                 # アプリ側でソートや表示に使う辞書のキーを追加しておく
                 image_data['match_score'] = score
