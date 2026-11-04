@@ -101,11 +101,11 @@ class Tagger:
         try:
             cursor = self.db.conn.cursor()
             if force_update:
-                #全件取得して上書き
-                cursor.execute("SELECT id, file_path FROM images")
+                #全件（未削除のみ）取得して上書き
+                cursor.execute("SELECT id, file_path FROM images WHERE is_deleted = 0")
             else:
-                #まだタグがないものだけ取得
-                cursor.execute("SELECT id, file_path FROM images WHERE is_processed_tag = 0")
+                #まだタグがないもの（未削除のみ）だけ取得
+                cursor.execute("SELECT id, file_path FROM images WHERE is_processed_tag = 0 AND is_deleted = 0")
                 
             targets = cursor.fetchall()
         except Exception as e:

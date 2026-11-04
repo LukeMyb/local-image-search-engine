@@ -150,10 +150,10 @@ class ImageDatabase:
         self.conn.commit()
 
     def get_unprocessed_images(self, target_column):
-        #指定した処理がまだ終わっていない画像を取得
+        #指定した処理がまだ終わっていない画像（未削除のみ）を取得
         #例: target_column = 'is_processed_vector'
         cursor = self.conn.cursor()
-        cursor.execute(f'SELECT id, file_path FROM images WHERE {target_column} = 0 ORDER BY id')
+        cursor.execute(f'SELECT id, file_path FROM images WHERE {target_column} = 0 AND is_deleted = 0 ORDER BY id')
         return cursor.fetchall()
 
     def update_thumbnail_status(self, image_id, thumbnail_path):
@@ -541,6 +541,89 @@ class ImageDatabase:
         self.conn.commit()
         return restored_ids
 
+    def purge_images(self, image_ids: list[int], faiss_index_path: str = "data/faiss/style.index") -> int:
+        """
+        data/images/ にも data/trash/ にも存在しない画像（完全削除対象）の
+        サムネイルファイル・DBレコード（images / images_fts / style_cache）・FAISSベクトルを一括消去する
+        """
+        if not image_ids:
+            return 0
+
+        cursor = self.conn.cursor()
+        chunk_size = 900
+        deleted_thumb_count = 0
+
+        for i in range(0, len(image_ids), chunk_size):
+            chunk = image_ids[i:i + chunk_size]
+            placeholders = ','.join(['?'] * len(chunk))
+
+            # 1. サムネイルのパスを取得してディスクから消去
+            cursor.execute(f"SELECT id, thumbnail_path FROM images WHERE id IN ({placeholders})", chunk)
+            rows = cursor.fetchall()
+            for row in rows:
+                thumb_str = row['thumbnail_path']
+                if thumb_str:
+                    thumb_path = Path(thumb_str)
+                    try:
+                        if thumb_path.exists():
+                            thumb_path.unlink()
+                            deleted_thumb_count += 1
+                        if thumb_path.parent.exists() and thumb_path.parent != Path("data/thumbnails") and not any(thumb_path.parent.iterdir()):
+                            thumb_path.parent.rmdir()
+                    except OSError as e:
+                        print(f"サムネイル削除エラー ({thumb_path}): {e}")
+
+            # 2. style_cache と images（トリガーで images_fts も自動削除）からレコードを削除
+            cursor.execute(f"DELETE FROM style_cache WHERE image_id IN ({placeholders})", chunk)
+            cursor.execute(f"DELETE FROM images WHERE id IN ({placeholders})", chunk)
+
+        self.conn.commit()
+
+        # 3. FAISSインデックスから該当ID群を削除
+        if os.path.exists(faiss_index_path):
+            try:
+                import faiss
+                index = faiss.read_index(str(faiss_index_path))
+                ids_array = np.array(image_ids, dtype=np.int64)
+                removed_vecs = index.remove_ids(ids_array)
+                if removed_vecs > 0:
+                    faiss.write_index(index, str(faiss_index_path))
+                print(f"  [FAISS] {removed_vecs}件の絵柄ベクトルをインデックスから削除しました。")
+            except Exception as e:
+                print(f"  [FAISS] インデックスからのID削除中にエラーが発生しました: {e}")
+
+        print(f"  [完全削除] DBレコード: {len(image_ids)}件, サムネイル: {deleted_thumb_count}枚 を消去しました。")
+        return len(image_ids)
+
+    def empty_trash(self, faiss_index_path: str = "data/faiss/style.index") -> int:
+        """
+        ゴミ箱(is_deleted = 1)に入っている全ての画像について、
+        data/trash/ 内の元画像ファイル・サムネイル・DBレコード・FAISSベクトルを一括で完全削除する
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id, file_path FROM images WHERE is_deleted = 1")
+        rows = cursor.fetchall()
+        if not rows:
+            print("ゴミ箱は空です（削除対象はありません）。")
+            return 0
+
+        ids_to_purge = []
+        deleted_file_count = 0
+        for row in rows:
+            ids_to_purge.append(row['id'])
+            trash_path = Path(self.get_trash_path(row['file_path']))
+            try:
+                if trash_path.exists():
+                    trash_path.unlink()
+                    deleted_file_count += 1
+                if trash_path.parent.exists() and trash_path.parent != Path("data/trash") and not any(trash_path.parent.iterdir()):
+                    trash_path.parent.rmdir()
+            except OSError as e:
+                print(f"ゴミ箱ファイル削除エラー ({trash_path}): {e}")
+
+        print(f"  [ゴミ箱を空にする] data/trash/ から元画像 {deleted_file_count}枚 を消去しました。")
+        return self.purge_images(ids_to_purge, faiss_index_path=faiss_index_path)
+
 # --- ここから単体テスト用コード ---
 if __name__ == "__main__":
     import sys
@@ -554,10 +637,13 @@ if __name__ == "__main__":
     print(f"1. imagesテーブルのカラム確認: {'is_deleted' in cols} (columns: {cols})")
 
     # コマンドライン引数:
+    #   python -m core.database empty_trash   -> ゴミ箱(is_deleted=1)の画像を全て完全削除
     #   python -m core.database trash <id>    -> 指定IDを論理削除（data/trash へ移動）
     #   python -m core.database restore <id>  -> 指定IDを復元（data/images へ戻す）
     #   引数なし                              -> 先頭1件を使って自動で「論理削除 -> 復元」の往復テストを実行
-    if len(sys.argv) >= 3 and sys.argv[1] in ("trash", "restore"):
+    if len(sys.argv) >= 2 and sys.argv[1] == "empty_trash":
+        db.empty_trash()
+    elif len(sys.argv) >= 3 and sys.argv[1] in ("trash", "restore"):
         action = sys.argv[1]
         target_id = int(sys.argv[2])
         if action == "trash":
