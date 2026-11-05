@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { RotateCw } from "lucide-react";
 import { useSystemUI } from "../hooks/useSystemUI";
 import { useImageSearch } from "../hooks/useImageSearch";
 import { useDrawerSwipe } from "../hooks/useDrawerSwipe";
@@ -212,6 +213,118 @@ export default function Home() {
     handleSearch(query, "random", undefined, undefined, isFavoriteFilter, null, isTrashFilter);
   };
 
+  // 現在の検索条件・ソート順を維持したままグリッドを再読み込みする
+  const reloadGrid = useCallback(() => {
+    const activeSort = isRandomSorted ? "random" : sortOrder;
+    handleSearch(query, activeSort, undefined, undefined, isFavoriteFilter, null, isTrashFilter);
+  }, [query, sortOrder, isRandomSorted, isFavoriteFilter, isTrashFilter, handleSearch]);
+
+  // 画面最上部でのプルリフレッシュ（下引っ張り再読み込み）用のStateとRef
+  const [pullDistance, setPullDistance] = useState(0);
+  const pullDistanceRef = useRef(0);
+  const pullStartRef = useRef<{ x: number; y: number } | null>(null);
+  const PULL_REFRESH_THRESHOLD = 55;
+
+  // 画面最上部でさらに上方向へスクロール（下へスワイプ）した時にグリッドを再読み込みする処理
+  useEffect(() => {
+    if (selectedImage || isDrawerOpen || isSaveDialogOpen || isSuggestOpen || hasPrev) {
+      pullStartRef.current = null;
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+      return;
+    }
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        pullStartRef.current = null;
+        return;
+      }
+      // 画面の一番上にいる時のみ開始（左端40px以内のドロワースワイプ領域は除外）
+      if (window.scrollY <= 0 && e.touches[0].clientX > 40) {
+        pullStartRef.current = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+        };
+      } else {
+        pullStartRef.current = null;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!pullStartRef.current || e.touches.length !== 1) return;
+
+      if (window.scrollY > 0) {
+        pullStartRef.current = null;
+        if (pullDistanceRef.current > 0) {
+          pullDistanceRef.current = 0;
+          setPullDistance(0);
+        }
+        return;
+      }
+
+      const diffX = e.touches[0].clientX - pullStartRef.current.x;
+      const diffY = e.touches[0].clientY - pullStartRef.current.y;
+
+      // 縦方向（下向き）のスワイプである場合のみプル距離を更新
+      if (diffY > 10 && Math.abs(diffY) > Math.abs(diffX)) {
+        const damped = Math.min((diffY - 10) * 0.45, 96);
+        pullDistanceRef.current = damped;
+        setPullDistance(damped);
+      } else if (diffY <= 0 && pullDistanceRef.current > 0) {
+        pullDistanceRef.current = 0;
+        setPullDistance(0);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!pullStartRef.current) return;
+      const finalPull = pullDistanceRef.current;
+      pullStartRef.current = null;
+      pullDistanceRef.current = 0;
+      setPullDistance(0);
+
+      if (finalPull >= PULL_REFRESH_THRESHOLD && window.scrollY <= 0) {
+        reloadGrid();
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, [selectedImage, isDrawerOpen, isSaveDialogOpen, isSuggestOpen, hasPrev, reloadGrid]);
+
+  // PCの「r」キーでグリッドを再読み込みする処理
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key !== "r" && e.key !== "R") return;
+      if (selectedImage || isDrawerOpen || isSaveDialogOpen) return;
+
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      e.preventDefault();
+      reloadGrid();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedImage, isDrawerOpen, isSaveDialogOpen, reloadGrid]);
+
   // 類似画像（同じ髪色）を検索する関数
   const executeSearchSimilar = useCallback((image: any) => {
     if (!image || !image.tags_combined) {
@@ -397,6 +510,27 @@ export default function Home() {
   return (
     // レイアウト
     <div className="min-h-screen bg-zinc-900 text-green-400 flex flex-col relative pb-20 touch-manipulation">
+      {/* 最上部でのプルリフレッシュ（下スワイプ再読み込み）インジケーター */}
+      {pullDistance > 0 && (
+        <div
+          className="fixed left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-transform duration-75"
+          style={{ top: `${Math.min(pullDistance, 72)}px` }}
+        >
+          <div
+            className={`p-2.5 rounded-full shadow-xl border backdrop-blur-md flex items-center justify-center transition-colors ${
+              pullDistance >= PULL_REFRESH_THRESHOLD
+                ? "bg-green-500/20 border-green-400 text-green-400"
+                : "bg-zinc-800/90 border-zinc-700 text-zinc-400"
+            }`}
+          >
+            <RotateCw
+              size={20}
+              style={{ transform: `rotate(${pullDistance * 4}deg)` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="p-2 flex flex-col gap-4 md:sticky md:top-0 md:z-40 md:bg-zinc-900/90 md:backdrop-blur-md md:border-b md:border-zinc-800">
         <p className="text-lg font-medium">{statusMessage}</p>
 
