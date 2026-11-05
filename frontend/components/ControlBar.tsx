@@ -13,6 +13,7 @@ interface ControlBarProps {
   setStatusMessage: (msg: string) => void;
   executeRandomSearch: () => void;
   isTrashMode?: boolean;
+  hasFavoriteInSelection?: boolean;
   onTrashSelected?: () => Promise<void> | void;
   onRestoreSelected?: () => Promise<void> | void;
 }
@@ -27,6 +28,7 @@ export default function ControlBar({
   setStatusMessage,
   executeRandomSearch,
   isTrashMode = false,
+  hasFavoriteInSelection = false,
   onTrashSelected,
   onRestoreSelected,
 }: ControlBarProps) {
@@ -142,12 +144,19 @@ export default function ControlBar({
                     {onTrashSelected && (
                       <button
                         onClick={async () => {
+                          if (hasFavoriteInSelection) return;
                           setIsActionMenuOpen(false);
                           await onTrashSelected();
                         }}
-                        className="w-full flex flex-row items-center gap-3 px-4 py-3 hover:bg-zinc-700 transition-colors text-red-400 text-left border-t border-zinc-700/50"
+                        disabled={hasFavoriteInSelection}
+                        title={hasFavoriteInSelection ? "お気に入り画像が含まれているためゴミ箱へ移動できません" : "ゴミ箱へ移動"}
+                        className={`w-full flex flex-row items-center gap-3 px-4 py-3 transition-colors text-left border-t border-zinc-700/50 ${
+                          hasFavoriteInSelection
+                            ? "text-zinc-500 cursor-not-allowed opacity-60"
+                            : "hover:bg-zinc-700 text-red-400"
+                        }`}
                       >
-                        <Trash2 size={18} className="text-red-400" />
+                        <Trash2 size={18} className={hasFavoriteInSelection ? "text-zinc-500" : "text-red-400"} />
                         <span className="text-sm font-medium">ゴミ箱へ移動</span>
                       </button>
                     )}

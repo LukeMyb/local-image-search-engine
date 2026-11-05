@@ -970,22 +970,35 @@ export default function ImageViewer({
 
         {/* 論理削除（ゴミ箱へ移動）または 復元ボタン */}
         {!isTrashMode ? (
-          onTrash && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onTrash(selectedImage.id);
-              }}
-              className={`absolute top-0 left-0 p-4 sm:p-6 z-20 group cursor-pointer outline-none transition-all duration-300 ease-out ${
-                isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 pointer-events-none'
-              }`}
-              title="ゴミ箱へ移動"
-            >
-              <div className="p-3 bg-black/50 text-white group-hover:bg-red-600/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
-                <Trash2 size={24} />
-              </div>
-            </button>
-          )
+          onTrash && (() => {
+            const isFav = selectedImage.is_favorite === 1;
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isFav) return;
+                  onTrash(selectedImage.id);
+                }}
+                aria-disabled={isFav}
+                className={`absolute top-0 left-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
+                  isFav ? 'cursor-not-allowed' : 'group cursor-pointer'
+                } ${
+                  isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0 pointer-events-none'
+                }`}
+                title={isFav ? "お気に入り画像はゴミ箱へ移動できません" : "ゴミ箱へ移動"}
+              >
+                <div
+                  className={`p-3 rounded-full transition-colors flex items-center justify-center shadow-lg ${
+                    isFav
+                      ? "bg-black/40 text-zinc-500 opacity-60"
+                      : "bg-black/50 text-white group-hover:bg-red-600/80"
+                  }`}
+                >
+                  <Trash2 size={24} />
+                </div>
+              </button>
+            );
+          })()
         ) : (
           onRestore && (
             <button

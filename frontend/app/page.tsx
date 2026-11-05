@@ -146,8 +146,16 @@ export default function Home() {
     }
   }, [anchorScrollRequest]);
 
+  // 選択中の画像にお気に入り（いいね）画像が含まれているかどうかを判定
+  const hasFavoriteInSelection = selectedIds.some((id) =>
+    results.some((item) => item.id === id && item.is_favorite === 1)
+  );
+
   // ビューアーから1枚の画像を論理削除し、前後の画像へ切り替える処理
   const handleTrashInViewer = useCallback(async (imageId: number) => {
+    const target = results.find((item) => item.id === imageId);
+    if (target?.is_favorite === 1 || selectedImage?.is_favorite === 1) return;
+
     const currentIndex = results.findIndex((item) => item.id === imageId);
     const nextCandidate =
       currentIndex !== -1 && currentIndex < results.length - 1
@@ -160,17 +168,17 @@ export default function Home() {
     if (trashed.length > 0) {
       setSelectedImage(nextCandidate);
     }
-  }, [results, trashImages]);
+  }, [results, selectedImage, trashImages]);
 
   // 選択モードで選択された複数画像を一括で論理削除する処理
   const handleTrashSelected = useCallback(async () => {
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0 || hasFavoriteInSelection) return;
     const trashed = await trashImages(selectedIds);
     if (trashed.length > 0) {
       setSelectedIds([]);
       setIsSelectionMode(false);
     }
-  }, [selectedIds, trashImages]);
+  }, [selectedIds, hasFavoriteInSelection, trashImages]);
 
   // ゴミ箱表示中：ビューアーから1枚の画像を復元し、前後の画像へ切り替える処理
   const handleRestoreInViewer = useCallback(async (imageId: number) => {
@@ -517,6 +525,7 @@ export default function Home() {
           setStatusMessage={setStatusMessage}
           executeRandomSearch={executeRandomSearch}
           isTrashMode={isTrashFilter}
+          hasFavoriteInSelection={hasFavoriteInSelection}
           onTrashSelected={handleTrashSelected}
           onRestoreSelected={handleRestoreSelected}
         />

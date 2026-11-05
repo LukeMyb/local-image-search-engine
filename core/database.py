@@ -470,17 +470,20 @@ class ImageDatabase:
         """
         指定されたIDリストの元画像を data/trash/ に階層維持で移動し、
         DBの is_deleted フラグを 1 に更新する（サムネイルとDB解析データは温存）
+        ※ お気に入り（is_favorite = 1）の画像は保護のためゴミ箱へ移動しない
         """
         if not image_ids:
             return []
 
         cursor = self.conn.cursor()
         placeholders = ','.join(['?'] * len(image_ids))
-        cursor.execute(f"SELECT id, file_path, is_deleted FROM images WHERE id IN ({placeholders})", image_ids)
+        cursor.execute(f"SELECT id, file_path, is_deleted, is_favorite FROM images WHERE id IN ({placeholders})", image_ids)
         rows = cursor.fetchall()
 
         trashed_ids = []
         for row in rows:
+            if row['is_favorite'] == 1:
+                continue
             img_id = row['id']
             src_path = Path(row['file_path'])
             dst_path = Path(self.get_trash_path(row['file_path']))
