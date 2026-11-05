@@ -779,13 +779,25 @@ export default function ImageViewer({
     }
   };
 
-  // キーボード操作（← →）を検知して画像を切り替える処理
+  // キーボード操作（← → ↑ ↓ Esc）を検知して画像切り替え・詳細表示・閉じるを実行する処理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight") {
         executeNext();
       } else if (e.key === "ArrowLeft") {
         executePrev();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!isDetailOpen) {
+          setIsDetailOpen(true);
+        }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (isDetailOpen) {
+          setIsDetailOpen(false);
+        } else {
+          handleClose();
+        }
       } else if (e.key === "Escape") { // Escキーでも閉じるように
         handleClose();
       }
@@ -795,7 +807,7 @@ export default function ImageViewer({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [hasSubsequent, hasPreceding, onNext, onPrev]);
+  }, [hasSubsequent, hasPreceding, onNext, onPrev, isDetailOpen, handleClose]);
 
   // 画面の余白や画像のタップでUIを隠す処理
   const handleTap = () => {
