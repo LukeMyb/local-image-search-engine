@@ -6,6 +6,7 @@ import { API_BASE_URL } from "../lib/config";
 interface SearchResult {
   id: number;
   is_favorite?: number;
+  file_mtime?: number;
   // 詳細パネルに表示するためのデータ
   file_path?: string;
   tags_combined?: string;
@@ -824,6 +825,19 @@ export default function ImageViewer({
     return path.split(/[/\\]/).pop();
   };
 
+  // UNIXタイムスタンプ（秒）から YYYY.MM.DD 形式の保存日付文字列を生成する関数
+  const formatSavedDate = (mtime?: number) => {
+    if (!mtime) return null;
+    const date = new Date(mtime * 1000);
+    if (isNaN(date.getTime())) return null;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}.${month}.${day}`;
+  };
+
+  const savedDateText = formatSavedDate(selectedImage.file_mtime);
+
   return (
     <div 
       className="fixed inset-0 z-50 touch-none overscroll-none"
@@ -1016,6 +1030,19 @@ export default function ImageViewer({
               </div>
             </button>
           )
+        )}
+
+        {/* 上部中央：画像の保存日付 (YYYY.MM.DD) */}
+        {savedDateText && (
+          <div
+            className={`absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 h-12 flex items-center z-20 pointer-events-none transition-all duration-300 ease-out ${
+              isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : '-translate-y-12 opacity-0'
+            }`}
+          >
+            <div className="px-4 py-1.5 bg-black/50 text-white text-sm font-medium tracking-wider rounded-full shadow-lg">
+              {savedDateText}
+            </div>
+          </div>
         )}
 
         {/* 閉じるボタン */}
