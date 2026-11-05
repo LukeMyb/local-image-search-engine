@@ -80,8 +80,29 @@ export default function ImageGrid({
   const isPrependingRef = useRef(false);
   const prevFirstIdRef = useRef<number | null>(null);
 
-  // 上に戻るボタンを直接操作するための参照
+  // 上に戻るボタンを直接操作するための参照とスクロール方向検知用のRef
   const scrollToTopBtnRef = useRef<HTMLButtonElement>(null);
+  const lastScrollYRef = useRef(0);
+  const ignoreScrollHideUntilRef = useRef(0);
+
+  const setScrollToTopVisible = useCallback((visible: boolean) => {
+    if (!scrollToTopBtnRef.current) return;
+    if (visible) {
+      scrollToTopBtnRef.current.style.opacity = "1";
+      scrollToTopBtnRef.current.style.pointerEvents = "auto";
+      scrollToTopBtnRef.current.style.transform = "translateY(0)";
+    } else {
+      scrollToTopBtnRef.current.style.opacity = "0";
+      scrollToTopBtnRef.current.style.pointerEvents = "none";
+      scrollToTopBtnRef.current.style.transform = "translateY(10px)";
+    }
+  }, []);
+
+  const notifyProgrammaticScroll = useCallback((addedHeight: number) => {
+    lastScrollYRef.current = Math.max(lastScrollYRef.current + addedHeight, window.scrollY);
+    ignoreScrollHideUntilRef.current = performance.now() + 250;
+    onProgrammaticScroll?.(addedHeight);
+  }, [onProgrammaticScroll]);
 
   // スマホ向けピンチ操作の計算用Ref
   const initialDistance = useRef<number | null>(null);
@@ -105,9 +126,9 @@ export default function ImageGrid({
     const targetScrollY = Math.max(0, elementCenterY - window.innerHeight / 2);
     const delta = targetScrollY - window.scrollY;
     window.scrollTo({ top: targetScrollY, behavior: "instant" as ScrollBehavior });
-    onProgrammaticScroll?.(delta);
+    notifyProgrammaticScroll(delta);
     return true;
-  }, [onProgrammaticScroll]);
+  }, [notifyProgrammaticScroll]);
 
   // ソート変更時の初期中央配置と、上方向への無限スクロール（前の120件を先頭に追加）時のスクロール位置維持をペイント前に同期実行する
   useLayoutEffect(() => {
@@ -151,7 +172,7 @@ export default function ImageGrid({
         const appliedDelta = targetScrollY - window.scrollY;
         if (Math.abs(appliedDelta) > 1) {
           window.scrollTo({ top: targetScrollY, behavior: "instant" as ScrollBehavior });
-          onProgrammaticScroll?.(appliedDelta);
+          notifyProgrammaticScroll(appliedDelta);
         }
       }
       return;
@@ -169,7 +190,7 @@ export default function ImageGrid({
         const addedHeight = oldFirstEl.getBoundingClientRect().top - newFirstEl.getBoundingClientRect().top;
         if (addedHeight > 0) {
           window.scrollBy({ top: addedHeight, behavior: "instant" as ScrollBehavior });
-          onProgrammaticScroll?.(addedHeight);
+          notifyProgrammaticScroll(addedHeight);
         }
       }
       isPrependingRef.current = false;
@@ -191,7 +212,7 @@ export default function ImageGrid({
     }
 
     prevFirstIdRef.current = currentFirstId;
-  }, [results, focusRequest, anchorScrollRequest, scrollImageToCenter, hasPrev, loadPrev, onProgrammaticScroll]);
+  }, [results, focusRequest, anchorScrollRequest, scrollImageToCenter, hasPrev, loadPrev, notifyProgrammaticScroll]);
 
   // スマホのピンチ操作検知ロジック
   // 2点間の距離をピクセル単位で計算する関数
@@ -259,27 +280,41 @@ export default function ImageGrid({
     return () => window.removeEventListener("wheel", handleWheel);
   }, [gridColsPC, setGridColsPC]);
 
-  // スクロール量に応じてボタンの表示/非表示を直接切り替える処理
+  // スクロール方向と位置に応じてボタンの表示/非表示を直接切り替える処理
+  // （コントロールバーと同様、下にスクロールで隠し、上にスクロールした時だけ表示する）
   useEffect(() => {
     const handleScroll = () => {
-      if (!scrollToTopBtnRef.current) return;
-      
-      // 300px以上下にスクロールしたら表示、それ以外は隠す
-      if (window.scrollY > 300) {
-        scrollToTopBtnRef.current.style.opacity = "1";
-        scrollToTopBtnRef.current.style.pointerEvents = "auto";
-        scrollToTopBtnRef.current.style.transform = "translateY(0)";
-      } else {
-        scrollToTopBtnRef.current.style.opacity = "0";
-        scrollToTopBtnRef.current.style.pointerEvents = "none";
-        scrollToTopBtnRef.current.style.transform = "translateY(10px)";
+      const currentScrollY = window.scrollY;
+
+      // 300px以下の上部エリアにいる時は常に隠す
+      if (currentScrollY <= 300) {
+        setScrollToTopVisible(false);
+        lastScrollYRef.current = currentScrollY;
+        return;
       }
+
+      const diff = currentScrollY - lastScrollYRef.current;
+
+      // 微小な1〜2pxの揺れは無視する
+      if (Math.abs(diff) < 2) return;
+
+      if (diff > 0) {
+        // 上スクロールによる先頭追加（loadPrev）の直後は下スクロール誤判定による非表示をブロックする
+        if (performance.now() < ignoreScrollHideUntilRef.current) {
+          lastScrollYRef.current = currentScrollY;
+          return;
+        }
+        setScrollToTopVisible(false);
+      } else {
+        setScrollToTopVisible(true);
+      }
+      lastScrollYRef.current = currentScrollY;
     };
 
     // passive: true をつけることで、スクロール操作自体の動作を軽くする
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [setScrollToTopVisible]);
 
   // ビューアが閉じた瞬間に、見ていた画像の位置へスクロールする処理
   useEffect(() => {
@@ -296,6 +331,7 @@ export default function ImageGrid({
         if (el) {
           // 画面内に見えている場合は動かず、画面外にある場合のみ一番近い端にスクロール
           el.scrollIntoView({ block: "nearest", behavior: "auto" });
+          lastScrollYRef.current = window.scrollY;
         }
       }, 0);
 
