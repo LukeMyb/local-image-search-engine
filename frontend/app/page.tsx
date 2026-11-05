@@ -54,17 +54,6 @@ export default function Home() {
   // 現在保存されているすべての「クエリ（文字列）」のリストを保持する変数
   const [savedQueries, setSavedQueries] = useState<string[]>([]);
 
-  // コントロールバーの表示状態と、スクロール量監視用のRef
-  const [isControlBarVisible, setIsControlBarVisible] = useState(true);
-  const lastScrollY = useRef(0);
-  const ignoreControlBarHideUntilRef = useRef(0);
-
-  // 先頭への画像追加（loadPrev）やソート時の中央配置によるプログラム的なスクロール補正を反映する関数
-  const handleProgrammaticScroll = useCallback((addedHeight: number) => {
-    lastScrollY.current = Math.max(lastScrollY.current + addedHeight, window.scrollY);
-    ignoreControlBarHideUntilRef.current = performance.now() + 250;
-  }, []);
-
   // 選択モードとソート順のステート
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [sortOrder, setSortOrder] = useState<"score" | "newest">("score");
@@ -331,37 +320,6 @@ export default function Home() {
   // スワイプによるドロワー展開ロジックを有効化
   useDrawerSwipe({ isDrawerOpen, setIsDrawerOpen, selectedImage });
 
-  // スクロール検知ロジック（下にスクロールで隠し、上にスクロールで表示）
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      const diff = currentScrollY - lastScrollY.current;
-
-      // 微小な1〜2pxの揺れは無視する
-      if (Math.abs(diff) < 2) return;
-
-      // 50px以上スクロールしている場合のみ判定（一番上にいる時のチラつき防止）
-      if (currentScrollY > 50) {
-        if (diff > 0) {
-          // 上スクロールによる先頭追加（loadPrev）の直後は下スクロール誤判定による非表示をブロックする
-          if (performance.now() < ignoreControlBarHideUntilRef.current) {
-            lastScrollY.current = currentScrollY;
-            return;
-          }
-          setIsControlBarVisible(false);
-        } else {
-          setIsControlBarVisible(true);
-        }
-      } else {
-        setIsControlBarVisible(true);
-      }
-      lastScrollY.current = currentScrollY;
-    };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
   // サーバーからすべてのブックマークを取得して、クエリのリストを最新にする関数
   const refreshSavedQueries = async () => {
     try {
@@ -474,7 +432,6 @@ export default function Home() {
           resetToTop={resetToTop}
           focusRequest={focusRequest}
           anchorScrollRequest={anchorScrollRequest}
-          onProgrammaticScroll={handleProgrammaticScroll}
           isSelectionMode={isSelectionMode}
           selectedIds={selectedIds}
           toggleSelection={toggleSelection}
@@ -551,7 +508,6 @@ export default function Home() {
       {/* コントロールバーの処理 */}
       {!selectedImage && (
         <ControlBar
-          isControlBarVisible={isControlBarVisible}
           isSelectionMode={isSelectionMode}
           setIsSelectionMode={setIsSelectionMode}
           sortText={sortText}

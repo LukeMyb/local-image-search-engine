@@ -4,7 +4,6 @@ import { API_BASE_URL } from "../lib/config";
 
 // 親（page.tsx）から受け取るプロパティの型定義
 interface ControlBarProps {
-  isControlBarVisible: boolean;
   isSelectionMode: boolean;
   setIsSelectionMode: (mode: boolean) => void;
   sortText: string;
@@ -19,7 +18,6 @@ interface ControlBarProps {
 }
 
 export default function ControlBar({
-  isControlBarVisible,
   isSelectionMode,
   setIsSelectionMode,
   sortText,
@@ -79,11 +77,7 @@ export default function ControlBar({
 
   return (
     <>
-      <div
-        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all duration-300 ease-in-out ${
-          isControlBarVisible || isSelectionMode ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
-        }`}
-      >
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30">
         {/* 選択モードのON/OFFで中身を切り替える */}
         {!isSelectionMode ? (
           <div className="bg-zinc-800/90 backdrop-blur-md border border-zinc-700 shadow-2xl rounded-full px-1.5 py-1.5 flex flex-row items-center gap-1 overflow-x-auto max-w-[95vw] scrollbar-hide">

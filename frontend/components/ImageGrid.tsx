@@ -26,9 +26,6 @@ interface ImageGridProps {
   // 一括削除・復元時に最後に選択した画像の位置へスクロールを補正するリクエスト
   anchorScrollRequest?: { id: number; viewportTop: number; key: number } | null;
 
-  // 先頭追加時などのプログラム的なスクロール補正量を親へ通知するコールバック
-  onProgrammaticScroll?: (addedHeight: number) => void;
-
   // 選択モード用のProps
   isSelectionMode?: boolean;
   selectedIds?: number[];
@@ -52,7 +49,6 @@ export default function ImageGrid({
   resetToTop,
   focusRequest,
   anchorScrollRequest,
-  onProgrammaticScroll,
   isSelectionMode = false,
   selectedIds = [],
   toggleSelection,
@@ -101,8 +97,7 @@ export default function ImageGrid({
   const notifyProgrammaticScroll = useCallback((addedHeight: number) => {
     lastScrollYRef.current = Math.max(lastScrollYRef.current + addedHeight, window.scrollY);
     ignoreScrollHideUntilRef.current = performance.now() + 250;
-    onProgrammaticScroll?.(addedHeight);
-  }, [onProgrammaticScroll]);
+  }, []);
 
   // スマホ向けピンチ操作の計算用Ref
   const initialDistance = useRef<number | null>(null);
