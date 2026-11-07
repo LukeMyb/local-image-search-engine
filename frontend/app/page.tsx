@@ -58,8 +58,21 @@ export default function Home() {
   // 選択モードとソート順のステート
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [sortOrder, setSortOrder] = useState<"score" | "newest">("score");
-  // 直前のソートがランダム表示だったかどうかを管理するステート
+  // 直前のソートがランダム表示だったかどうかと、その乱数シード値を管理するステート
   const [isRandomSorted, setIsRandomSorted] = useState(false);
+  const [randomSeed, setRandomSeed] = useState<number | null>(null);
+
+  // ランダムソート状態とシード値をState・localStorageの双方に同期するヘルパー
+  const updateRandomSortState = useCallback((isRandom: boolean, seed: number | null = null) => {
+    setIsRandomSorted(isRandom);
+    setRandomSeed(seed);
+    localStorage.setItem("isRandomSorted", String(isRandom));
+    if (seed !== null) {
+      localStorage.setItem("randomSeed", String(seed));
+    } else {
+      localStorage.removeItem("randomSeed");
+    }
+  }, []);
 
   // グリッドの列数を管理するState（PC用とスマホ用を分離）
   const [gridColsPC, setGridColsPC] = useState(6);
@@ -85,7 +98,7 @@ export default function Home() {
   const toggleSortOrder = () => {
     // 直前のソートがランダムだった場合は、ボタンの表示は変えずに現在表示されているソート順をそのまま適用する
     if (isRandomSorted) {
-      setIsRandomSorted(false);
+      updateRandomSortState(false, null);
       handleSearch(query, sortOrder, undefined, undefined, isFavoriteFilter, lastViewedIdRef.current, isTrashFilter);
       return;
     }
@@ -102,7 +115,7 @@ export default function Home() {
   const toggleFavoriteFilter = () => {
     const nextState = !isFavoriteFilter;
     setIsFavoriteFilter(nextState);
-    setIsRandomSorted(false);
+    updateRandomSortState(false, null);
     localStorage.setItem("isFavoriteFilter", String(nextState)); // 切り替えた瞬間にlocalStorageに保存する
     handleSearch(query, sortOrder, undefined, undefined, nextState, null, isTrashFilter);
   };
@@ -111,7 +124,7 @@ export default function Home() {
   const toggleTrashFilter = () => {
     const nextState = !isTrashFilter;
     setIsTrashFilter(nextState);
-    setIsRandomSorted(false);
+    updateRandomSortState(false, null);
     setIsSelectionMode(false);
     handleSearch(query, sortOrder, undefined, undefined, isFavoriteFilter, null, nextState);
   };
@@ -207,17 +220,27 @@ export default function Home() {
     }
   }, [selectedIds, restoreImages]);
 
-  // 現在のクエリとフィルターを維持したまま、並び順をランダムにして再検索する
+  // 現在のクエリとフィルターを維持したまま、新しい乱数シードで並び順をランダムにして再検索する
   const executeRandomSearch = () => {
-    setIsRandomSorted(true);
-    handleSearch(query, "random", undefined, undefined, isFavoriteFilter, null, isTrashFilter);
+    const newSeed = Math.floor(Math.random() * 2147483647) + 1;
+    updateRandomSortState(true, newSeed);
+    handleSearch(query, "random", undefined, undefined, isFavoriteFilter, null, isTrashFilter, newSeed);
   };
 
-  // 現在の検索条件・ソート順を維持したままグリッドを再読み込みする
+  // 現在の検索条件・ソート順（ランダム時はシード値も）を維持したままグリッドを再読み込みする
   const reloadGrid = useCallback(() => {
     const activeSort = isRandomSorted ? "random" : sortOrder;
-    handleSearch(query, activeSort, undefined, undefined, isFavoriteFilter, null, isTrashFilter);
-  }, [query, sortOrder, isRandomSorted, isFavoriteFilter, isTrashFilter, handleSearch]);
+    handleSearch(
+      query,
+      activeSort,
+      undefined,
+      undefined,
+      isFavoriteFilter,
+      null,
+      isTrashFilter,
+      isRandomSorted ? randomSeed : null
+    );
+  }, [query, sortOrder, isRandomSorted, randomSeed, isFavoriteFilter, isTrashFilter, handleSearch]);
 
   // 画面最上部でのプルリフレッシュ（下引っ張り再読み込み）用のStateとRef
   const [pullDistance, setPullDistance] = useState(0);
@@ -430,10 +453,10 @@ export default function Home() {
     if (newQuery) {
       setQuery(newQuery);
       setSelectedImage(null); // ビューアーを閉じる
-      setIsRandomSorted(false);
+      updateRandomSortState(false, null);
       handleSearch(newQuery, "score", undefined, undefined, isFavoriteFilter, null, isTrashFilter);
     }
-  }, [handleSearch, isFavoriteFilter, isTrashFilter]);
+  }, [handleSearch, isFavoriteFilter, isTrashFilter, updateRandomSortState]);
 
   // システム制御（ズーム禁止・スクロールロック）を有効化
   useSystemUI({ selectedImage, isDrawerOpen });
@@ -479,6 +502,15 @@ export default function Home() {
     const savedSort: "score" | "newest" = rawSavedSort === "newest" ? "newest" : "score";
     setSortOrder(savedSort);
 
+    // localStorageから前回のランダムソート状態とシード値を読み込む
+    const savedRandomSorted = localStorage.getItem("isRandomSorted") === "true";
+    const savedSeedStr = localStorage.getItem("randomSeed");
+    const parsedSeed = savedSeedStr ? parseInt(savedSeedStr, 10) : NaN;
+    const savedSeed = !isNaN(parsedSeed) ? parsedSeed : null;
+    const effectiveRandom = savedRandomSorted && savedSeed !== null;
+    setIsRandomSorted(effectiveRandom);
+    setRandomSeed(effectiveRandom ? savedSeed : null);
+
     // localStorageから前回のビューアーUI表示状態を読み込む
     const savedUIVisible = localStorage.getItem("isViewerUIVisible");
     if (savedUIVisible !== null) {
@@ -501,7 +533,17 @@ export default function Home() {
       // localStorageから読み込んで検索を実行する
       const lastQuery = localStorage.getItem("lastQuery") || "";
       setQuery(lastQuery);
-      handleSearch(lastQuery, savedSort, undefined, undefined, savedFavoriteFilter);
+      const initialSort = effectiveRandom ? "random" : savedSort;
+      handleSearch(
+        lastQuery,
+        initialSort,
+        undefined,
+        undefined,
+        savedFavoriteFilter,
+        null,
+        false,
+        effectiveRandom ? savedSeed : null
+      );
     };
 
     restoreLastQuery();
@@ -539,7 +581,7 @@ export default function Home() {
           query={query}
           setQuery={setQuery}
           onSearch={(e) => {
-            setIsRandomSorted(false);
+            updateRandomSortState(false, null);
             handleSearch(query, sortOrder, e, undefined, isFavoriteFilter, null, isTrashFilter);
           }}
           setIsDrawerOpen={setIsDrawerOpen}
@@ -639,7 +681,7 @@ export default function Home() {
         query={query}
         setQuery={setQuery}
         handleSearch={(e, oq) => {
-          setIsRandomSorted(false);
+          updateRandomSortState(false, null);
           return handleSearch(query, sortOrder, e, oq, isFavoriteFilter, null, isTrashFilter);
         }}
         allBookmarks={allBookmarks}

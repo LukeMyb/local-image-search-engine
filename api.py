@@ -6,9 +6,20 @@ import os
 import re
 import random
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 from core.search import SearchManager
+
+
+def _random_order_key(seed: int, image_id: int) -> int:
+    """
+    シード値と画像IDから決定論的な64bitハッシュ値（SplitMix64）を計算する。
+    画像の追加・削除で要素数が変わっても、残存する画像同士の相対的なランダム順序を維持できる。
+    """
+    x = (seed ^ (image_id * 0x9E3779B97F4A7C15)) & 0xFFFFFFFFFFFFFFFF
+    x = ((x ^ (x >> 30)) * 0xBF58476D1CE4E5B9) & 0xFFFFFFFFFFFFFFFF
+    x = ((x ^ (x >> 27)) * 0x94D049BB133111EB) & 0xFFFFFFFFFFFFFFFF
+    return x ^ (x >> 31)
 
 # POST リクエストで受け取るIDリストのデータ型を定義
 class BatchImageRequest(BaseModel):
@@ -78,7 +89,7 @@ def get_thumbnail(image_id: int):
     return FileResponse(image_data['thumbnail_path'])
 
 @app.get("/search")
-def search(q: str = "", sort: str = "score", favorite_only: bool = False, trash_only: bool = False):
+def search(q: str = "", sort: str = "score", favorite_only: bool = False, trash_only: bool = False, seed: Optional[int] = None):
     """
     検索クエリ(q)を受け取り、検索結果をJSONで返す
     """
@@ -113,7 +124,10 @@ def search(q: str = "", sort: str = "score", favorite_only: bool = False, trash_
 
     # ランダム表示が要求された場合はシャッフルする
     if sort == "random":
-        random.shuffle(results)
+        if seed is not None:
+            results.sort(key=lambda img: _random_order_key(seed, img["id"]))
+        else:
+            random.shuffle(results)
 
     # 検索結果からIDだけをすべて抽出し、表示用は最初の100件で切り出す
     all_ids = [img["id"] for img in results]

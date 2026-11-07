@@ -86,7 +86,8 @@ export function useImageSearch() {
     overrideQuery?: string,
     isFavoriteFilter: boolean = false,
     focusImageId?: number | null,
-    isTrashFilter: boolean = false
+    isTrashFilter: boolean = false,
+    randomSeed?: number | null
   ) => {
     // フォーム送信によるページリロードを阻止する
     if (e) e.preventDefault();
@@ -108,8 +109,11 @@ export function useImageSearch() {
 
     let endpoint = `/search?q=${encodeURIComponent(currentQuery)}&sort=${sortOrder}${isFavoriteFilter ? '&favorite_only=true' : ''}${isTrashFilter ? '&trash_only=true' : ''}`;
     
-    // ランダムソート時はキャッシュを回避して毎回新しいシャッフルを得る
+    // ランダムソート時はシード値があれば付与し、キャッシュ回避用のタイムスタンプも付ける
     if (sortOrder === "random") {
+      if (randomSeed != null) {
+        endpoint += `&seed=${randomSeed}`;
+      }
       endpoint += `&_t=${Date.now()}`;
     }
 
