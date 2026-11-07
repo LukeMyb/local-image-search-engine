@@ -53,7 +53,19 @@ export default function SearchBar({
 }: SearchBarProps) {
   // 枠外クリック検知用のRefと、削除ダイアログ用のState
   const searchBarRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
   const [styleToDelete, setStyleToDelete] = useState<Suggestion | null>(null);
+
+  // アンマウント時にタイマーをクリア
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current) {
+        clearTimeout(blurTimerRef.current);
+      }
+    };
+  }, []);
 
   // クエリが変更されたら、少し遅れてAPIを叩く（デバウンス処理）
   useEffect(() => {
@@ -78,25 +90,52 @@ export default function SearchBar({
   return (
     <>
       <div className="flex flex-row gap-2 w-full max-w-md" ref={searchBarRef}>
-        {/* ドロワーメニュー展開ボタン */}
-        <button
-          type="button"
-          onClick={() => setIsDrawerOpen(true)}
-          className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
-        >
-          <Menu size={16} />
-        </button>
+        {/* ドロワーメニュー展開ボタン（検索窓フォーカス時は非表示） */}
+        {!isFocused && (
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
+          >
+            <Menu size={16} />
+          </button>
+        )}
 
         {/* 検索フォーム */}
-        <form onSubmit={onSearch} className="flex flex-row gap-2 grow">
+        <form
+          onSubmit={(e) => {
+            if (blurTimerRef.current) {
+              clearTimeout(blurTimerRef.current);
+              blurTimerRef.current = null;
+            }
+            setIsFocused(false);
+            setIsSuggestOpen(false);
+            inputRef.current?.blur();
+            onSearch(e);
+          }}
+          className="flex flex-row gap-2 grow"
+        >
           <div className="relative grow flex items-center">
             {/* 検索窓（テキストボックス） */}
             <input
+              ref={inputRef}
               type="text"
               value={query}
-              onFocus={() => setIsSuggestOpen(true)}
-              // フォーカスが外れたらサジェストを閉じる（クリック判定のために少し遅延させる）
-              onBlur={() => setTimeout(() => setIsSuggestOpen(false), 150)}
+              onFocus={() => {
+                if (blurTimerRef.current) {
+                  clearTimeout(blurTimerRef.current);
+                  blurTimerRef.current = null;
+                }
+                setIsFocused(true);
+                setIsSuggestOpen(true);
+              }}
+              // フォーカスが外れたらサジェストを閉じ、通常表示に戻す（クリック判定のために少し遅延させる）
+              onBlur={() => {
+                blurTimerRef.current = setTimeout(() => {
+                  setIsFocused(false);
+                  setIsSuggestOpen(false);
+                }, 150);
+              }}
               onChange={(e) => {
                 setQuery(e.target.value);
                 setIsSuggestOpen(true);
@@ -111,7 +150,15 @@ export default function SearchBar({
                 type="button"
                 // タップ時にフォーカスが外れる（キーボードが閉じる）のを防ぐ
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setQuery("")}
+                onClick={() => {
+                  if (blurTimerRef.current) {
+                    clearTimeout(blurTimerRef.current);
+                    blurTimerRef.current = null;
+                  }
+                  setQuery("");
+                  setIsFocused(true);
+                  inputRef.current?.focus();
+                }}
                 className="absolute right-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
               >
                 <X size={16} />
@@ -131,6 +178,7 @@ export default function SearchBar({
                       onClick={() => {
                         setQuery(s.query); // 検索窓にクエリを反映
                         setIsSuggestOpen(false); // サジェストを閉じる
+                        setIsFocused(false);
                       }}
                     >
                       {s.display}
@@ -165,55 +213,61 @@ export default function SearchBar({
           </button>
         </form>
 
-        {/* ブックマーク保存ボタン */}
-        <button
-          type="button"
-          // クエリが入力されている時だけダイアログを開けるようにする
-          onClick={openBookmarkDialog}
-          className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
-            query.trim() 
-              // 入力されたクエリが保存済みリストにある場合、緑色(text-green-400)にする
-              ? savedQueries.includes(query.trim())
-                ? "bg-[#27272a] hover:bg-zinc-700 text-green-400"
-                : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white" 
-              : "bg-[#27272a] text-zinc-600 cursor-not-allowed"
-          }`}
-        >
-          {/* 保存済みかどうかに応じてアイコンを切り替える */}
-          {query.trim() && savedQueries.includes(query.trim()) ? (
-            <BookmarkCheck size={16} />
-          ) : (
-            <BookmarkPlus size={16} />
-          )}
-        </button>
+        {/* ブックマーク保存ボタン（検索窓フォーカス時は非表示） */}
+        {!isFocused && (
+          <button
+            type="button"
+            // クエリが入力されている時だけダイアログを開けるようにする
+            onClick={openBookmarkDialog}
+            className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+              query.trim() 
+                // 入力されたクエリが保存済みリストにある場合、緑色(text-green-400)にする
+                ? savedQueries.includes(query.trim())
+                  ? "bg-[#27272a] hover:bg-zinc-700 text-green-400"
+                  : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white" 
+                : "bg-[#27272a] text-zinc-600 cursor-not-allowed"
+            }`}
+          >
+            {/* 保存済みかどうかに応じてアイコンを切り替える */}
+            {query.trim() && savedQueries.includes(query.trim()) ? (
+              <BookmarkCheck size={16} />
+            ) : (
+              <BookmarkPlus size={16} />
+            )}
+          </button>
+        )}
 
-        {/* お気に入りフィルターボタン */}
-        <button 
-          type="button"
-          onClick={onToggleFavoriteFilter}
-          className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
-            isFavoriteFilter 
-              ? "bg-[#27272a] hover:bg-zinc-700 text-white"
-              : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
-          }`}
-          title="お気に入りのみ表示"
-        >
-          <Heart size={16} className={isFavoriteFilter ? "fill-current" : ""} />
-        </button>
+        {/* お気に入りフィルターボタン（検索窓フォーカス時は非表示） */}
+        {!isFocused && (
+          <button 
+            type="button"
+            onClick={onToggleFavoriteFilter}
+            className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+              isFavoriteFilter 
+                ? "bg-[#27272a] hover:bg-zinc-700 text-white"
+                : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
+            }`}
+            title="お気に入りのみ表示"
+          >
+            <Heart size={16} className={isFavoriteFilter ? "fill-current" : ""} />
+          </button>
+        )}
 
-        {/* ゴミ箱フィルターボタン */}
-        <button
-          type="button"
-          onClick={onToggleTrashFilter}
-          className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
-            isTrashFilter
-              ? "bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30"
-              : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
-          }`}
-          title={isTrashFilter ? "ゴミ箱表示中（クリックで通常表示に戻る）" : "ゴミ箱を表示"}
-        >
-          <Trash2 size={16} />
-        </button>
+        {/* ゴミ箱フィルターボタン（検索窓フォーカス時は非表示） */}
+        {!isFocused && (
+          <button
+            type="button"
+            onClick={onToggleTrashFilter}
+            className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+              isTrashFilter
+                ? "bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30"
+                : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
+            }`}
+            title={isTrashFilter ? "ゴミ箱表示中（クリックで通常表示に戻る）" : "ゴミ箱を表示"}
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
 
       {/* 絵柄タグの削除確認ダイアログ */}
