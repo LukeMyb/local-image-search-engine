@@ -68,6 +68,9 @@ export default function ImageViewer({
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
+  // ゴミ箱移動の確認ダイアログの開閉状態を管理するState
+  const [isTrashDialogOpen, setIsTrashDialogOpen] = useState(false);
+
   // 展開アニメーションの状態と、起点（座標）を管理するState
   const [entranceState, setEntranceState] = useState<'init' | 'animating' | 'done' | 'closing'>('init');
   const [transformOrigin, setTransformOrigin] = useState("center center");
@@ -262,6 +265,7 @@ export default function ImageViewer({
   useEffect(() => {
     stopZoomAnimation();
     setIsDetailOpen(false);
+    setIsTrashDialogOpen(false);
     setDragX(0);
     setSwipeDirection(null);
     updateZoomState(1, 0, 0);
@@ -782,6 +786,13 @@ export default function ImageViewer({
   // キーボード操作（← → ↑ ↓ Esc）を検知して画像切り替え・詳細表示・閉じるを実行する処理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTrashDialogOpen) {
+        if (e.key === "Escape") {
+          setIsTrashDialogOpen(false);
+        }
+        return;
+      }
+
       if (e.key === "ArrowRight") {
         executeNext();
       } else if (e.key === "ArrowLeft") {
@@ -807,7 +818,7 @@ export default function ImageViewer({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [hasSubsequent, hasPreceding, onNext, onPrev, isDetailOpen, handleClose]);
+  }, [hasSubsequent, hasPreceding, onNext, onPrev, isDetailOpen, isTrashDialogOpen, handleClose]);
 
   // 画面の余白や画像のタップでUIを隠す処理
   const handleTap = () => {
@@ -1003,7 +1014,7 @@ export default function ImageViewer({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isFav) return;
-                  onTrash(selectedImage.id);
+                  setIsTrashDialogOpen(true);
                 }}
                 aria-disabled={isFav}
                 className={`absolute top-0 left-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
@@ -1017,7 +1028,7 @@ export default function ImageViewer({
                   className={`p-3 rounded-full transition-colors flex items-center justify-center shadow-lg ${
                     isFav
                       ? "bg-black/40 text-zinc-500 opacity-60"
-                      : "bg-black/50 text-white group-hover:bg-red-600/80"
+                      : "bg-black/50 text-white group-hover:bg-black/80"
                   }`}
                 >
                   <Trash2 size={24} />
@@ -1101,6 +1112,48 @@ export default function ImageViewer({
           </p>
         </div>
       </div>
+
+      {/* ゴミ箱移動の確認ダイアログ */}
+      {isTrashDialogOpen && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4"
+          onClick={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
+        >
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setIsTrashDialogOpen(false)}
+          />
+
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl w-full max-w-sm p-6 flex flex-col gap-4">
+            <h3 className="text-lg font-medium text-white">ゴミ箱へ移動</h3>
+
+            <p className="text-zinc-300 text-sm">
+              この画像をゴミ箱に移動しますか？
+            </p>
+
+            <div className="flex flex-row justify-end gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setIsTrashDialogOpen(false);
+                  onTrash?.(selectedImage.id);
+                }}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white rounded-md transition-colors font-medium cursor-pointer"
+              >
+                はい
+              </button>
+              <button
+                onClick={() => setIsTrashDialogOpen(false)}
+                className="px-4 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors cursor-pointer"
+              >
+                いいえ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
