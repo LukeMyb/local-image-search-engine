@@ -89,17 +89,24 @@ export default function SearchBar({
 
   return (
     <>
-      <div className="flex flex-row gap-2 w-full max-w-md" ref={searchBarRef}>
-        {/* ドロワーメニュー展開ボタン（検索窓フォーカス時は非表示） */}
-        {!isFocused && (
+      <div className="flex flex-row w-full max-w-md" ref={searchBarRef}>
+        {/* ドロワーメニュー展開ボタン（検索窓フォーカス時はアニメーションで縮小・非表示） */}
+        <div
+          className={`flex overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
+            isFocused
+              ? "w-0 mr-0 opacity-0 scale-90 pointer-events-none"
+              : "w-10 mr-2 opacity-100 scale-100"
+          }`}
+        >
           <button
             type="button"
+            tabIndex={isFocused ? -1 : 0}
             onClick={() => setIsDrawerOpen(true)}
             className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
           >
             <Menu size={16} />
           </button>
-        )}
+        </div>
 
         {/* 検索フォーム */}
         <form
@@ -113,9 +120,9 @@ export default function SearchBar({
             inputRef.current?.blur();
             onSearch(e);
           }}
-          className="flex flex-row gap-2 grow"
+          className="flex flex-row gap-2 grow min-w-0"
         >
-          <div className="relative grow flex items-center">
+          <div className="relative grow flex items-center min-w-0">
             {/* 検索窓（テキストボックス） */}
             <input
               ref={inputRef}
@@ -213,10 +220,18 @@ export default function SearchBar({
           </button>
         </form>
 
-        {/* ブックマーク保存ボタン（検索窓フォーカス時は非表示） */}
-        {!isFocused && (
+        {/* 右側ボタン群（検索窓フォーカス時はアニメーションで縮小・非表示） */}
+        <div
+          className={`flex flex-row gap-2 overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
+            isFocused
+              ? "w-0 ml-0 opacity-0 scale-90 pointer-events-none"
+              : "w-[136px] ml-2 opacity-100 scale-100"
+          }`}
+        >
+          {/* ブックマーク保存ボタン */}
           <button
             type="button"
+            tabIndex={isFocused ? -1 : 0}
             // クエリが入力されている時だけダイアログを開けるようにする
             onClick={openBookmarkDialog}
             className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
@@ -235,12 +250,11 @@ export default function SearchBar({
               <BookmarkPlus size={16} />
             )}
           </button>
-        )}
 
-        {/* お気に入りフィルターボタン（検索窓フォーカス時は非表示） */}
-        {!isFocused && (
+          {/* お気に入りフィルターボタン */}
           <button 
             type="button"
+            tabIndex={isFocused ? -1 : 0}
             onClick={onToggleFavoriteFilter}
             className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
               isFavoriteFilter 
@@ -251,14 +265,13 @@ export default function SearchBar({
           >
             <Heart size={16} className={isFavoriteFilter ? "fill-current" : ""} />
           </button>
-        )}
 
-        {/* ゴミ箱フィルターボタン（検索窓フォーカス時は非表示） */}
-        {!isFocused && (
+          {/* ゴミ箱フィルターボタン */}
           <button
             type="button"
+            tabIndex={isFocused ? -1 : 0}
             onClick={onToggleTrashFilter}
-            className={`p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+            className={`w-10 p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
               isTrashFilter
                 ? "bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30"
                 : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
@@ -267,7 +280,7 @@ export default function SearchBar({
           >
             <Trash2 size={16} />
           </button>
-        )}
+        </div>
       </div>
 
       {/* 絵柄タグの削除確認ダイアログ */}
