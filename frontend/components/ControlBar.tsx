@@ -16,6 +16,7 @@ interface ControlBarProps {
   hasFavoriteInSelection?: boolean;
   onTrashSelected?: () => Promise<void> | void;
   onRestoreSelected?: () => Promise<void> | void;
+  serverMode?: "light" | "starting" | "heavy";
 }
 
 export default function ControlBar({
@@ -31,6 +32,7 @@ export default function ControlBar({
   hasFavoriteInSelection = false,
   onTrashSelected,
   onRestoreSelected,
+  serverMode = "light",
 }: ControlBarProps) {
   // アクションメニューの開閉状態を管理するState
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -131,13 +133,24 @@ export default function ControlBar({
                   <>
                     <button
                       onClick={() => {
+                        if (serverMode !== "heavy") return;
                         setIsActionMenuOpen(false);
                         setStyleNameInput(""); 
                         setIsStyleDialogOpen(true);
                       }}
-                      className="w-full flex flex-row items-center gap-3 px-4 py-3 hover:bg-zinc-700 transition-colors text-zinc-200 text-left"
+                      disabled={serverMode !== "heavy"}
+                      title={
+                        serverMode !== "heavy"
+                          ? "軽量モード中は絵柄タグを作成できません（右上のボタンで重量版をONにしてください）"
+                          : "選択した画像から絵柄タグを作成"
+                      }
+                      className={`w-full flex flex-row items-center gap-3 px-4 py-3 transition-colors text-left ${
+                        serverMode !== "heavy"
+                          ? "text-zinc-500 cursor-not-allowed opacity-60"
+                          : "hover:bg-zinc-700 text-zinc-200"
+                      }`}
                     >
-                      <Tag size={18} className="text-blue-400" />
+                      <Tag size={18} className={serverMode !== "heavy" ? "text-zinc-500" : "text-blue-400"} />
                       <span className="text-sm font-medium">絵柄タグを作成</span>
                     </button>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { RotateCw } from "lucide-react";
+import { RotateCw, Zap, Loader2, Feather } from "lucide-react";
 import { useSystemUI } from "../hooks/useSystemUI";
 import { useImageSearch } from "../hooks/useImageSearch";
 import { useDrawerSwipe } from "../hooks/useDrawerSwipe";
@@ -87,6 +87,9 @@ export default function Home() {
   // ゴミ箱フィルターのON/OFF状態を管理するState
   const [isTrashFilter, setIsTrashFilter] = useState(false);
 
+  // サーバーモード状態（"light" | "starting" | "heavy"）を管理するState
+  const [serverMode, setServerMode] = useState<"light" | "starting" | "heavy">("light");
+
   // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
   const toggleSelection = (id: number) => {
     setSelectedIds((prev) => 
@@ -152,6 +155,76 @@ export default function Home() {
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
+
+  // サーバーから現在のモード状態を取得する関数
+  const fetchServerMode = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/mode`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.mode === "light" || data.mode === "starting" || data.mode === "heavy") {
+        setServerMode(data.mode);
+      }
+    } catch (error) {
+      console.error("モード状態の取得エラー:", error);
+    }
+  }, []);
+
+  // 重量モード起動中("starting")の間、完了するまで定期的にステータスをポーリングする（最大35秒タイムアウト）
+  useEffect(() => {
+    if (serverMode !== "starting") return;
+
+    const startTime = Date.now();
+    const interval = setInterval(async () => {
+      if (Date.now() - startTime > 35000) {
+        setServerMode("light");
+        setStatusMessage("重量モードの起動がタイムアウトしました");
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/mode`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.mode === "heavy") {
+          setServerMode("heavy");
+        } else if (data.mode === "light") {
+          setServerMode("light");
+          if (data.error) {
+            setStatusMessage(`重量モードの起動に失敗しました: ${data.error}`);
+          }
+        }
+      } catch (error) {
+        console.error("モードポーリングエラー:", error);
+      }
+    }, 800);
+
+    return () => clearInterval(interval);
+  }, [serverMode, setStatusMessage]);
+
+  // フロントエンドから軽量モード⇔重量モードを切り替える関数
+  const toggleServerMode = async () => {
+    if (serverMode === "starting") return;
+    const targetMode = serverMode === "heavy" ? "light" : "heavy";
+
+    try {
+      if (targetMode === "heavy") {
+        setServerMode("starting");
+      }
+      const res = await fetch(`${API_BASE_URL}/mode`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: targetMode, wait: false }),
+      });
+      if (!res.ok) throw new Error("モードの切り替えに失敗しました");
+      const data = await res.json();
+      if (data.mode === "light" || data.mode === "starting" || data.mode === "heavy") {
+        setServerMode(data.mode);
+      }
+    } catch (error) {
+      console.error("モード切り替えエラー:", error);
+      setServerMode("light");
+    }
+  };
 
   // 一括削除・復元でアンカー位置が更新された場合は、ソート変更時の中心保持IDにも反映する
   useEffect(() => {
@@ -524,6 +597,7 @@ export default function Home() {
   // アプリ起動時に一回だけ、保存済みクエリのリストを読み込む
   useEffect(() => {
     refreshSavedQueries();
+    fetchServerMode();
 
     // localStorageから前回のソート順を読み込む（無い場合や無効な値の場合は "score" にする）
     const rawSavedSort = localStorage.getItem("sortOrder");
@@ -602,7 +676,47 @@ export default function Home() {
       )}
 
       <div className="p-2 flex flex-col gap-4 md:sticky md:top-0 md:z-40 md:bg-zinc-900/90 md:backdrop-blur-md md:border-b md:border-zinc-800">
-        <p className="text-lg font-medium">{statusMessage}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-lg font-medium truncate">{statusMessage}</p>
+
+          {/* サーバーモード（軽量 / 重量）切り替えボタン */}
+          <button
+            type="button"
+            onClick={toggleServerMode}
+            disabled={serverMode === "starting"}
+            title={
+              serverMode === "heavy"
+                ? "クリックで軽量モードに戻す（メモリ解放）"
+                : serverMode === "starting"
+                ? "重量モード（AI）を起動しています..."
+                : "クリックで重量モード（AI検索・絵柄作成）を起動"
+            }
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer ${
+              serverMode === "heavy"
+                ? "bg-blue-500/20 border-blue-500/50 text-blue-300 hover:bg-blue-500/30"
+                : serverMode === "starting"
+                ? "bg-amber-500/20 border-amber-500/40 text-amber-300 cursor-wait"
+                : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+            }`}
+          >
+            {serverMode === "heavy" ? (
+              <>
+                <Zap size={14} className="fill-current text-blue-400" />
+                <span>重量版 ON</span>
+              </>
+            ) : serverMode === "starting" ? (
+              <>
+                <Loader2 size={14} className="animate-spin text-amber-400" />
+                <span>重量版 起動中...</span>
+              </>
+            ) : (
+              <>
+                <Feather size={14} className="text-zinc-400" />
+                <span>軽量版</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* (SearchBarコンポーネントを呼び出し) */}
         <SearchBar 
@@ -733,6 +847,7 @@ export default function Home() {
           hasFavoriteInSelection={hasFavoriteInSelection}
           onTrashSelected={handleTrashSelected}
           onRestoreSelected={handleRestoreSelected}
+          serverMode={serverMode}
         />
       )}
     </div>
