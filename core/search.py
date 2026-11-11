@@ -15,10 +15,10 @@ class SearchManager:
         self.db.sync_filesystem_states()
         
         # 各エンジンをそれぞれ独立して初期化（ここで統括する）
-        self.tag_searcher = TagSearch(db_path, tag_index_path)
+        self.tag_searcher = TagSearch(db_path, tag_index_path, db=self.db)
         
         try:
-            self.style_engine = StyleSearcher(self.db)
+            self.style_engine = StyleSearcher(self.db, device=self.tag_searcher.device)
         except Exception as e:
             print(f"  [SearchManager] 絵柄検索エンジンのロードに失敗しました: {e}")
             self.style_engine = None

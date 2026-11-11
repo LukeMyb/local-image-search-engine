@@ -9,11 +9,11 @@ from PIL import Image
 from core.database import ImageDatabase
 
 class StyleSearcher:
-    def __init__(self, db: ImageDatabase, index_path="data/faiss/style.index"):
+    def __init__(self, db: ImageDatabase, index_path="data/faiss/style.index", device=None):
         self.db = db
         self.index_path = index_path
         
-        self.device = torch_directml.device()
+        self.device = device if device is not None else torch_directml.device()
         print(f"  [StyleSearch] 起動中 (デバイス: {self.device})")
         
         # VGG16モデルのロード

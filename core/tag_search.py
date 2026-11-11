@@ -1,28 +1,42 @@
+import csv
 import faiss
 import torch
-import pandas as pd
 import numpy as np
 import re
 import os
 import json
 import math
+from collections import Counter
 import torch_directml #DirectML用のプラグイン
 
 import time
 
+# Hugging Face Hub および translators の起動時外部通信を完全に無効化（高速化・フリーズ防止）
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("translators_default_region", "EN")
+
 print(f"[{time.strftime('%H:%M:%S')}] huggingface_hub インポート開始")
 from huggingface_hub import hf_hub_download
 print(f"[{time.strftime('%H:%M:%S')}] transformers インポート開始")
-from transformers import CLIPProcessor, CLIPModel
-print(f"[{time.strftime('%H:%M:%S')}] translators インポート開始")
-import translators as ts
+from transformers import CLIPTokenizer, CLIPTextModelWithProjection, logging as hf_logging
+hf_logging.set_verbosity_error()
 print(f"[{time.strftime('%H:%M:%S')}] インポート完了・クラス定義開始")
 
 from core.database import ImageDatabase
 
+# translators は実際に未キャッシュ単語の翻訳が必要になった時だけ遅延インポートする
+_ts_module = None
+def _get_translators():
+    global _ts_module
+    if _ts_module is None:
+        import translators as ts
+        _ts_module = ts
+    return _ts_module
+
 class TagSearch:
-    def __init__(self, db_path="data/db/index.db", tag_index_path="data/tag_vector_index.bin"):
-        self.db = ImageDatabase(db_path)
+    def __init__(self, db_path="data/db/index.db", tag_index_path="data/tag_vector_index.bin", db=None):
+        self.db = db if db is not None else ImageDatabase(db_path)
         
         #CUDA/CPUの判定を削除し、DirectMLを強制的に割り当てる
         self.device = torch_directml.device()
@@ -39,9 +53,9 @@ class TagSearch:
         if hasattr(import_utils, 'check_torch_load_is_safe'):
             import_utils.check_torch_load_is_safe = lambda: None
 
-        #脆弱性エラーを回避するため、安全な safetensors 形式で読み込むように指定
-        self.model = CLIPModel.from_pretrained(model_id, use_safetensors=False, local_files_only=True).to(self.device)
-        self.processor = CLIPProcessor.from_pretrained(model_id, local_files_only=True)
+        #テキスト特徴量のみを使用するため、不要なVisionモデルを省いた CLIPTextModelWithProjection をロード（VRAM・起動時間を削減）
+        self.model = CLIPTextModelWithProjection.from_pretrained(model_id, use_safetensors=False, local_files_only=True).to(self.device)
+        self.tokenizer = CLIPTokenizer.from_pretrained(model_id, local_files_only=True)
         
         #タグインデックスロード
         self.tag_index = faiss.read_index(tag_index_path)
@@ -49,7 +63,10 @@ class TagSearch:
         #タグ名リストロード
         repo_id = "SmilingWolf/wd-v1-4-moat-tagger-v2"
         csv_path = hf_hub_download(repo_id, "selected_tags.csv", local_files_only=True)
-        self.tag_list = pd.read_csv(csv_path)["name"].tolist()
+        with open(csv_path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            self.tag_list = [row["name"] for row in reader]
+        self.tag_set = set(self.tag_list)
 
         #辞書ロード (10万語 + 手動修正)
         self.alias_map = self._load_all_aliases()
@@ -67,14 +84,19 @@ class TagSearch:
         for path in paths:
             if os.path.exists(path):
                 try:
-                    df = pd.read_csv(path)
                     count = 0
-                    for k, v in zip(df['alias'], df['actual']):
-                        # 全て小文字、スペースをアンダースコアに統一
-                        key = str(k).strip().lower().replace(' ', '_')
-                        val = str(v).strip().lower().replace(' ', '_')
-                        combined[key] = val
-                        count += 1
+                    with open(path, "r", encoding="utf-8") as f:
+                        reader = csv.DictReader(f)
+                        for row in reader:
+                            k = row.get("alias")
+                            v = row.get("actual")
+                            if k is None or v is None:
+                                continue
+                            # 全て小文字、スペースをアンダースコアに統一
+                            key = k.strip().lower().replace(' ', '_')
+                            val = v.strip().lower().replace(' ', '_')
+                            combined[key] = val
+                            count += 1
                     print(f"    - Loaded {count} entries from {path}")
                 except Exception as e:
                     print(f"    [!] Failed to load {path}: {e}")
@@ -82,7 +104,6 @@ class TagSearch:
     
     def _build_tag_counts(self):
         """DB内の全画像（未削除のみ）から存在するタグとその件数を集計してメモリに保持する"""
-        self.tag_counts = {}
         cursor = self.db.conn.cursor()
         cursor.execute("SELECT tags_combined FROM images WHERE is_deleted = 0")
 
@@ -90,16 +111,15 @@ class TagSearch:
         rows = cursor.fetchall()
         self.total_images = len(rows)
         
+        counts = Counter()
         # 上で取得したrowsを回す
-        for row in rows:
-            tags_str = row[0]
-            if not tags_str: continue
-            
+        for (tags_str,) in rows:
+            if not tags_str:
+                continue
             # コンマ区切りのタグを処理してカウント
-            tags = [t.strip().lower() for t in tags_str.split(',')]
-            for t in tags:
-                self.tag_counts[t] = self.tag_counts.get(t, 0) + 1
+            counts.update(t.strip().lower() for t in tags_str.split(',') if t.strip())
                 
+        self.tag_counts = dict(counts)
         print(f"  [System] Cached {len(self.tag_counts)} unique tags from DB.")
 
     def adjust_tag_counts(self, image_ids: list[int], delta: int):
@@ -183,9 +203,9 @@ class TagSearch:
         return sorted_results[:limit]
 
     def query_to_vector(self, text):
-        inputs = self.processor(text=[text], return_tensors="pt", padding=True).to(self.device)
+        inputs = self.tokenizer([text], return_tensors="pt", padding=True).to(self.device)
         with torch.no_grad():
-            output = self.model.get_text_features(**inputs)
+            output = self.model(**inputs)
         
         if isinstance(output, torch.Tensor):
             vec = output
@@ -211,11 +231,11 @@ class TagSearch:
         if key in self.alias_map:
             actual_tag = self.alias_map[key]
             # 変換先がタグリストに存在するか確認
-            if actual_tag in self.tag_list:
+            if actual_tag in self.tag_set:
                 return actual_tag, True
         
         # 2. 直接タグリストにあるか確認
-        if key in self.tag_list:
+        if key in self.tag_set:
             return key, True
             
         return key, False
@@ -237,12 +257,13 @@ class TagSearch:
             if found:
                 return english_word, {english_word: 1.0}
         else:
-            # キャッシュがなければ従来通りAPIへ
+            # キャッシュがなければ従来通りAPIへ（ここで初めて translators を遅延インポート）
             print(f"  ├─ [API Request]: Translating '{word}'...")
+            ts = _get_translators()
 
             # --- Step 3: Google翻訳 ---
             try:
-                translated_g = ts.translate_text(word, translator='google', to_language='en')
+                translated_g = ts.translate_text(word, translator='google', to_language='en', timeout=3.0)
 
                 if translated_g:
                     self.db.save_translation_to_cache(word, translated_g) # 保存
@@ -258,7 +279,7 @@ class TagSearch:
             # --- Step 4: Bing翻訳 ---
             translated_b = ""
             try:
-                translated_b = ts.translate_text(word, translator='bing', to_language='en')
+                translated_b = ts.translate_text(word, translator='bing', to_language='en', timeout=3.0)
 
                 if translated_b:
                     self.db.save_translation_to_cache(word, translated_b) # 保存
@@ -299,7 +320,7 @@ class TagSearch:
         
         #クエリ自体がもしタグリストにあるなら、スコア1.0で追加
         norm_final = final_query.lower().replace(' ', '_')
-        if norm_final in self.tag_list:
+        if norm_final in self.tag_set:
             found_tags_map[norm_final] = 1.0
 
         query_has_size = self.has_size_modifier(final_query)
