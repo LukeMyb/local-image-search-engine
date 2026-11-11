@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { RotateCw, Zap, Loader2, Feather } from "lucide-react";
+import { RotateCw, Zap, Loader2, Feather, Settings } from "lucide-react";
 import { useSystemUI } from "../hooks/useSystemUI";
 import { useImageSearch } from "../hooks/useImageSearch";
 import { useDrawerSwipe } from "../hooks/useDrawerSwipe";
@@ -11,6 +11,7 @@ import ImageGrid from "../components/ImageGrid";
 import ImageViewer from "../components/ImageViewer";
 import SearchBar from "../components/SearchBar";
 import ControlBar from "../components/ControlBar";
+import SettingsModal from "../components/SettingsModal";
 
 import { API_BASE_URL } from "../lib/config";
 
@@ -49,6 +50,9 @@ export default function Home() {
 
   // ブックマーク保存ダイアログの開閉と入力内容を管理
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+
+  // 設定モーダルの開閉状態を管理
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // 全ブックマークの完全な情報を保持する
   const [allBookmarks, setAllBookmarks] = useState<Bookmark[]>([]);
@@ -368,7 +372,7 @@ export default function Home() {
 
   // 画面最上部でさらに上方向へスクロール（下へスワイプ）した時にグリッドを再読み込みする処理
   useEffect(() => {
-    if (selectedImage || isDrawerOpen || isSaveDialogOpen || isSuggestOpen || hasPrev) {
+    if (selectedImage || isDrawerOpen || isSaveDialogOpen || isSettingsOpen || isSuggestOpen || hasPrev) {
       pullStartRef.current = null;
       pullDistanceRef.current = 0;
       setPullDistance(0);
@@ -440,14 +444,14 @@ export default function Home() {
       window.removeEventListener("touchend", handleTouchEnd);
       window.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [selectedImage, isDrawerOpen, isSaveDialogOpen, isSuggestOpen, hasPrev, reloadGrid]);
+  }, [selectedImage, isDrawerOpen, isSaveDialogOpen, isSettingsOpen, isSuggestOpen, hasPrev, reloadGrid]);
 
   // PCの「r」キーでグリッドを再読み込みする処理
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key !== "r" && e.key !== "R") return;
-      if (selectedImage || isDrawerOpen || isSaveDialogOpen) return;
+      if (selectedImage || isDrawerOpen || isSaveDialogOpen || isSettingsOpen) return;
 
       const target = e.target as HTMLElement | null;
       if (
@@ -464,7 +468,7 @@ export default function Home() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedImage, isDrawerOpen, isSaveDialogOpen, reloadGrid]);
+  }, [selectedImage, isDrawerOpen, isSaveDialogOpen, isSettingsOpen, reloadGrid]);
 
   // 類似画像（同じ髪色）を検索する関数
   const executeSearchSimilar = useCallback((image: any) => {
@@ -605,10 +609,10 @@ export default function Home() {
   }, [handleSearch, isFavoriteFilter, isTrashFilter, updateRandomSortState]);
 
   // システム制御（ズーム禁止・スクロールロック）を有効化
-  useSystemUI({ selectedImage, isDrawerOpen });
+  useSystemUI({ selectedImage, isDrawerOpen, isSettingsOpen });
 
   // スワイプによるドロワー展開ロジックを有効化
-  useDrawerSwipe({ isDrawerOpen, setIsDrawerOpen, selectedImage });
+  useDrawerSwipe({ isDrawerOpen, setIsDrawerOpen, selectedImage, isSettingsOpen });
 
   // サーバーからすべてのブックマークを取得して、クエリのリストを最新にする関数
   const refreshSavedQueries = async () => {
@@ -724,43 +728,55 @@ export default function Home() {
         <div className="flex items-center justify-between gap-2">
           <p className="text-lg font-medium truncate">{statusMessage}</p>
 
-          {/* サーバーモード（軽量 / 重量）切り替えボタン */}
-          <button
-            type="button"
-            onClick={toggleServerMode}
-            disabled={serverMode === "starting"}
-            title={
-              serverMode === "heavy"
-                ? "クリックで軽量モードに戻す（メモリ解放）"
-                : serverMode === "starting"
-                ? "重量モード（AI）を起動しています..."
-                : "クリックで重量モード（AI検索・絵柄作成）を起動"
-            }
-            className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer ${
-              serverMode === "heavy"
-                ? "bg-blue-500/20 border-blue-500/50 text-blue-300 hover:bg-blue-500/30"
-                : serverMode === "starting"
-                ? "bg-amber-500/20 border-amber-500/40 text-amber-300 cursor-wait"
-                : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-            }`}
-          >
-            {serverMode === "heavy" ? (
-              <>
-                <Zap size={14} className="fill-current text-blue-400" />
-                <span>重量版 ON</span>
-              </>
-            ) : serverMode === "starting" ? (
-              <>
-                <Loader2 size={14} className="animate-spin text-amber-400" />
-                <span>重量版 起動中...</span>
-              </>
-            ) : (
-              <>
-                <Feather size={14} className="text-zinc-400" />
-                <span>軽量版</span>
-              </>
-            )}
-          </button>
+          <div className="shrink-0 flex items-center gap-2">
+            {/* サーバーモード（軽量 / 重量）切り替えボタン */}
+            <button
+              type="button"
+              onClick={toggleServerMode}
+              disabled={serverMode === "starting"}
+              title={
+                serverMode === "heavy"
+                  ? "クリックで軽量モードに戻す（メモリ解放）"
+                  : serverMode === "starting"
+                  ? "重量モード（AI）を起動しています..."
+                  : "クリックで重量モード（AI検索・絵柄作成）を起動"
+              }
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer ${
+                serverMode === "heavy"
+                  ? "bg-blue-500/20 border-blue-500/50 text-blue-300 hover:bg-blue-500/30"
+                  : serverMode === "starting"
+                  ? "bg-amber-500/20 border-amber-500/40 text-amber-300 cursor-wait"
+                  : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
+              }`}
+            >
+              {serverMode === "heavy" ? (
+                <>
+                  <Zap size={14} className="fill-current text-blue-400" />
+                  <span>重量版 ON</span>
+                </>
+              ) : serverMode === "starting" ? (
+                <>
+                  <Loader2 size={14} className="animate-spin text-amber-400" />
+                  <span>重量版 起動中...</span>
+                </>
+              ) : (
+                <>
+                  <Feather size={14} className="text-zinc-400" />
+                  <span>軽量版</span>
+                </>
+              )}
+            </button>
+
+            {/* 設定モーダルを開くボタン */}
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              title="設定を開く"
+              className="p-1.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition-colors flex items-center justify-center cursor-pointer"
+            >
+              <Settings size={16} />
+            </button>
+          </div>
         </div>
 
         {/* (SearchBarコンポーネントを呼び出し) */}
@@ -875,6 +891,12 @@ export default function Home() {
         allBookmarks={allBookmarks}
         savedQueries={savedQueries}
         refreshSavedQueries={refreshSavedQueries}
+      />
+
+      {/* 設定モーダルの処理 */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
 
       {/* コントロールバーの処理 */}

@@ -5,15 +5,16 @@ interface UseDrawerSwipeProps {
   setIsDrawerOpen: (open: boolean) => void;
   // 画像ビューワー展開中かどうかを判定するために受け取る
   selectedImage: any;
+  isSettingsOpen?: boolean;
 }
 
 /**
  * 画面左端からの右スワイプを検知してドロワーを開くカスタムフック
  */
-export function useDrawerSwipe({ isDrawerOpen, setIsDrawerOpen, selectedImage }: UseDrawerSwipeProps) {
+export function useDrawerSwipe({ isDrawerOpen, setIsDrawerOpen, selectedImage, isSettingsOpen = false }: UseDrawerSwipeProps) {
   useEffect(() => {
-    // 画像ビューワーが開いている時や、すでにドロワーが開いている時はイベントを登録しない
-    if (selectedImage || isDrawerOpen) return;
+    // 画像ビューワーが開いている時や、すでにドロワー・設定モーダルが開いている時はイベントを登録しない
+    if (selectedImage || isDrawerOpen || isSettingsOpen) return;
 
     const EDGE_SWIPE_THRESHOLD = 40; // 左端から40px以内
     const MIN_SWIPE_DISTANCE = 50;   // 50px以上の移動で判定
@@ -59,5 +60,5 @@ export function useDrawerSwipe({ isDrawerOpen, setIsDrawerOpen, selectedImage }:
       document.removeEventListener("touchmove", handleTouchMove);
       document.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [isDrawerOpen, setIsDrawerOpen, selectedImage]);
+  }, [isDrawerOpen, setIsDrawerOpen, selectedImage, isSettingsOpen]);
 }

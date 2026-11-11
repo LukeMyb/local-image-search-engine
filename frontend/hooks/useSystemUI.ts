@@ -3,12 +3,13 @@ import { useEffect } from "react";
 interface UseSystemUIProps {
   selectedImage: any;
   isDrawerOpen: boolean;
+  isSettingsOpen?: boolean;
 }
 
 /**
  * PWAとしての挙動やブラウザのシステム制御（ズーム禁止・スクロールロック）を管理するカスタムフック
  */
-export function useSystemUI({ selectedImage, isDrawerOpen }: UseSystemUIProps) {
+export function useSystemUI({ selectedImage, isDrawerOpen, isSettingsOpen = false }: UseSystemUIProps) {
   // ピンチズーム（画面全体の拡大）を禁止する処理
   useEffect(() => {
     // 2本指以上の物理的なスワイプ（拡大操作）のみを無効化する
@@ -29,7 +30,7 @@ export function useSystemUI({ selectedImage, isDrawerOpen }: UseSystemUIProps) {
 
   // モーダルやドロワーの開閉に合わせて背景のスクロールを制御する
   useEffect(() => {
-    if (selectedImage || isDrawerOpen) {
+    if (selectedImage || isDrawerOpen || isSettingsOpen) {
       // 開いている時: ブラウザ全体のスクロールを隠す（無効化）
       document.documentElement.style.overflow = "hidden";
       document.documentElement.style.overscrollBehavior = "none";
@@ -50,5 +51,5 @@ export function useSystemUI({ selectedImage, isDrawerOpen }: UseSystemUIProps) {
       document.body.style.overflow = "";
       document.body.style.overscrollBehavior = "";
     };
-  }, [selectedImage, isDrawerOpen]); // <- これらが変化するたびにこの処理を走らせる
+  }, [selectedImage, isDrawerOpen, isSettingsOpen]); // <- これらが変化するたびにこの処理を走らせる
 }
