@@ -30,6 +30,13 @@ class SearchManager:
         except (ValueError, TypeError):
             saved_timeout = 300
 
+        # 保存済みの絵柄検索しきい値をDBから読み込む（デフォルト0.98、範囲0.97〜0.99）
+        raw_style_th = self.db.get_setting("style_threshold", "0.98")
+        try:
+            self.style_threshold = round(min(max(float(raw_style_th), 0.97), 0.99), 3)
+        except (ValueError, TypeError):
+            self.style_threshold = 0.98
+
         # 重量AIワーカー管理マネージャー（起動時は子プロセス未起動＝軽量状態）
         self.heavy_engine = HeavyEngineManager(
             db_path=db_path,
@@ -63,14 +70,23 @@ class SearchManager:
         """現在のバックエンド設定一覧を返す"""
         return {
             "heavy_idle_timeout": int(self.heavy_engine.idle_timeout),
+            "style_threshold": self.style_threshold,
         }
 
-    def update_settings(self, heavy_idle_timeout: int | None = None):
+    def update_settings(
+        self,
+        heavy_idle_timeout: int | None = None,
+        style_threshold: float | None = None,
+    ):
         """バックエンド設定を更新し、DBに永続化する"""
         if heavy_idle_timeout is not None:
             timeout_sec = max(0, int(heavy_idle_timeout))
             self.heavy_engine.set_idle_timeout(float(timeout_sec))
             self.db.set_setting("heavy_idle_timeout", str(timeout_sec))
+        if style_threshold is not None:
+            clamped_th = round(min(max(float(style_threshold), 0.97), 0.99), 3)
+            self.style_threshold = clamped_th
+            self.db.set_setting("style_threshold", str(clamped_th))
         return self.get_settings()
 
     def get_suggestions(self, query_text, limit=10):
@@ -138,11 +154,11 @@ class SearchManager:
 
             if self.heavy_engine.is_heavy_ready:
                 print(f"\n{'='*60}")
-                print(f" Style Search (Heavy Mode FAISS): '{style_name}'")
+                print(f" Style Search (Heavy Mode FAISS): '{style_name}' (threshold={self.style_threshold})")
                 print(f"{'='*60}")
 
                 style_results = self.heavy_engine.search_by_style_name(
-                    style_name, threshold=0.98, trash_only=trash_only
+                    style_name, threshold=self.style_threshold, trash_only=trash_only
                 )
                 style_scores_map = {
                     res["id"]: res["match_score"] for res in style_results
@@ -160,23 +176,29 @@ class SearchManager:
                 )
             else:
                 print(f"\n{'='*60}")
-                print(f" Style Search (Light Mode Cache): '{style_name}'")
+                print(f" Style Search (Light Mode Cache): '{style_name}' (threshold={self.style_threshold})")
                 print(f"{'='*60}")
 
-                # 軽量モードではDBに保存されたキャッシュリストを使用する
-                style_scores_map = self.db.get_style_cache(style_name)
+                # しきい値が0.98未満に設定されている場合やキャッシュ未作成時は、0.97までのキャッシュを自動補完する
+                if self.style_threshold < 0.98 or not self.db.has_style_cache(style_name):
+                    self.db.ensure_style_cache_min_threshold(style_name, min_threshold=0.97)
 
-                if not style_scores_map:
+                if not self.db.has_style_cache(style_name):
                     raise HTTPException(
                         status_code=400,
                         detail=f"絵柄タグ '{style_name}' のキャッシュが見つかりません。重量モードに切り替えて実行してください。",
                     )
 
+                # 軽量モードではDBに保存されたキャッシュリストから現在のしきい値以上のものを取得する
+                style_scores_map = self.db.get_style_cache(style_name, min_score=self.style_threshold)
+
                 print(
-                    f"  -> キャッシュから {len(style_scores_map)}件 の画像を読み込みました。"
+                    f"  -> キャッシュから {len(style_scores_map)}件 の画像を読み込みました (threshold>={self.style_threshold})。"
                 )
 
                 if not user_query:
+                    if not style_scores_map:
+                        return []
                     image_ids = list(style_scores_map.keys())
                     raw_style_results = self.db.get_images_by_ids(image_ids)
                     style_results = [
@@ -199,6 +221,10 @@ class SearchManager:
                         ]
                     return sort_by_order(style_results)
 
+                if not style_scores_map:
+                    print("  -> 絵柄に一致する画像が0件のため、検索を終了します。")
+                    return []
+
         # タグ検索の実行
         tag_results = self.tag_searcher.search(user_query, trash_only=trash_only)
 
@@ -212,7 +238,7 @@ class SearchManager:
                 continue
 
             style_score = style_scores_map[row["id"]]
-            style_multiplier = 1.0 + max(0, (style_score - 0.98) * 100)
+            style_multiplier = 1.0 + max(0, (style_score - self.style_threshold) * 100)
             base_score = max(row["match_score"], 1.0)
             final_score = base_score * style_multiplier
 

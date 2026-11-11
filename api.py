@@ -38,6 +38,7 @@ class ModeSwitchRequest(BaseModel):
 # アプリ設定更新リクエストのデータ型定義
 class SettingsUpdateRequest(BaseModel):
     heavy_idle_timeout: Optional[int] = None
+    style_threshold: Optional[float] = None
 
 from contextlib import asynccontextmanager
 
@@ -282,6 +283,7 @@ def update_app_settings(data: SettingsUpdateRequest):
     """
     return search_manager.update_settings(
         heavy_idle_timeout=data.heavy_idle_timeout,
+        style_threshold=data.style_threshold,
     )
 
 # 絵柄タグ作成用エンドポイント
@@ -319,8 +321,8 @@ def create_style_tag(data: StyleTagCreate):
         
         # --- キャッシュの作成を追加 ---
         print(f"DEBUG: [{data.name}] の検索キャッシュを構築中...")
-        # 閾値0.98で検索結果を算出
-        results = search_manager.heavy_engine.search_by_style_name(data.name, threshold=0.98, include_deleted=True)
+        # しきい値調整の下限(0.97)までキャッシュを保持しておくことで、軽量モード時も動的にしきい値変更を反映できるようにする
+        results = search_manager.heavy_engine.search_by_style_name(data.name, threshold=0.97, include_deleted=True)
         search_manager.db.save_style_cache(data.name, results)
         
         print(f"[{data.name}] の保存とキャッシュ構築が完了しました！")

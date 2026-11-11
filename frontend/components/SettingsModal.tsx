@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { X, Settings, ChevronDown } from "lucide-react";
+import { X, Settings, ChevronDown, RotateCcw } from "lucide-react";
 
 const IDLE_TIMEOUT_OPTIONS = [
   { label: "1分", value: 60 },
@@ -10,6 +10,8 @@ const IDLE_TIMEOUT_OPTIONS = [
   { label: "自動停止しない", value: 0 },
 ];
 
+export const DEFAULT_STYLE_THRESHOLD = 0.98;
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -17,6 +19,9 @@ interface SettingsModalProps {
   onChangeConfirmTrashInViewer: (enabled: boolean) => void;
   heavyIdleTimeout: number;
   onChangeHeavyIdleTimeout: (seconds: number) => void;
+  styleThreshold: number;
+  onChangeStyleThreshold: (value: number) => void;
+  onCommitStyleThreshold: (value: number) => void;
 }
 
 export default function SettingsModal({
@@ -26,6 +31,9 @@ export default function SettingsModal({
   onChangeConfirmTrashInViewer,
   heavyIdleTimeout,
   onChangeHeavyIdleTimeout,
+  styleThreshold,
+  onChangeStyleThreshold,
+  onCommitStyleThreshold,
 }: SettingsModalProps) {
   // Escキーでモーダルを閉じる処理
   useEffect(() => {
@@ -42,6 +50,8 @@ export default function SettingsModal({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const isDefaultThreshold = Math.abs(styleThreshold - DEFAULT_STYLE_THRESHOLD) < 0.0005;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -128,6 +138,64 @@ export default function SettingsModal({
                 size={14}
                 className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
               />
+            </div>
+          </div>
+
+          <hr className="border-zinc-800" />
+
+          {/* 3. 絵柄検索の類似度しきい値 */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-white">
+                絵柄検索の類似度しきい値
+              </span>
+
+              <div className="flex items-center gap-2">
+                {!isDefaultThreshold && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChangeStyleThreshold(DEFAULT_STYLE_THRESHOLD);
+                      onCommitStyleThreshold(DEFAULT_STYLE_THRESHOLD);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="標準値 (0.980) に戻す"
+                  >
+                    <RotateCcw size={12} />
+                    <span>標準に戻す</span>
+                  </button>
+                )}
+                <span className="px-2.5 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-blue-300 font-mono text-xs font-bold">
+                  {styleThreshold.toFixed(3)}
+                </span>
+              </div>
+            </div>
+
+            <span className="text-xs text-zinc-400 leading-relaxed">
+              絵柄検索（<code className="text-zinc-300">style:</code>）でヒットさせる類似度の足切りラインです。数値を下げるとヒット件数が増え、上げるとより厳選されます。
+            </span>
+
+            <div className="flex flex-col gap-1.5 pt-1">
+              <input
+                type="range"
+                min={0.97}
+                max={0.99}
+                step={0.001}
+                value={styleThreshold}
+                onChange={(e) => onChangeStyleThreshold(parseFloat(e.target.value))}
+                onPointerUp={(e) =>
+                  onCommitStyleThreshold(parseFloat((e.target as HTMLInputElement).value))
+                }
+                onKeyUp={(e) =>
+                  onCommitStyleThreshold(parseFloat((e.target as HTMLInputElement).value))
+                }
+                className="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <div className="flex justify-between text-[11px] text-zinc-500 font-mono">
+                <span>0.970 (広め)</span>
+                <span>0.980 (標準)</span>
+                <span>0.990 (厳しめ)</span>
+              </div>
             </div>
           </div>
         </div>

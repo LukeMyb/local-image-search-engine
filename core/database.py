@@ -393,13 +393,80 @@ class ImageDatabase:
             ''', data_to_insert)
         self.conn.commit()
 
-    def get_style_cache(self, style_name):
+    def get_style_cache(self, style_name, min_score: float | None = None):
         """保存された絵柄タグの検索結果（キャッシュ）を辞書として取得する"""
         cursor = self.conn.cursor()
-        cursor.execute('SELECT image_id, score FROM style_cache WHERE style_name = ?', (style_name,))
+        if min_score is not None:
+            cursor.execute(
+                'SELECT image_id, score FROM style_cache WHERE style_name = ? AND score >= ?',
+                (style_name, min_score),
+            )
+        else:
+            cursor.execute('SELECT image_id, score FROM style_cache WHERE style_name = ?', (style_name,))
         rows = cursor.fetchall()
         # {image_id: score} の辞書を返す
         return {row['image_id']: row['score'] for row in rows}
+
+    def has_style_cache(self, style_name: str) -> bool:
+        """指定した絵柄タグのキャッシュがDB内に1件以上存在するか確認する"""
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT 1 FROM style_cache WHERE style_name = ? LIMIT 1', (style_name,))
+        return cursor.fetchone() is not None
+
+    def ensure_style_cache_min_threshold(
+        self,
+        style_name: str,
+        min_threshold: float = 0.97,
+        faiss_index_path: str = "data/faiss/style.index",
+    ) -> bool:
+        """
+        指定した絵柄タグのキャッシュが旧仕様（0.98以上のみ）または未作成の場合に、
+        FAISSインデックスから min_threshold（0.97）以上のスコアを一括抽出して style_cache を更新する
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*), MIN(score) FROM style_cache WHERE style_name = ?",
+            (style_name,),
+        )
+        row = cursor.fetchone()
+        count = row[0] if row else 0
+        min_score = row[1] if row else None
+
+        # すでに min_threshold 付近（0.979未満）のデータが含まれている場合は再構築不要
+        if count > 0 and min_score is not None and min_score < 0.979:
+            return True
+
+        query_vector = self.get_style_vector(style_name)
+        if query_vector is None or not os.path.exists(faiss_index_path):
+            return count > 0
+
+        try:
+            import faiss
+
+            index = faiss.read_index(str(faiss_index_path))
+            if index.ntotal == 0:
+                return count > 0
+
+            faiss.normalize_L2(query_vector)
+            distances, indices = index.search(query_vector, index.ntotal)
+
+            results_list = []
+            for d, idx in zip(distances[0], indices[0]):
+                if idx == -1:
+                    continue
+                score = float(d)
+                if score >= min_threshold:
+                    results_list.append({"id": int(idx), "match_score": score})
+
+            self.save_style_cache(style_name, results_list)
+            del index
+            print(
+                f"  [StyleCache] '{style_name}' のキャッシュを threshold>={min_threshold} ({len(results_list)}件) に更新しました。"
+            )
+            return True
+        except Exception as e:
+            print(f"  [StyleCache] キャッシュ更新エラー ({style_name}): {e}")
+            return count > 0
 
     # ----- 翻訳キャッシュ関連メソッド -----
 

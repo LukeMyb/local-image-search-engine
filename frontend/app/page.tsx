@@ -100,6 +100,9 @@ export default function Home() {
   // 重量モードのアイドル自動停止時間（秒）を管理するState（初期値は300秒＝5分）
   const [heavyIdleTimeout, setHeavyIdleTimeout] = useState<number>(300);
 
+  // 絵柄検索の類似度しきい値を管理するState（初期値は0.98）
+  const [styleThreshold, setStyleThreshold] = useState<number>(0.98);
+
   // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
   const toggleSelection = (id: number) => {
     setSelectedIds((prev) => 
@@ -183,6 +186,25 @@ export default function Home() {
     // サジェスト用の状態と関数を取得
     suggestions, isSuggestOpen, setIsSuggestOpen, fetchSuggestions, deleteStyleTag 
   } = useImageSearch();
+
+  // サーバーから現在の設定値（自動停止時間・絵柄検索しきい値）を取得して同期する関数
+  const fetchAppSettings = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/settings`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.heavy_idle_timeout === "number") {
+        setHeavyIdleTimeout(data.heavy_idle_timeout);
+        localStorage.setItem("heavyIdleTimeout", String(data.heavy_idle_timeout));
+      }
+      if (typeof data.style_threshold === "number") {
+        setStyleThreshold(data.style_threshold);
+        localStorage.setItem("styleThreshold", String(data.style_threshold));
+      }
+    } catch (error) {
+      console.error("設定の取得エラー:", error);
+    }
+  }, []);
 
   // サーバーから現在のモード状態を取得する関数
   const fetchServerMode = useCallback(async () => {
@@ -657,6 +679,7 @@ export default function Home() {
   useEffect(() => {
     refreshSavedQueries();
     fetchServerMode();
+    fetchAppSettings();
 
     // localStorageから前回のソート順を読み込む（無い場合や無効な値の場合は "score" にする）
     const rawSavedSort = localStorage.getItem("sortOrder");
@@ -690,6 +713,15 @@ export default function Home() {
       const parsedTimeout = parseInt(savedIdleTimeout, 10);
       if (!isNaN(parsedTimeout) && parsedTimeout >= 0) {
         setHeavyIdleTimeout(parsedTimeout);
+      }
+    }
+
+    // localStorageから絵柄検索の類似度しきい値を読み込む
+    const savedStyleThreshold = localStorage.getItem("styleThreshold");
+    if (savedStyleThreshold !== null) {
+      const parsedThreshold = parseFloat(savedStyleThreshold);
+      if (!isNaN(parsedThreshold) && parsedThreshold >= 0.97 && parsedThreshold <= 0.99) {
+        setStyleThreshold(parsedThreshold);
       }
     }
 
@@ -940,6 +972,27 @@ export default function Home() {
             });
           } catch (error) {
             console.error("自動停止時間の設定保存エラー:", error);
+          }
+        }}
+        styleThreshold={styleThreshold}
+        onChangeStyleThreshold={(val) => {
+          setStyleThreshold(val);
+        }}
+        onCommitStyleThreshold={async (val) => {
+          const rounded = Math.round(val * 1000) / 1000;
+          setStyleThreshold(rounded);
+          localStorage.setItem("styleThreshold", String(rounded));
+          try {
+            const res = await fetch(`${API_BASE_URL}/settings`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ style_threshold: rounded }),
+            });
+            if (res.ok && /style:[^\s|]+/.test(query)) {
+              reloadGrid();
+            }
+          } catch (error) {
+            console.error("絵柄検索しきい値の設定保存エラー:", error);
           }
         }}
       />
