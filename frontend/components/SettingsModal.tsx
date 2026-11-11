@@ -66,7 +66,7 @@ export default function SettingsModal({
       />
 
       {/* モーダル本体 */}
-      <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-md md:max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-2 text-white">
