@@ -88,6 +88,9 @@ export default function Home() {
   // ビューアーでのゴミ箱移動時に確認ダイアログを表示するかどうかのState（初期値はtrue）
   const [confirmTrashInViewer, setConfirmTrashInViewer] = useState(true);
 
+  // 検索バー横の検索ボタンを表示するかどうかのState（初期値はtrue）
+  const [showSearchButton, setShowSearchButton] = useState(true);
+
   // お気に入りフィルターのON/OFF状態を管理するState
   const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
 
@@ -707,6 +710,12 @@ export default function Home() {
       setConfirmTrashInViewer(savedConfirmTrash === "true");
     }
 
+    // localStorageから検索ボタンの表示設定を読み込む
+    const savedShowSearchBtn = localStorage.getItem("showSearchButton");
+    if (savedShowSearchBtn !== null) {
+      setShowSearchButton(savedShowSearchBtn === "true");
+    }
+
     // localStorageから重量モードの自動停止時間を読み込む
     const savedIdleTimeout = localStorage.getItem("heavyIdleTimeout");
     if (savedIdleTimeout !== null) {
@@ -859,6 +868,8 @@ export default function Home() {
           // ゴミ箱フィルター
           isTrashFilter={isTrashFilter}
           onToggleTrashFilter={toggleTrashFilter}
+          // 検索ボタンの表示/非表示
+          showSearchButton={showSearchButton}
         />
       </div>
 
@@ -955,6 +966,11 @@ export default function Home() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        showSearchButton={showSearchButton}
+        onChangeShowSearchButton={(enabled) => {
+          setShowSearchButton(enabled);
+          localStorage.setItem("showSearchButton", String(enabled));
+        }}
         confirmTrashInViewer={confirmTrashInViewer}
         onChangeConfirmTrashInViewer={(enabled) => {
           setConfirmTrashInViewer(enabled);

@@ -29,6 +29,8 @@ interface SearchBarProps {
   // ゴミ箱フィルター用のProps
   isTrashFilter: boolean;
   onToggleTrashFilter: () => void;
+  // 検索ボタンの表示/非表示
+  showSearchButton?: boolean;
 }
 
 export default function SearchBar({
@@ -50,6 +52,8 @@ export default function SearchBar({
   // ゴミ箱フィルター
   isTrashFilter,
   onToggleTrashFilter,
+  // 検索ボタンの表示/非表示
+  showSearchButton = true,
 }: SearchBarProps) {
   // 枠外クリック検知用のRefと、削除ダイアログ用のState
   const searchBarRef = useRef<HTMLDivElement>(null);
@@ -127,6 +131,7 @@ export default function SearchBar({
             <input
               ref={inputRef}
               type="text"
+              enterKeyHint="search"
               value={query}
               onFocus={() => {
                 if (blurTimerRef.current) {
@@ -212,12 +217,14 @@ export default function SearchBar({
           </div>
 
           {/* 検索ボタン */}
-          <button
-            type="submit"
-            className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
-          >
-            <Search size={16} />
-          </button>
+          {showSearchButton && (
+            <button
+              type="submit"
+              className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
+            >
+              <Search size={16} />
+            </button>
+          )}
         </form>
 
         {/* 右側ボタン群（検索窓フォーカス時はアニメーションで縮小・非表示） */}
