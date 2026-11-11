@@ -1,7 +1,7 @@
 Set WshShell = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
 
-' バックエンドの起動 (コマンドプロンプトを非表示で実行)
-WshShell.Run "cmd /c cd c:\src\personal\local-image-search-engine && call .venv\Scripts\activate && python api.py", 0, False
+BaseDir = fso.GetParentFolderName(WScript.ScriptFullName)
+WshShell.CurrentDirectory = BaseDir
 
-' フロントエンドの起動 (コマンドプロンプトを非表示で実行)
-WshShell.Run "cmd /c cd c:\src\personal\local-image-search-engine\frontend && npm run start", 0, False
+WshShell.Run """" & BaseDir & "\.venv\Scripts\pythonw.exe"" """ & BaseDir & "\tray_app.py""", 0, False
