@@ -458,6 +458,34 @@ export default function Home() {
     }
   }, [handleSearch, isFavoriteFilter, isTrashFilter, updateRandomSortState]);
 
+  // 検索窓をリセットし、ソート順を新着順にして現在の画像の位置へスクロール移動する関数
+  const executeJumpToImage = useCallback((image: SearchResult) => {
+    if (!image) return;
+
+    // ビューアーを閉じた直後のスクロール移動がブロックされないよう、スクロールロックを先行解除
+    document.documentElement.style.overflow = "";
+    document.documentElement.style.overscrollBehavior = "";
+    document.body.style.overflow = "";
+    document.body.style.overscrollBehavior = "";
+
+    setQuery("");
+    setSortOrder("newest");
+    localStorage.setItem("sortOrder", "newest");
+    updateRandomSortState(false, null);
+    lastViewedIdRef.current = image.id;
+    setSelectedImage(null); // ビューアーを閉じる
+
+    // お気に入りフィルターがONかつ対象画像がお気に入りではない場合は、画像が表示されるようフィルターを解除
+    let nextFavoriteFilter = isFavoriteFilter;
+    if (isFavoriteFilter && image.is_favorite !== 1) {
+      nextFavoriteFilter = false;
+      setIsFavoriteFilter(false);
+      localStorage.setItem("isFavoriteFilter", "false");
+    }
+
+    handleSearch("", "newest", undefined, undefined, nextFavoriteFilter, image.id, isTrashFilter);
+  }, [handleSearch, isFavoriteFilter, isTrashFilter, updateRandomSortState]);
+
   // システム制御（ズーム禁止・スクロールロック）を有効化
   useSystemUI({ selectedImage, isDrawerOpen });
 
@@ -653,6 +681,7 @@ export default function Home() {
             onClose={() => setSelectedImage(null)} 
             onToggleFavorite={(id, e) => toggleFavorite(id, e, selectedImage, setSelectedImage)}
             onSearchSimilar={executeSearchSimilar}
+            onJumpToImage={executeJumpToImage}
             isTrashMode={isTrashFilter}
             onTrash={handleTrashInViewer}
             onRestore={handleRestoreInViewer}

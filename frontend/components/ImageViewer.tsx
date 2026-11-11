@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { X, Heart, ChevronLeft, ChevronRight, Search, Trash2, RotateCcw } from "lucide-react";
+import { X, Heart, ChevronLeft, ChevronRight, Search, Trash2, RotateCcw, CornerUpRight } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 // 検索結果のデータ構造を定義
@@ -21,6 +21,7 @@ interface ImageViewerProps {
   onClose: () => void;
   onToggleFavorite: (id: number, e: React.MouseEvent) => void;
   onSearchSimilar?: (image: SearchResult) => void;
+  onJumpToImage?: (image: SearchResult) => void;
   isTrashMode?: boolean;
   onTrash?: (id: number) => void;
   onRestore?: (id: number) => void;
@@ -39,6 +40,7 @@ export default function ImageViewer({
   onClose,
   onToggleFavorite,
   onSearchSimilar,
+  onJumpToImage,
   isTrashMode = false,
   onTrash,
   onRestore,
@@ -984,26 +986,45 @@ export default function ImageViewer({
           </div>
         </button>
 
-        {/* 類似画像検索ボタン */}
-        <button
-          onClick={(e) => { 
-            e.stopPropagation();
-            if (onSearchSimilar) {
-              onSearchSimilar(selectedImage);
-            }
-          }}
-          // 外側の button: 透明な大きなパディングを持たせ、画面の右下カドの広範囲を当たり判定にする
-          className={`absolute bottom-0 right-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${
+        {/* 右下アクションボタン群（画像の場所へ移動 / 類似画像検索） */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className={`absolute bottom-0 right-0 p-4 sm:p-6 z-20 flex flex-row items-center gap-3 transition-all duration-300 ease-out ${
             isUIVisible && entranceState !== 'closing' ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0 pointer-events-none'
           }`}
-          title="類似画像（同じ髪色）を検索"
         >
-          {/* 内側の div: 実際の見た目 */}
-          <div className="p-3 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg gap-2">
-            <Search size={22} />
-            <span className="text-sm font-medium pr-1 hidden sm:inline">類似画像</span>
-          </div>
-        </button>
+          {/* 画像の場所へ飛ぶボタン（新着順・検索リセットで該当画像の位置へ移動） */}
+          {onJumpToImage && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onJumpToImage(selectedImage);
+              }}
+              className="outline-none cursor-pointer"
+              title="検索をリセットして新着順でこの画像の場所へ移動"
+            >
+              <div className="p-3 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
+                <CornerUpRight size={24} />
+              </div>
+            </button>
+          )}
+
+          {/* 類似画像検索ボタン */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onSearchSimilar) {
+                onSearchSimilar(selectedImage);
+              }
+            }}
+            className="outline-none cursor-pointer"
+            title="類似画像（同じ髪色）を検索"
+          >
+            <div className="p-3 bg-black/50 text-white hover:bg-black/80 rounded-full transition-colors flex items-center justify-center shadow-lg">
+              <Search size={24} />
+            </div>
+          </button>
+        </div>
 
         {/* 論理削除（ゴミ箱へ移動）または 復元ボタン */}
         {!isTrashMode ? (
