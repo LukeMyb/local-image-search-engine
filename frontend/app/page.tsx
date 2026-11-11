@@ -118,18 +118,36 @@ export default function Home() {
   const toggleFavoriteFilter = () => {
     const nextState = !isFavoriteFilter;
     setIsFavoriteFilter(nextState);
-    updateRandomSortState(false, null);
     localStorage.setItem("isFavoriteFilter", String(nextState)); // 切り替えた瞬間にlocalStorageに保存する
-    handleSearch(query, sortOrder, undefined, undefined, nextState, null, isTrashFilter);
+    const activeSort = isRandomSorted ? "random" : sortOrder;
+    handleSearch(
+      query,
+      activeSort,
+      undefined,
+      undefined,
+      nextState,
+      null,
+      isTrashFilter,
+      isRandomSorted ? randomSeed : null
+    );
   };
 
   // ゴミ箱フィルターのトグル処理
   const toggleTrashFilter = () => {
     const nextState = !isTrashFilter;
     setIsTrashFilter(nextState);
-    updateRandomSortState(false, null);
     setIsSelectionMode(false);
-    handleSearch(query, sortOrder, undefined, undefined, isFavoriteFilter, null, nextState);
+    const activeSort = isRandomSorted ? "random" : sortOrder;
+    handleSearch(
+      query,
+      activeSort,
+      undefined,
+      undefined,
+      isFavoriteFilter,
+      null,
+      nextState,
+      isRandomSorted ? randomSeed : null
+    );
   };
 
 
