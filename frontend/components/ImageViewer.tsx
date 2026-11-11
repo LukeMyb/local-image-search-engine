@@ -23,6 +23,7 @@ interface ImageViewerProps {
   onSearchSimilar?: (image: SearchResult) => void;
   onJumpToImage?: (image: SearchResult) => void;
   isTrashMode?: boolean;
+  confirmTrash?: boolean;
   onTrash?: (id: number) => void;
   onRestore?: (id: number) => void;
 
@@ -42,6 +43,7 @@ export default function ImageViewer({
   onSearchSimilar,
   onJumpToImage,
   isTrashMode = false,
+  confirmTrash = true,
   onTrash,
   onRestore,
   onNext,
@@ -1035,7 +1037,11 @@ export default function ImageViewer({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isFav) return;
-                  setIsTrashDialogOpen(true);
+                  if (confirmTrash) {
+                    setIsTrashDialogOpen(true);
+                  } else {
+                    onTrash(selectedImage.id);
+                  }
                 }}
                 aria-disabled={isFav}
                 className={`absolute top-0 left-0 p-4 sm:p-6 z-20 outline-none transition-all duration-300 ease-out ${

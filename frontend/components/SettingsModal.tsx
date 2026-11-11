@@ -4,9 +4,16 @@ import { X, Settings } from "lucide-react";
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  confirmTrashInViewer: boolean;
+  onChangeConfirmTrashInViewer: (enabled: boolean) => void;
 }
 
-export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export default function SettingsModal({
+  isOpen,
+  onClose,
+  confirmTrashInViewer,
+  onChangeConfirmTrashInViewer,
+}: SettingsModalProps) {
   // Escキーでモーダルを閉じる処理
   useEffect(() => {
     if (!isOpen) return;
@@ -51,9 +58,33 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         {/* 設定項目リスト領域 */}
         <div className="p-6 overflow-y-auto flex flex-col gap-6 text-sm text-zinc-300">
-          <p className="text-zinc-500 text-center py-4">
-            ここに設定項目を追加していきます（Step 2〜4）
-          </p>
+          {/* 1. ビューアーでの削除時の確認ダイアログ ON/OFF */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="font-medium text-white">
+                ゴミ箱移動時の確認ダイアログ
+              </span>
+              <span className="text-xs text-zinc-400 leading-relaxed">
+                ビューアーで画像をゴミ箱へ移動する際、確認ポップアップを表示します。OFFにするとワンタップで即座に移動します。
+              </span>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={confirmTrashInViewer}
+              onClick={() => onChangeConfirmTrashInViewer(!confirmTrashInViewer)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                confirmTrashInViewer ? "bg-blue-600" : "bg-zinc-700"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-md transform transition duration-200 ease-in-out ${
+                  confirmTrashInViewer ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
     </div>

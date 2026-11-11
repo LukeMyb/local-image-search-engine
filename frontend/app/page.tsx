@@ -85,6 +85,9 @@ export default function Home() {
   // ビューアーのUI表示状態を管理するState（初期値はtrue）
   const [isViewerUIVisible, setIsViewerUIVisible] = useState(true);
 
+  // ビューアーでのゴミ箱移動時に確認ダイアログを表示するかどうかのState（初期値はtrue）
+  const [confirmTrashInViewer, setConfirmTrashInViewer] = useState(true);
+
   // お気に入りフィルターのON/OFF状態を管理するState
   const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
 
@@ -668,6 +671,12 @@ export default function Home() {
       setIsViewerUIVisible(savedUIVisible === "true");
     }
 
+    // localStorageからビューアー削除時の確認ダイアログ設定を読み込む
+    const savedConfirmTrash = localStorage.getItem("confirmTrashInViewer");
+    if (savedConfirmTrash !== null) {
+      setConfirmTrashInViewer(savedConfirmTrash === "true");
+    }
+
     // localStorageから列数の設定を読み込む
     const savedColsPC = localStorage.getItem("gridColsPC");
     if (savedColsPC) setGridColsPC(parseInt(savedColsPC, 10));
@@ -858,6 +867,7 @@ export default function Home() {
             onSearchSimilar={executeSearchSimilar}
             onJumpToImage={executeJumpToImage}
             isTrashMode={isTrashFilter}
+            confirmTrash={confirmTrashInViewer}
             onTrash={handleTrashInViewer}
             onRestore={handleRestoreInViewer}
             onNext={() => hasSubsequent && setSelectedImage(results[currentIndex + 1])}
@@ -897,6 +907,11 @@ export default function Home() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        confirmTrashInViewer={confirmTrashInViewer}
+        onChangeConfirmTrashInViewer={(enabled) => {
+          setConfirmTrashInViewer(enabled);
+          localStorage.setItem("confirmTrashInViewer", String(enabled));
+        }}
       />
 
       {/* コントロールバーの処理 */}
