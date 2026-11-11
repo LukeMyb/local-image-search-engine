@@ -30,7 +30,20 @@ class StyleTagCreate(BaseModel):
     name: str
     image_ids: List[int]
 
-app = FastAPI()
+# サーバーモード切り替えリクエストのデータ型定義
+class ModeSwitchRequest(BaseModel):
+    mode: str
+    wait: bool = False
+
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # サーバー終了時に重量ワーカーが動いていれば確実に停止してメモリを解放する
+    search_manager.set_mode("light")
+
+app = FastAPI(lifespan=lifespan)
 
 # フロントエンド（React/Next.js等）からのアクセスを許可する必須設定 (CORS)
 app.add_middleware(
@@ -229,12 +242,38 @@ def update_bookmark_usage(bookmark_id: int):
     search_manager.db.update_bookmark_usage(bookmark_id)
     return {"status": "success", "message": "使用時刻を更新しました"}
 
+# サーバーモード状態取得エンドポイント
+@app.get("/mode")
+def get_server_mode():
+    """
+    現在のサーバーモード状態 ("light" | "starting" | "heavy") を返す
+    """
+    return search_manager.get_mode_status()
+
+# サーバーモード切り替えエンドポイント
+@app.post("/mode")
+def switch_server_mode(data: ModeSwitchRequest):
+    """
+    軽量モード("light")と重量モード("heavy")を切り替える。
+    heavy指定時はバックグラウンドで子プロセスを起動し即座に "starting" を返す（wait=True時は完了まで待機）。
+    light指定時は子プロセスを即座に終了し、RAM・VRAMをOSへ100%解放する。
+    """
+    if data.mode not in ("light", "heavy"):
+        raise HTTPException(status_code=400, detail="mode は 'light' または 'heavy' を指定してください")
+    return search_manager.set_mode(data.mode, wait=data.wait)
+
 # 絵柄タグ作成用エンドポイント
 @app.post("/style")
 def create_style_tag(data: StyleTagCreate):
     """
     選択された画像IDのリストとタグ名を受け取り、重心ベクトルを計算して絵柄タグを保存する
     """
+    if not search_manager.heavy_engine.is_heavy_ready:
+        raise HTTPException(
+            status_code=400,
+            detail="軽量モードのため絵柄タグの作成は使用できません。重量モードに切り替えてください。",
+        )
+
     # 1. 画像IDからファイルパスを取得する
     image_paths = []
     for img_id in data.image_ids:
@@ -245,14 +284,9 @@ def create_style_tag(data: StyleTagCreate):
     if not image_paths:
         raise HTTPException(status_code=400, detail="有効な画像が選択されていません")
         
-    # 絵柄検索エンジン(style_searcher)を取得
-    style_searcher = search_manager.style_engine
-    if style_searcher is None:
-        raise HTTPException(status_code=500, detail="絵柄検索エンジンがロードされていません")
-        
-    # 重心ベクトルを計算
+    # 重心ベクトルを子プロセス（HeavyWorker）で計算
     print(f"DEBUG: [{data.name}] を {len(image_paths)}枚の画像から計算します...")
-    centroid = style_searcher.calculate_centroid(image_paths)
+    centroid = search_manager.heavy_engine.calculate_centroid(image_paths)
     
     if centroid is None:
         raise HTTPException(status_code=500, detail="絵柄の解析に失敗しました。画像がベクトル化されていない可能性があります。")
@@ -264,7 +298,7 @@ def create_style_tag(data: StyleTagCreate):
         # --- キャッシュの作成を追加 ---
         print(f"DEBUG: [{data.name}] の検索キャッシュを構築中...")
         # 閾値0.98で検索結果を算出
-        results = style_searcher.search_by_style_name(data.name, threshold=0.98, include_deleted=True)
+        results = search_manager.heavy_engine.search_by_style_name(data.name, threshold=0.98, include_deleted=True)
         search_manager.db.save_style_cache(data.name, results)
         
         print(f"[{data.name}] の保存とキャッシュ構築が完了しました！")
