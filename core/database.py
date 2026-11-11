@@ -136,6 +136,14 @@ class ImageDatabase:
             )
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_jp_text ON translation_cache(jp_text)')
+
+        # アプリ設定保存用のKey-Valueテーブル
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        ''')
         
         self.conn.commit()
 
@@ -406,6 +414,24 @@ class ImageDatabase:
     def save_translation_to_cache(self, jp_text, en_text):
         cursor = self.conn.cursor()
         cursor.execute("INSERT OR REPLACE INTO translation_cache (jp_text, en_text) VALUES (?, ?)", (jp_text, en_text))
+        self.conn.commit()
+
+    # ----- アプリ設定（Key-Value）関連メソッド -----
+
+    def get_setting(self, key: str, default: str | None = None) -> str | None:
+        """設定キーに対応する値を取得する（未設定時はdefaultを返す）"""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT value FROM app_settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row["value"] if row else default
+
+    def set_setting(self, key: str, value: str):
+        """設定キーと値を保存（または上書き更新）する"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)",
+            (key, str(value)),
+        )
         self.conn.commit()
 
     # ----- クエリキャッシュ関連メソッド -----

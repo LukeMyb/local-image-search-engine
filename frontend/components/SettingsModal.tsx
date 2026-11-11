@@ -1,11 +1,22 @@
 import { useEffect } from "react";
-import { X, Settings } from "lucide-react";
+import { X, Settings, ChevronDown } from "lucide-react";
+
+const IDLE_TIMEOUT_OPTIONS = [
+  { label: "1分", value: 60 },
+  { label: "3分", value: 180 },
+  { label: "5分 (標準)", value: 300 },
+  { label: "10分", value: 600 },
+  { label: "30分", value: 1800 },
+  { label: "自動停止しない", value: 0 },
+];
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   confirmTrashInViewer: boolean;
   onChangeConfirmTrashInViewer: (enabled: boolean) => void;
+  heavyIdleTimeout: number;
+  onChangeHeavyIdleTimeout: (seconds: number) => void;
 }
 
 export default function SettingsModal({
@@ -13,6 +24,8 @@ export default function SettingsModal({
   onClose,
   confirmTrashInViewer,
   onChangeConfirmTrashInViewer,
+  heavyIdleTimeout,
+  onChangeHeavyIdleTimeout,
 }: SettingsModalProps) {
   // Escキーでモーダルを閉じる処理
   useEffect(() => {
@@ -84,6 +97,38 @@ export default function SettingsModal({
                 }`}
               />
             </button>
+          </div>
+
+          <hr className="border-zinc-800" />
+
+          {/* 2. 重量モードの自動停止タイムアウト時間 */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="font-medium text-white">
+                重量モードの自動停止時間
+              </span>
+              <span className="text-xs text-zinc-400 leading-relaxed">
+                画面を閉じるか非表示にしてから一定時間が経過すると、自動で軽量モードに戻りメモリ（RAM・VRAM）を解放します。
+              </span>
+            </div>
+
+            <div className="relative shrink-0">
+              <select
+                value={heavyIdleTimeout}
+                onChange={(e) => onChangeHeavyIdleTimeout(Number(e.target.value))}
+                className="appearance-none bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700 text-zinc-100 text-xs font-medium rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-colors cursor-pointer"
+              >
+                {IDLE_TIMEOUT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="bg-zinc-800 text-zinc-100">
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
+              />
+            </div>
           </div>
         </div>
       </div>

@@ -97,6 +97,9 @@ export default function Home() {
   // サーバーモード状態（"light" | "starting" | "heavy"）を管理するState
   const [serverMode, setServerMode] = useState<"light" | "starting" | "heavy">("light");
 
+  // 重量モードのアイドル自動停止時間（秒）を管理するState（初期値は300秒＝5分）
+  const [heavyIdleTimeout, setHeavyIdleTimeout] = useState<number>(300);
+
   // 選択状態を切り替える関数（すでにあれば外し、なければ追加する）
   const toggleSelection = (id: number) => {
     setSelectedIds((prev) => 
@@ -189,6 +192,10 @@ export default function Home() {
       const data = await res.json();
       if (data.mode === "light" || data.mode === "starting" || data.mode === "heavy") {
         setServerMode(data.mode);
+      }
+      if (typeof data.idle_timeout === "number") {
+        setHeavyIdleTimeout(data.idle_timeout);
+        localStorage.setItem("heavyIdleTimeout", String(data.idle_timeout));
       }
     } catch (error) {
       console.error("モード状態の取得エラー:", error);
@@ -677,6 +684,15 @@ export default function Home() {
       setConfirmTrashInViewer(savedConfirmTrash === "true");
     }
 
+    // localStorageから重量モードの自動停止時間を読み込む
+    const savedIdleTimeout = localStorage.getItem("heavyIdleTimeout");
+    if (savedIdleTimeout !== null) {
+      const parsedTimeout = parseInt(savedIdleTimeout, 10);
+      if (!isNaN(parsedTimeout) && parsedTimeout >= 0) {
+        setHeavyIdleTimeout(parsedTimeout);
+      }
+    }
+
     // localStorageから列数の設定を読み込む
     const savedColsPC = localStorage.getItem("gridColsPC");
     if (savedColsPC) setGridColsPC(parseInt(savedColsPC, 10));
@@ -911,6 +927,20 @@ export default function Home() {
         onChangeConfirmTrashInViewer={(enabled) => {
           setConfirmTrashInViewer(enabled);
           localStorage.setItem("confirmTrashInViewer", String(enabled));
+        }}
+        heavyIdleTimeout={heavyIdleTimeout}
+        onChangeHeavyIdleTimeout={async (seconds) => {
+          setHeavyIdleTimeout(seconds);
+          localStorage.setItem("heavyIdleTimeout", String(seconds));
+          try {
+            await fetch(`${API_BASE_URL}/settings`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ heavy_idle_timeout: seconds }),
+            });
+          } catch (error) {
+            console.error("自動停止時間の設定保存エラー:", error);
+          }
         }}
       />
 

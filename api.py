@@ -35,6 +35,10 @@ class ModeSwitchRequest(BaseModel):
     mode: str
     wait: bool = False
 
+# アプリ設定更新リクエストのデータ型定義
+class SettingsUpdateRequest(BaseModel):
+    heavy_idle_timeout: Optional[int] = None
+
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
@@ -261,6 +265,24 @@ def switch_server_mode(data: ModeSwitchRequest):
     if data.mode not in ("light", "heavy"):
         raise HTTPException(status_code=400, detail="mode は 'light' または 'heavy' を指定してください")
     return search_manager.set_mode(data.mode, wait=data.wait)
+
+# バックエンド設定の取得エンドポイント
+@app.get("/settings")
+def get_app_settings():
+    """
+    現在サーバーに適用されている設定値（重量モード自動停止時間など）を取得する
+    """
+    return search_manager.get_settings()
+
+# バックエンド設定の更新エンドポイント
+@app.post("/settings")
+def update_app_settings(data: SettingsUpdateRequest):
+    """
+    サーバーの設定値を更新し、DBへ永続化する
+    """
+    return search_manager.update_settings(
+        heavy_idle_timeout=data.heavy_idle_timeout,
+    )
 
 # 絵柄タグ作成用エンドポイント
 @app.post("/style")

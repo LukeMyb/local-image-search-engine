@@ -277,6 +277,12 @@ class HeavyEngineManager:
         """最終アクセス（ハートビート）時刻を現在時刻に更新する"""
         self._last_active_time = time.time()
 
+    def set_idle_timeout(self, timeout_sec: float) -> None:
+        """アイドル自動停止までの秒数を変更する（0以下の場合は自動停止しない）"""
+        with self._state_lock:
+            self.idle_timeout = max(0.0, float(timeout_sec))
+            self._last_active_time = time.time()
+
     def get_status(self, touch: bool = True) -> Dict[str, Any]:
         """現在のモード状態とワーカーPIDを返す"""
         if touch:
@@ -299,6 +305,7 @@ class HeavyEngineManager:
                 "mode": self._mode,
                 "worker_pid": pid,
                 "error": self._last_error,
+                "idle_timeout": int(self.idle_timeout),
             }
 
     @property
@@ -417,9 +424,10 @@ class HeavyEngineManager:
                 if self._process is not proc or self._mode != "heavy":
                     return
                 idle_sec = time.time() - self._last_active_time
-            if self.idle_timeout > 0 and idle_sec >= self.idle_timeout:
+                timeout_sec = self.idle_timeout
+            if timeout_sec > 0 and idle_sec >= timeout_sec:
                 print(
-                    f"\n  [HeavyWorker] {int(self.idle_timeout)}秒間アクセスがなかったため、重量モードを自動終了します...",
+                    f"\n  [HeavyWorker] {int(timeout_sec)}秒間アクセスがなかったため、重量モードを自動終了します...",
                     flush=True,
                 )
                 self.stop()

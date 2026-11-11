@@ -23,11 +23,19 @@ class SearchManager:
         # 起動時にエクスプローラーで削除・移動された画像の3状態同期（ゴーストデータのクリーンアップ）を実行
         self.db.sync_filesystem_states()
 
+        # 保存済みの重量モード自動停止タイムアウト（秒）をDBから読み込む（デフォルト300秒＝5分）
+        raw_timeout = self.db.get_setting("heavy_idle_timeout", "300")
+        try:
+            saved_timeout = max(0, int(float(raw_timeout)))
+        except (ValueError, TypeError):
+            saved_timeout = 300
+
         # 重量AIワーカー管理マネージャー（起動時は子プロセス未起動＝軽量状態）
         self.heavy_engine = HeavyEngineManager(
             db_path=db_path,
             tag_index_path=tag_index_path,
             style_index_path=style_index_path,
+            idle_timeout=float(saved_timeout),
         )
 
         # タグ検索エンジンを初期化
@@ -50,6 +58,20 @@ class SearchManager:
             return self.heavy_engine.stop()
         else:
             raise ValueError(f"Invalid mode: {target_mode}")
+
+    def get_settings(self):
+        """現在のバックエンド設定一覧を返す"""
+        return {
+            "heavy_idle_timeout": int(self.heavy_engine.idle_timeout),
+        }
+
+    def update_settings(self, heavy_idle_timeout: int | None = None):
+        """バックエンド設定を更新し、DBに永続化する"""
+        if heavy_idle_timeout is not None:
+            timeout_sec = max(0, int(heavy_idle_timeout))
+            self.heavy_engine.set_idle_timeout(float(timeout_sec))
+            self.db.set_setting("heavy_idle_timeout", str(timeout_sec))
+        return self.get_settings()
 
     def get_suggestions(self, query_text, limit=10):
         if not query_text:
