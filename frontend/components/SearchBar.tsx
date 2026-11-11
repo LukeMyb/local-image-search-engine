@@ -31,6 +31,8 @@ interface SearchBarProps {
   onToggleTrashFilter: () => void;
   // 検索ボタンの表示/非表示
   showSearchButton?: boolean;
+  // ゴミ箱フィルターボタンの表示/非表示
+  showTrashButton?: boolean;
 }
 
 export default function SearchBar({
@@ -54,6 +56,8 @@ export default function SearchBar({
   onToggleTrashFilter,
   // 検索ボタンの表示/非表示
   showSearchButton = true,
+  // ゴミ箱フィルターボタンの表示/非表示
+  showTrashButton = true,
 }: SearchBarProps) {
   // 枠外クリック検知用のRefと、削除ダイアログ用のState
   const searchBarRef = useRef<HTMLDivElement>(null);
@@ -228,11 +232,12 @@ export default function SearchBar({
         </form>
 
         {/* 右側ボタン群（検索窓フォーカス時はアニメーションで縮小・非表示） */}
+        {/* ※ ゴミ箱ボタン非表示設定中でも、ゴミ箱表示中は通常表示へ戻れるようボタンを表示する */}
         <div
           className={`flex flex-row gap-2 overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
             isFocused
               ? "w-0 ml-0 opacity-0 scale-90 pointer-events-none"
-              : "w-[136px] ml-2 opacity-100 scale-100"
+              : `${showTrashButton || isTrashFilter ? "w-[136px]" : "w-[88px]"} ml-2 opacity-100 scale-100`
           }`}
         >
           {/* ブックマーク保存ボタン */}
@@ -274,19 +279,21 @@ export default function SearchBar({
           </button>
 
           {/* ゴミ箱フィルターボタン */}
-          <button
-            type="button"
-            tabIndex={isFocused ? -1 : 0}
-            onClick={onToggleTrashFilter}
-            className={`w-10 p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
-              isTrashFilter
-                ? "bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30"
-                : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
-            }`}
-            title={isTrashFilter ? "ゴミ箱表示中（クリックで通常表示に戻る）" : "ゴミ箱を表示"}
-          >
-            <Trash2 size={16} />
-          </button>
+          {(showTrashButton || isTrashFilter) && (
+            <button
+              type="button"
+              tabIndex={isFocused ? -1 : 0}
+              onClick={onToggleTrashFilter}
+              className={`w-10 p-3 rounded-md transition-colors flex items-center justify-center shrink-0 ${
+                isTrashFilter
+                  ? "bg-red-600/20 border border-red-500/50 text-red-400 hover:bg-red-600/30"
+                  : "bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white"
+              }`}
+              title={isTrashFilter ? "ゴミ箱表示中（クリックで通常表示に戻る）" : "ゴミ箱を表示"}
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </div>
 

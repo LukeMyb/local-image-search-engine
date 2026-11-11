@@ -91,6 +91,9 @@ export default function Home() {
   // 検索バー横の検索ボタンを表示するかどうかのState（初期値はtrue）
   const [showSearchButton, setShowSearchButton] = useState(true);
 
+  // 検索バー右側のゴミ箱フィルターボタンを表示するかどうかのState（初期値はtrue）
+  const [showTrashButton, setShowTrashButton] = useState(true);
+
   // お気に入りフィルターのON/OFF状態を管理するState
   const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
 
@@ -716,6 +719,12 @@ export default function Home() {
       setShowSearchButton(savedShowSearchBtn === "true");
     }
 
+    // localStorageからゴミ箱ボタンの表示設定を読み込む
+    const savedShowTrashBtn = localStorage.getItem("showTrashButton");
+    if (savedShowTrashBtn !== null) {
+      setShowTrashButton(savedShowTrashBtn === "true");
+    }
+
     // localStorageから重量モードの自動停止時間を読み込む
     const savedIdleTimeout = localStorage.getItem("heavyIdleTimeout");
     if (savedIdleTimeout !== null) {
@@ -870,6 +879,8 @@ export default function Home() {
           onToggleTrashFilter={toggleTrashFilter}
           // 検索ボタンの表示/非表示
           showSearchButton={showSearchButton}
+          // ゴミ箱フィルターボタンの表示/非表示
+          showTrashButton={showTrashButton}
         />
       </div>
 
@@ -970,6 +981,11 @@ export default function Home() {
         onChangeShowSearchButton={(enabled) => {
           setShowSearchButton(enabled);
           localStorage.setItem("showSearchButton", String(enabled));
+        }}
+        showTrashButton={showTrashButton}
+        onChangeShowTrashButton={(enabled) => {
+          setShowTrashButton(enabled);
+          localStorage.setItem("showTrashButton", String(enabled));
         }}
         confirmTrashInViewer={confirmTrashInViewer}
         onChangeConfirmTrashInViewer={(enabled) => {

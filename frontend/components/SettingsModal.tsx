@@ -17,6 +17,8 @@ interface SettingsModalProps {
   onClose: () => void;
   showSearchButton: boolean;
   onChangeShowSearchButton: (enabled: boolean) => void;
+  showTrashButton: boolean;
+  onChangeShowTrashButton: (enabled: boolean) => void;
   confirmTrashInViewer: boolean;
   onChangeConfirmTrashInViewer: (enabled: boolean) => void;
   heavyIdleTimeout: number;
@@ -31,6 +33,8 @@ export default function SettingsModal({
   onClose,
   showSearchButton,
   onChangeShowSearchButton,
+  showTrashButton,
+  onChangeShowTrashButton,
   confirmTrashInViewer,
   onChangeConfirmTrashInViewer,
   heavyIdleTimeout,
@@ -115,7 +119,37 @@ export default function SettingsModal({
 
           <hr className="border-zinc-800" />
 
-          {/* 2. ビューアーでの削除時の確認ダイアログ ON/OFF */}
+          {/* 2. ホームのゴミ箱ボタンの表示 / 非表示 */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="font-medium text-white">
+                ゴミ箱ボタンの表示
+              </span>
+              <span className="text-xs text-zinc-400 leading-relaxed">
+                検索窓の右側にあるゴミ箱表示の切り替えボタンを表示します。OFFにしてもゴミ箱を表示中の間は、通常表示へ戻るためにボタンが表示されます。
+              </span>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showTrashButton}
+              onClick={() => onChangeShowTrashButton(!showTrashButton)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                showTrashButton ? "bg-blue-600" : "bg-zinc-700"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-md transform transition duration-200 ease-in-out ${
+                  showTrashButton ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <hr className="border-zinc-800" />
+
+          {/* 3. ビューアーでの削除時の確認ダイアログ ON/OFF */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex flex-col gap-1">
               <span className="font-medium text-white">
@@ -145,7 +179,7 @@ export default function SettingsModal({
 
           <hr className="border-zinc-800" />
 
-          {/* 3. 重量モードの自動停止タイムアウト時間 */}
+          {/* 4. 重量モードの自動停止タイムアウト時間 */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex flex-col gap-1">
               <span className="font-medium text-white">
@@ -177,7 +211,7 @@ export default function SettingsModal({
 
           <hr className="border-zinc-800" />
 
-          {/* 4. 絵柄検索の類似度しきい値 */}
+          {/* 5. 絵柄検索の類似度しきい値 */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-white">
