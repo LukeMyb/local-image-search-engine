@@ -239,6 +239,10 @@ def _heavy_worker_loop(
         print(f"  [HeavyWorker] 子プロセス終了 (PID: {os.getpid()})", flush=True)
 
 
+# ページを閉じてハートビート（通信）が途絶えてから重量モードを自動終了するまでの秒数（300秒＝5分）
+AUTO_STOP_TIMEOUT_SECONDS = 300.0
+
+
 class HeavyEngineManager:
     """
     親プロセス（軽量サーバー）側からAI推論ワーカー子プロセスを管理するクラス。
@@ -253,10 +257,12 @@ class HeavyEngineManager:
         db_path: str = "data/db/index.db",
         tag_index_path: str = "data/tag_vector_index.bin",
         style_index_path: str = "data/faiss/style.index",
+        idle_timeout: float = AUTO_STOP_TIMEOUT_SECONDS,
     ):
         self.db_path = db_path
         self.tag_index_path = tag_index_path
         self.style_index_path = style_index_path
+        self.idle_timeout = idle_timeout
 
         self._state_lock = threading.Lock()
         self._rpc_lock = threading.Lock()
@@ -265,9 +271,16 @@ class HeavyEngineManager:
         self._process: Optional[multiprocessing.Process] = None
         self._conn: Optional[Connection] = None
         self._ready_event = threading.Event()
+        self._last_active_time: float = time.time()
 
-    def get_status(self) -> Dict[str, Any]:
+    def touch(self) -> None:
+        """最終アクセス（ハートビート）時刻を現在時刻に更新する"""
+        self._last_active_time = time.time()
+
+    def get_status(self, touch: bool = True) -> Dict[str, Any]:
         """現在のモード状態とワーカーPIDを返す"""
+        if touch:
+            self.touch()
         with self._state_lock:
             # 万が一子プロセスが予期せず終了していた場合は light に戻す
             if self._mode == "heavy" and (
@@ -290,7 +303,7 @@ class HeavyEngineManager:
 
     @property
     def is_heavy_ready(self) -> bool:
-        return self.get_status()["mode"] == "heavy"
+        return self.get_status(touch=False)["mode"] == "heavy"
 
     def start(self, wait: bool = False, timeout: float = 30.0) -> Dict[str, Any]:
         """
@@ -350,6 +363,13 @@ class HeavyEngineManager:
                         with self._state_lock:
                             if self._process is proc:
                                 self._mode = "heavy"
+                                self._last_active_time = time.time()
+                                # アイドル自動停止監視スレッドを起動
+                                threading.Thread(
+                                    target=self._idle_watchdog_loop,
+                                    args=(proc,),
+                                    daemon=True,
+                                ).start()
                         self._ready_event.set()
                         return
                     elif isinstance(msg, dict) and msg.get("status") == "error":
@@ -386,6 +406,25 @@ class HeavyEngineManager:
         finally:
             self._ready_event.set()
 
+    def _idle_watchdog_loop(self, proc: multiprocessing.Process):
+        """
+        一定時間（self.idle_timeout秒）フロントエンドからのハートビートや検索リクエストが
+        途絶えた場合に、自動で子プロセスを終了してメモリを解放する監視スレッド。
+        """
+        while proc.is_alive():
+            time.sleep(2.0)
+            with self._state_lock:
+                if self._process is not proc or self._mode != "heavy":
+                    return
+                idle_sec = time.time() - self._last_active_time
+            if self.idle_timeout > 0 and idle_sec >= self.idle_timeout:
+                print(
+                    f"\n  [HeavyWorker] {int(self.idle_timeout)}秒間アクセスがなかったため、重量モードを自動終了します...",
+                    flush=True,
+                )
+                self.stop()
+                return
+
     def stop(self) -> Dict[str, Any]:
         """
         重量ワーカープロセスを即座に終了し、RAM・VRAMをOSへ100%解放する。
@@ -418,6 +457,7 @@ class HeavyEngineManager:
 
     def _call(self, payload: Dict[str, Any], timeout: float = 30.0) -> Any:
         """子プロセスへRPCリクエストを送信し、結果を受け取る（タイムアウト付き）"""
+        self.touch()
         with self._state_lock:
             if self._mode != "heavy" or self._conn is None or self._process is None or not self._process.is_alive():
                 raise RuntimeError("重量モードが起動していません")

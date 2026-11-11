@@ -88,6 +88,7 @@ class SearchManager:
         return self.tag_searcher.get_suggestions(query_text, limit)
 
     def search(self, user_query, sort_order="score", trash_only=False):
+        self.heavy_engine.touch()
         style_match = re.search(r"style:([^\s|]+)", user_query)
         style_name = None
         style_scores_map = {}

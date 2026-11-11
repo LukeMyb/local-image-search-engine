@@ -201,6 +201,33 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [serverMode, setStatusMessage]);
 
+  // 重量モード("heavy")稼働中は、ページを開いている間20秒ごとに生存確認（ハートビート）を送り、
+  // タブ復帰時（visibilitychange / focus）にも最新のモード状態を同期する
+  useEffect(() => {
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        fetchServerMode();
+      }
+    };
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    if (serverMode === "heavy") {
+      heartbeat = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          fetchServerMode();
+        }
+      }, 20000);
+    }
+
+    return () => {
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      if (heartbeat) clearInterval(heartbeat);
+    };
+  }, [serverMode, fetchServerMode]);
+
   // フロントエンドから軽量モード⇔重量モードを切り替える関数
   const toggleServerMode = async () => {
     if (serverMode === "starting") return;
