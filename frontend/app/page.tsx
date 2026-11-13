@@ -94,6 +94,10 @@ export default function Home() {
   // 検索バー右側のゴミ箱フィルターボタンを表示するかどうかのState（初期値はtrue）
   const [showTrashButton, setShowTrashButton] = useState(true);
 
+  // 類似画像検索時に周囲（保存日時が近い）の画像のタグも参照するかどうかのState（実験的機能・初期値はfalse）
+  // TODO: 現時点では設定値の保持のみで、executeSearchSimilar 側のロジックは未実装
+  const [useNeighborsForSimilar, setUseNeighborsForSimilar] = useState(false);
+
   // お気に入りフィルターのON/OFF状態を管理するState
   const [isFavoriteFilter, setIsFavoriteFilter] = useState(false);
 
@@ -725,6 +729,12 @@ export default function Home() {
       setShowTrashButton(savedShowTrashBtn === "true");
     }
 
+    // localStorageから類似画像検索で周囲の画像を参照する設定を読み込む
+    const savedUseNeighbors = localStorage.getItem("useNeighborsForSimilar");
+    if (savedUseNeighbors !== null) {
+      setUseNeighborsForSimilar(savedUseNeighbors === "true");
+    }
+
     // localStorageから重量モードの自動停止時間を読み込む
     const savedIdleTimeout = localStorage.getItem("heavyIdleTimeout");
     if (savedIdleTimeout !== null) {
@@ -991,6 +1001,11 @@ export default function Home() {
         onChangeConfirmTrashInViewer={(enabled) => {
           setConfirmTrashInViewer(enabled);
           localStorage.setItem("confirmTrashInViewer", String(enabled));
+        }}
+        useNeighborsForSimilar={useNeighborsForSimilar}
+        onChangeUseNeighborsForSimilar={(enabled) => {
+          setUseNeighborsForSimilar(enabled);
+          localStorage.setItem("useNeighborsForSimilar", String(enabled));
         }}
         heavyIdleTimeout={heavyIdleTimeout}
         onChangeHeavyIdleTimeout={async (seconds) => {

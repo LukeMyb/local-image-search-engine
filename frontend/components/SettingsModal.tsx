@@ -21,6 +21,8 @@ interface SettingsModalProps {
   onChangeShowTrashButton: (enabled: boolean) => void;
   confirmTrashInViewer: boolean;
   onChangeConfirmTrashInViewer: (enabled: boolean) => void;
+  useNeighborsForSimilar: boolean;
+  onChangeUseNeighborsForSimilar: (enabled: boolean) => void;
   heavyIdleTimeout: number;
   onChangeHeavyIdleTimeout: (seconds: number) => void;
   styleThreshold: number;
@@ -37,6 +39,8 @@ export default function SettingsModal({
   onChangeShowTrashButton,
   confirmTrashInViewer,
   onChangeConfirmTrashInViewer,
+  useNeighborsForSimilar,
+  onChangeUseNeighborsForSimilar,
   heavyIdleTimeout,
   onChangeHeavyIdleTimeout,
   styleThreshold,
@@ -265,6 +269,41 @@ export default function SettingsModal({
                 <span>0.990 (厳しめ)</span>
               </div>
             </div>
+          </div>
+
+          <hr className="border-zinc-800" />
+
+          {/* 6. 類似画像検索で周囲の画像を参照する（実験的機能） */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-white">
+                  類似画像検索で周囲の画像を参照
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 border border-amber-500/40 text-amber-300">
+                  実験的
+                </span>
+              </div>
+              <span className="text-xs text-zinc-400 leading-relaxed">
+                ビューアーから類似画像を検索する際、保存日時が近く同じキャラと推定される画像のタグも参照し、共通する特徴（髪型・髪飾りなどのチャームポイント）を検索条件に加えます。複数枚をまとめて保存している場合に有効です。
+              </span>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={useNeighborsForSimilar}
+              onClick={() => onChangeUseNeighborsForSimilar(!useNeighborsForSimilar)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
+                useNeighborsForSimilar ? "bg-blue-600" : "bg-zinc-700"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-md transform transition duration-200 ease-in-out ${
+                  useNeighborsForSimilar ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
           </div>
         </div>
       </div>
