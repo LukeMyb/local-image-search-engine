@@ -38,6 +38,11 @@ interface ImageGridProps {
   setGridColsMobile?: (cols: number) => void;
 }
 
+// 画像1枚の幅に対する余白（gap）の比率
+// 従来のデフォルト表示（スマホ3列・8px / PC6列・16px）の見た目に近くなるよう設定
+const GAP_RATIO_MOBILE = 0.067;
+const GAP_RATIO_PC = 0.053;
+
 export default function ImageGrid({ 
   results, 
   selectedImage,
@@ -399,16 +404,28 @@ export default function ImageGrid({
     };
   }, [hasPrev, loadPrev]);
 
+  // 列数に応じた余白（gap）をコンテナ幅に対する割合で算出する
+  // 画像1枚の幅 : 余白 = 1 : ratio を維持するため、gap = W * ratio / (n + (n - 1) * ratio) となる
+  const calcGapFactor = (cols: number, ratio: number) =>
+    (ratio / (cols + (cols - 1) * ratio)) * 100;
+  const gapMobile = calcGapFactor(gridColsMobile, GAP_RATIO_MOBILE);
+  const gapPC = calcGapFactor(gridColsPC, GAP_RATIO_PC);
+
   return (
     <>
-      {/* CSSのメディアクエリを使って、PCとスマホの列数を自動で切り替えるスタイルを定義 */}
+      {/* CSSのメディアクエリを使って、PCとスマホの列数と余白を自動で切り替えるスタイルを定義 */}
       <style>{`
+        .custom-dynamic-grid-container {
+          container-type: inline-size;
+        }
         .custom-dynamic-grid {
           grid-template-columns: repeat(${gridColsMobile}, minmax(0, 1fr));
+          gap: ${gapMobile}cqw;
         }
         @media (min-width: 768px) {
           .custom-dynamic-grid {
             grid-template-columns: repeat(${gridColsPC}, minmax(0, 1fr));
+            gap: ${gapPC}cqw;
           }
         }
       `}</style>
@@ -416,10 +433,12 @@ export default function ImageGrid({
       {/* 上方向の無限スクロール検知用タグ */}
       <div ref={topObserverTarget} className="h-1 w-full" />
 
+      {/* 余白をグリッド幅基準（cqw）で計算するためのコンテナ */}
+      <div className="custom-dynamic-grid-container mt-4">
       <div 
         ref={gridRef}
         style={{ overflowAnchor: "none" }}
-        className="grid gap-2 md:gap-4 mt-4 custom-dynamic-grid"
+        className="grid custom-dynamic-grid"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -483,6 +502,7 @@ export default function ImageGrid({
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* 無限スクロールの検知用タグ（この透明な箱が画面に入ったら次を読み込む） */}
