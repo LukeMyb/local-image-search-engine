@@ -45,6 +45,13 @@ export default function BookmarkManager({
   // ブックマーク保存ダイアログの入力内容を管理
   const [newBookmarkName, setNewBookmarkName] = useState("");
 
+  // 同じ名前で異なるクエリのブックマークがすでに存在するかどうか（上書き判定）
+  const isOverwrite =
+    newBookmarkName.trim() !== "" &&
+    allBookmarks.some(
+      (bm) => bm.name.trim() === newBookmarkName.trim() && bm.query.trim() !== query.trim()
+    );
+
   // 保存ダイアログが開かれたとき、またはクエリが変わったときに初期値をセットする
   useEffect(() => {
     if (isSaveDialogOpen) {
@@ -281,17 +288,17 @@ export default function BookmarkManager({
                 onChange={(e) => setNewBookmarkName(e.target.value)}
                 placeholder="ブックマーク名を入力..."
                 className={`w-full p-3 bg-[#27272a] rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-2 ${
-                  // 重複している場合は枠線を赤にする
-                  allBookmarks.some(bm => bm.name.trim() === newBookmarkName.trim() && bm.query.trim() !== query.trim())
-                    ? "border border-red-500 focus:ring-red-500"
+                  // 既存のブックマーク名と一致する（上書きになる）場合は枠線をアンバーにする
+                  isOverwrite
+                    ? "border border-amber-500/80 focus:ring-amber-500"
                     : "focus:ring-blue-600"
                 }`}
                 autoFocus // ダイアログが開いた瞬間にフォーカスを当てる
               />
-              {/* リアルタイム重複エラーメッセージ */}
-              {allBookmarks.some(bm => bm.name.trim() === newBookmarkName.trim() && bm.query.trim() !== query.trim()) && (
-                <p className="text-red-400 text-sm mt-2">
-                  この名前はすでに使用されています
+              {/* リアルタイム上書き案内メッセージ */}
+              {isOverwrite && (
+                <p className="text-amber-400 text-sm mt-2">
+                  既存のブックマークを上書きします
                 </p>
               )}
             </div>
@@ -305,11 +312,11 @@ export default function BookmarkManager({
               </button>
               <button
                 onClick={handleSaveBookmark}
-                // 名前が空、または重複している場合は押せないようにする
-                disabled={!newBookmarkName.trim() || allBookmarks.some(bm => bm.name.trim() === newBookmarkName.trim() && bm.query.trim() !== query.trim())}
+                // 名前が空の場合は押せないようにする
+                disabled={!newBookmarkName.trim()}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:text-white/50 text-white rounded-md transition-colors font-medium"
               >
-                保存
+                {isOverwrite ? "上書き保存" : "保存"}
               </button>
             </div>
           </div>
