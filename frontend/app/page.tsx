@@ -612,9 +612,9 @@ export default function Home() {
       // 目の色のタグがあれば抽出
       const eyeTags = tags.filter((t: string) => validEyeColors.includes(t));
       if (eyeTags.length > 0) {
-        // 目の色のタグも空白をアンダースコアに変換して、複数あれば OR ( | ) で繋ぐ
+        // 目の色のタグも空白をアンダースコアに変換して、closed_eyes も含めて OR ( | ) で繋ぐ
         const formattedEyeTags = eyeTags.map((t: string) => t.replace(/\s+/g, '_'));
-        queryParts.push(formattedEyeTags.join('|'));
+        queryParts.push(["closed_eyes", ...formattedEyeTags].join('|'));
       }
     }
 
