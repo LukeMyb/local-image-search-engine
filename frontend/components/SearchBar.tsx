@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Search, X, Menu, BookmarkPlus, BookmarkCheck, Trash2, Heart } from "lucide-react";
 
 // サジェストの型定義
@@ -61,10 +61,43 @@ export default function SearchBar({
 }: SearchBarProps) {
   // 枠外クリック検知用のRefと、削除ダイアログ用のState
   const searchBarRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [styleToDelete, setStyleToDelete] = useState<Suggestion | null>(null);
+
+  // フォーカス時は入力内容に合わせて検索窓を複数行に自動展開し、非フォーカス時は1行(48px)に戻す
+  const adjustTextareaHeight = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (isFocused) {
+      el.style.height = "auto";
+      el.style.height = `${Math.max(48, el.scrollHeight)}px`;
+    } else {
+      el.style.height = "48px";
+      el.scrollTop = 0;
+      el.scrollLeft = 0;
+    }
+  }, [isFocused]);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [query, isFocused, adjustTextareaHeight]);
+
+  // フォーカス時の横幅展開アニメーション中も折り返し高さをリアルタイムに追従させる
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el || !isFocused) return;
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== lastWidth) {
+        lastWidth = el.clientWidth;
+        adjustTextareaHeight();
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isFocused, adjustTextareaHeight]);
 
   // アンマウント時にタイマーをクリア
   useEffect(() => {
@@ -97,7 +130,7 @@ export default function SearchBar({
 
   return (
     <>
-      <div className="flex flex-row w-full max-w-md" ref={searchBarRef}>
+      <div className="flex flex-row items-start w-full max-w-md" ref={searchBarRef}>
         {/* ドロワーメニュー展開ボタン（検索窓フォーカス時はアニメーションで縮小・非表示） */}
         <div
           className={`flex overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
@@ -110,7 +143,7 @@ export default function SearchBar({
             type="button"
             tabIndex={isFocused ? -1 : 0}
             onClick={() => setIsDrawerOpen(true)}
-            className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
+            className="h-12 p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
           >
             <Menu size={16} />
           </button>
@@ -128,13 +161,14 @@ export default function SearchBar({
             inputRef.current?.blur();
             onSearch(e);
           }}
-          className="flex flex-row gap-2 grow min-w-0"
+          className="flex flex-row items-start gap-2 grow min-w-0"
         >
-          <div className="relative grow flex items-center min-w-0">
-            {/* 検索窓（テキストボックス） */}
-            <input
+          <div className="relative grow flex items-start min-w-0">
+            {/* 検索窓（フォーカス時に複数行へ自動展開するテキストエリア） */}
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
+              wrap={isFocused ? "soft" : "off"}
               enterKeyHint="search"
               value={query}
               onFocus={() => {
@@ -145,7 +179,7 @@ export default function SearchBar({
                 setIsFocused(true);
                 setIsSuggestOpen(true);
               }}
-              // フォーカスが外れたらサジェストを閉じ、通常表示に戻す（クリック判定のために少し遅延させる）
+              // フォーカスが外れたらサジェストを閉じ、1行表示に戻す（クリック判定のために少し遅延させる）
               onBlur={() => {
                 blurTimerRef.current = setTimeout(() => {
                   setIsFocused(false);
@@ -153,11 +187,31 @@ export default function SearchBar({
                 }, 150);
               }}
               onChange={(e) => {
-                setQuery(e.target.value);
+                // 改行コードが混入した場合はスペースに置換して1つのクエリとして扱う
+                const normalized = e.target.value.replace(/[\r\n]+/g, " ");
+                setQuery(normalized);
                 setIsSuggestOpen(true);
               }}
+              onKeyDown={(e) => {
+                // Enterキー押下時は改行せず検索を実行する（日本語変換確定のEnterは除く）
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  if (blurTimerRef.current) {
+                    clearTimeout(blurTimerRef.current);
+                    blurTimerRef.current = null;
+                  }
+                  setIsFocused(false);
+                  setIsSuggestOpen(false);
+                  inputRef.current?.blur();
+                  onSearch();
+                }
+              }}
               placeholder={isTrashFilter ? "ゴミ箱内を検索..." : "タグやキーワードを入力..."}
-              className="p-3 pr-10 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 w-full min-w-0"
+              className={`p-3 pr-10 leading-6 bg-[#27272a] rounded-md text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-600 w-full min-w-0 resize-none ${
+                isFocused
+                  ? "whitespace-pre-wrap break-words overflow-y-auto max-h-48"
+                  : "h-12 whitespace-nowrap overflow-hidden text-ellipsis"
+              }`}
             />
 
             {/* 文字が入力されている時だけ表示されるクリアボタン */}
@@ -175,7 +229,7 @@ export default function SearchBar({
                   setIsFocused(true);
                   inputRef.current?.focus();
                 }}
-                className="absolute right-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
+                className="absolute right-2 top-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
               >
                 <X size={16} />
               </button>
@@ -224,7 +278,7 @@ export default function SearchBar({
           {showSearchButton && (
             <button
               type="submit"
-              className="p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
+              className="h-12 p-3 bg-[#27272a] hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-md transition-colors flex items-center justify-center shrink-0"
             >
               <Search size={16} />
             </button>
@@ -234,7 +288,7 @@ export default function SearchBar({
         {/* 右側ボタン群（検索窓フォーカス時はアニメーションで縮小・非表示） */}
         {/* ※ ゴミ箱ボタン非表示設定中でも、ゴミ箱表示中は通常表示へ戻れるようボタンを表示する */}
         <div
-          className={`flex flex-row gap-2 overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
+          className={`h-12 flex flex-row gap-2 overflow-hidden shrink-0 transition-all duration-300 ease-in-out ${
             isFocused
               ? "w-0 ml-0 opacity-0 scale-90 pointer-events-none"
               : `${showTrashButton || isTrashFilter ? "w-[136px]" : "w-[88px]"} ml-2 opacity-100 scale-100`

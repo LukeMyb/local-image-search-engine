@@ -426,6 +426,12 @@ export default function Home() {
         pullStartRef.current = null;
         return;
       }
+      // 検索窓や入力欄の操作中はプルリフレッシュを開始しない
+      const target = e.target as HTMLElement | null;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        pullStartRef.current = null;
+        return;
+      }
       // 画面の一番上にいる時のみ開始（左端40px以内のドロワースワイプ領域は除外）
       if (window.scrollY <= 0 && e.touches[0].clientX > 40) {
         pullStartRef.current = {
