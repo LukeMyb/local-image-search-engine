@@ -38,8 +38,7 @@ interface ImageGridProps {
   setGridColsMobile?: (cols: number) => void;
 }
 
-// 画像1枚の幅に対する余白（gap）の比率
-// 従来のデフォルト表示（スマホ3列・8px / PC6列・16px）の見た目に近くなるよう設定
+// 画像1枚の幅に対する余白（gap）の比率（スマホ3列・8px / PC6列・16px相当の見た目を基準に設定）
 const GAP_RATIO_MOBILE = 0.067;
 const GAP_RATIO_PC = 0.053;
 

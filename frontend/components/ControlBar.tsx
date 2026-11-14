@@ -233,7 +233,7 @@ export default function ControlBar({
         )}
       </div>
 
-      {/* 幽閉された絵柄タグ作成ダイアログ */}
+      {/* 絵柄タグ作成ダイアログ */}
       {isStyleDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-zinc-800 border border-zinc-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4">

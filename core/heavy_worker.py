@@ -22,7 +22,7 @@ def _heavy_worker_loop(
         t_start = time.time()
         print(f"  [HeavyWorker] 子プロセス起動 (PID: {os.getpid()}) - AIモデルをロード中...", flush=True)
 
-        # 外部通信の完全遮断（起動高速化・フリーズ防止）
+        # HuggingFace / Transformers のオンライン確認を無効化（起動高速化・フリーズ防止）
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
         os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         os.environ.setdefault("translators_default_region", "EN")
@@ -583,7 +583,7 @@ if __name__ == "__main__":
     manager = _Manager()
 
     print("=" * 65, flush=True)
-    print(" [Phase 1 単体検証] HeavyEngineManager (子プロセス分離・メモリ解放テスト)", flush=True)
+    print(" [単体検証] HeavyEngineManager (子プロセス分離・メモリ解放テスト)", flush=True)
     print("=" * 65, flush=True)
     print("1. 初期状態（軽量モード）", flush=True)
     print(f"   - ステータス     : {manager.get_status()}", flush=True)

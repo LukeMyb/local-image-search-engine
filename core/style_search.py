@@ -58,7 +58,7 @@ class StyleSearcher:
         return np.concatenate(style_vectors)
 
     def calculate_centroid(self, image_paths):
-        """【機能1】ギャラリーで選択された複数画像のパスから重心ベクトルを計算する"""
+        """ギャラリーで選択された複数画像のパスから重心ベクトルを計算する"""
         valid_vectors = []
         for path in image_paths:
             if not os.path.exists(path):
@@ -77,7 +77,7 @@ class StyleSearcher:
         return mean_vec
 
     def search_by_style_name(self, style_name, threshold=0.98, trash_only=False, include_deleted=False):
-        """【機能2】DBに保存された絵柄名（style:xxx）から検索を実行する"""
+        """DBに保存された絵柄名（style:xxx）から検索を実行する"""
         if self.index is None:
             print("エラー: 検索インデックスがロードされていません。")
             return []

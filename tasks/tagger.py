@@ -60,7 +60,7 @@ class Tagger:
         self.tag_names = self.tags_df["name"].tolist()
         self.tag_categories = self.tags_df["category"].tolist() # 0:General, 4:Character, 9:Rating
         
-        #'CPUExecutionProvider' から 'DmlExecutionProvider' (DirectML) に変更
+        #DirectML(GPU)を優先し、利用できない場合はCPUにフォールバック
         self.session = ort.InferenceSession(model_path, providers=['DmlExecutionProvider', 'CPUExecutionProvider'])
         self.input_name = self.session.get_inputs()[0].name
 
@@ -276,10 +276,6 @@ class Tagger:
 if __name__ == "__main__":
     tagger = Tagger()
     
-    # テスト実行ブロック
-    #TEST_IMAGE = "data/images/185APPLE/IMG_5464.JPG"
-    #tagger.debug_compare_models(TEST_IMAGE)
-    
-    # 本番実行ブロック
+    # 2モデルの判定結果を比較診断したい場合は tagger.debug_compare_models("画像パス") を実行
     # force_update=True にすれば、前のタグを全部消して上書きします
     tagger.process_all(force_update=False)

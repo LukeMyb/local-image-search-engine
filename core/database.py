@@ -21,7 +21,7 @@ class ImageDatabase:
         #テーブルと検索高速化のためのインデックスを作成
         cursor = self.conn.cursor() #SQLを送る窓口を作成
         
-        #Xの差分画像クラスタリング用にfile_mtime(REAL型(小数点も含むUnix))を追加
+        #file_mtime: ファイルの保存日時（小数点を含むUnix時刻・REAL型）。新着順ソートなどに使用
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS images (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +51,7 @@ class ImageDatabase:
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_is_deleted ON images(is_deleted)')
 
         # ---------------------------------------------------------
-        # 以下、FTS5（全文検索）用の仮想テーブルと自動同期ロジックの追加
+        # FTS5（全文検索）用の仮想テーブルと自動同期ロジック
         # ---------------------------------------------------------
         
         # 1. 検索専用の仮想テーブル（インデックス）を作成
@@ -107,7 +107,7 @@ class ImageDatabase:
             )
         ''')
 
-        # ベクトルデータ(768次元のfloat32)はBLOB型で保存する
+        # 絵柄タグの重心ベクトル(1920次元のfloat32)はBLOB型で保存する
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS style_tags (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,7 +176,7 @@ class ImageDatabase:
         self.conn.commit()
 
     def update_vector_status(self, image_id):
-        #CLIPベクトル解析完了の記録
+        #絵柄ベクトル（VGG16/AdaIN）解析完了の記録
         cursor = self.conn.cursor()
         cursor.execute('''
             UPDATE images 
@@ -195,7 +195,7 @@ class ImageDatabase:
         ''', (tags_combined, image_id))
         self.conn.commit()
 
-    # アンサンブルタグ付け用の新しい保存メソッド
+    # アンサンブルタグ付け（ConvNeXt + MOAT）の結果を保存するメソッド
     def update_tags_with_scores(self, image_id, tags_combined, tag_scores_dict):
         """
         統合されたタグ名（検索用）と、信頼度スコア（ロジック計算用）を同時に保存する。
@@ -244,7 +244,6 @@ class ImageDatabase:
     def get_image_by_id(self, image_id):
         #指定されたIDの画像データを取得します
         cursor = self.conn.cursor()
-        #FAISSのインデックスは0開始、dbのIDは1開始のため、呼び出し側で調整するかここで調整します
         cursor.execute("SELECT * FROM images WHERE id = ?", (image_id,))
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -293,7 +292,7 @@ class ImageDatabase:
         return [dict(row) for row in cursor.fetchall()]
 
     def update_bookmark_usage(self, bookmark_id):
-        """検索実行時に呼び出し、使用時刻を最新に更新する"""
+        """ブックマーク使用時に呼び出し、使用時刻を最新に更新する"""
         cursor = self.conn.cursor()
         cursor.execute('''
             UPDATE user_saved_queries 
@@ -344,7 +343,7 @@ class ImageDatabase:
         if row:
             # BLOBからNumPy配列に復元
             vector = np.frombuffer(row['vector_data'], dtype=np.float32)
-            # FAISSで扱いやすいように次元を (1, 768) に整形して返す
+            # FAISSで扱いやすいように次元を (1, 1920) に整形して返す
             return vector.reshape(1, -1)
         return None
 

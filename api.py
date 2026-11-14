@@ -53,7 +53,7 @@ app = FastAPI(lifespan=lifespan)
 # フロントエンド（React/Next.js等）からのアクセスを許可する必須設定 (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 開発中はどこからでも通信を許可
+    allow_origins=["*"], # LAN内の他端末（スマホ等）からもアクセスできるよう全オリジンを許可
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -319,9 +319,9 @@ def create_style_tag(data: StyleTagCreate):
     try:
         search_manager.db.save_style_tag(data.name, centroid)
         
-        # --- キャッシュの作成を追加 ---
-        print(f"DEBUG: [{data.name}] の検索キャッシュを構築中...")
+        # 軽量モード用の検索キャッシュを作成
         # しきい値調整の下限(0.97)までキャッシュを保持しておくことで、軽量モード時も動的にしきい値変更を反映できるようにする
+        print(f"DEBUG: [{data.name}] の検索キャッシュを構築中...")
         results = search_manager.heavy_engine.search_by_style_name(data.name, threshold=0.97, include_deleted=True)
         search_manager.db.save_style_cache(data.name, results)
         

@@ -24,7 +24,7 @@ class StyleVectorizer:
         self.model = vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features.to(self.device)
         self.model.eval() 
         
-        # グラム行列の代わりにAdaIN(平均・標準偏差)を抽出する層
+        # AdaIN（各チャンネルの平均・標準偏差）を抽出する層
         self.style_layers = [3, 8, 15, 22]
         
         # 画像の前処理ルール
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     # ベクタライザー起動
     vectorizer = StyleVectorizer(db)
     
-    # 処理実行 (RTX 50シリーズならバッチサイズ32〜64で高速に回ります)
+    # 処理実行 (VRAMに余裕があればバッチサイズを64程度まで増やすと高速化できる)
     vectorizer.process_all(batch_size=32)
     
     db.close()

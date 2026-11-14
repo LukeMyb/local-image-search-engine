@@ -512,7 +512,7 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedImage, isDrawerOpen, isSaveDialogOpen, isSettingsOpen, reloadGrid]);
 
-  // 類似画像（同じ髪色）を検索する関数
+  // 類似画像検索（同じ髪色・目の色の検索）を実行する関数
   const executeSearchSimilar = useCallback((image: any) => {
     if (!image || !image.tags_combined) {
       alert("この画像にはタグ情報がありません。");
@@ -864,7 +864,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* (SearchBarコンポーネントを呼び出し) */}
+        {/* 検索バー */}
         <SearchBar 
           query={query}
           setQuery={setQuery}
