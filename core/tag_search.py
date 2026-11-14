@@ -119,8 +119,28 @@ class TagSearch:
         # サジェスト選択時に、前の単語を消さないためのベース文字列
         base_query = " ".join(parts[:-1]) + " " if len(parts) > 1 else ""
 
-        prefix = current_word.lower().strip()
+        # OR検索(|)の入力中は最後の「|」以降の単語を対象にする
+        or_prefix = ""
+        target_token = current_word
+        if "|" in current_word:
+            or_parts = current_word.split("|")
+            or_prefix = "|".join(or_parts[:-1]) + "|"
+            target_token = or_parts[-1]
+
+        # 任意加点(?/？)や除外(-)のプレフィックスを分離して補完できるようにする
+        modifier_prefix = ""
+        if target_token.startswith(("?", "？")):
+            modifier_prefix = "?"
+            target_token = target_token.lstrip("?？")
+        elif target_token.startswith("-"):
+            modifier_prefix = "-"
+            target_token = target_token.lstrip("-")
+
+        prefix = target_token.lower().strip()
+        if not prefix:
+            return []
         prefix_under = prefix.replace(" ", "_")
+        full_base_query = base_query + or_prefix + modifier_prefix
 
         candidates = []
 
@@ -131,7 +151,7 @@ class TagSearch:
                 candidates.append(
                     {
                         "display": f"{underscored_tag} ({count}件)",
-                        "query": base_query + underscored_tag,
+                        "query": full_base_query + underscored_tag,
                         "count": count,
                     }
                 )
@@ -144,7 +164,7 @@ class TagSearch:
                 candidates.append(
                     {
                         "display": f"{alias} -> {actual} ({count}件)",
-                        "query": base_query + alias,
+                        "query": full_base_query + alias,
                         "count": count,
                     }
                 )
@@ -318,26 +338,33 @@ class TagSearch:
             return []
 
         positive_groups = []
+        optional_groups = []
         negative_words = []
         for w in words:
             if w.startswith("-") and len(w) > 1:
                 negative_words.append(w[1:])
+            elif w.startswith(("?", "？")) and len(w) > 1:
+                parts = [p.lstrip("?？") for p in w[1:].split("|") if p.lstrip("?？")]
+                if parts:
+                    optional_groups.append(parts)
             else:
-                parts = w.split("|")
-                positive_groups.append(parts)
+                parts = [p for p in w.split("|") if p]
+                if parts:
+                    positive_groups.append(parts)
 
-        if not positive_groups:
+        if not positive_groups and not optional_groups:
             return []
 
         print(f"\n{'='*60}")
         print(f" Query: '{user_query}' (Mode: {'HEAVY' if self._is_heavy else 'LIGHT'})")
         print(f"{'='*60}")
 
-        search_groups = []
+        required_search_groups = []
+        optional_search_groups = []
 
         for or_words in positive_groups:
             combined_similar_tags_map = {}
-            print(f"  [OR Group] Processing: {or_words}")
+            print(f"  [OR Group (Required)] Processing: {or_words}")
 
             for word in or_words:
                 final_tag, similar_tags_map = self.find_similar_tags_with_score(word)
@@ -351,9 +378,28 @@ class TagSearch:
                     ):
                         combined_similar_tags_map[t] = s
 
-            search_groups.append(combined_similar_tags_map)
+            required_search_groups.append(combined_similar_tags_map)
 
-        match_groups = []
+        for or_words in optional_groups:
+            combined_similar_tags_map = {}
+            print(f"  [OR Group (Optional Boost)] Processing: {or_words}")
+
+            for word in or_words:
+                final_tag, similar_tags_map = self.find_similar_tags_with_score(word)
+                print(
+                    f"  Target (Optional): '{final_tag}' -> Candidates: {len(similar_tags_map)}"
+                )
+
+                for t, s in similar_tags_map.items():
+                    if t not in combined_similar_tags_map or s > combined_similar_tags_map.get(
+                        t, 0
+                    ):
+                        combined_similar_tags_map[t] = s
+
+            optional_search_groups.append(combined_similar_tags_map)
+
+        # スコア計算には必須グループと任意（加点）グループの両方を使用する
+        search_groups = required_search_groups + optional_search_groups
 
         fast_lookup = {}
         for group_map in search_groups:
@@ -362,18 +408,31 @@ class TagSearch:
                 if norm_tag not in fast_lookup or score > fast_lookup.get(norm_tag, 0):
                     fast_lookup[norm_tag] = score
 
-        for group_map in search_groups:
-            or_parts = []
-            for tag in group_map.keys():
-                norm_tag = tag.replace("_", " ")
-                or_parts.append(f'"{norm_tag}"')
-            if or_parts:
-                match_groups.append(f"({' OR '.join(or_parts)})")
-
-        if not match_groups:
-            return []
-
-        match_query = " AND ".join(match_groups)
+        # FTS5の絞り込み条件を構築（必須グループがある場合は必須グループのみでAND検索し、任意グループは除外しない）
+        match_groups = []
+        if required_search_groups:
+            for group_map in required_search_groups:
+                or_parts = []
+                for tag in group_map.keys():
+                    norm_tag = tag.replace("_", " ")
+                    or_parts.append(f'"{norm_tag}"')
+                if or_parts:
+                    match_groups.append(f"({' OR '.join(or_parts)})")
+            if not match_groups:
+                return []
+            match_query = " AND ".join(match_groups)
+        else:
+            # 任意（?）タグのみが指定された場合は、いずれか1つ以上に一致する画像を広く取得してスコア順に並べる
+            for group_map in optional_search_groups:
+                or_parts = []
+                for tag in group_map.keys():
+                    norm_tag = tag.replace("_", " ")
+                    or_parts.append(f'"{norm_tag}"')
+                if or_parts:
+                    match_groups.append(f"({' OR '.join(or_parts)})")
+            if not match_groups:
+                return []
+            match_query = f"({' OR '.join(match_groups)})"
 
         if negative_words:
             negative_tags = set()
