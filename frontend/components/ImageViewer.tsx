@@ -1,6 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { X, Heart, ChevronLeft, ChevronRight, Search, Trash2, RotateCcw, CornerUpRight } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
+
+type TagSortMode = "abc" | "score";
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -10,6 +12,8 @@ interface SearchResult {
   // 詳細パネルに表示するためのデータ
   file_path?: string;
   tags_combined?: string;
+  tag_scores?: string;
+  parsed_tag_scores?: Record<string, number>;
   [key: string]: any; // 他のプロパティも許容
 }
 
@@ -71,6 +75,34 @@ export default function ImageViewer({
 
   // 詳細パネルの開閉状態を管理するState
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // 詳細パネル内のタグソート順とスコア表示ON/OFFを管理するState
+  const [tagSortMode, setTagSortMode] = useState<TagSortMode>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("tagSortMode");
+      if (saved === "abc" || saved === "score") return saved;
+    }
+    return "abc";
+  });
+  const [showTagScores, setShowTagScores] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("showTagScores") === "true";
+    }
+    return false;
+  });
+
+  const handleChangeTagSortMode = (mode: TagSortMode) => {
+    setTagSortMode(mode);
+    localStorage.setItem("tagSortMode", mode);
+  };
+
+  const handleToggleTagScores = () => {
+    setShowTagScores((prev) => {
+      const next = !prev;
+      localStorage.setItem("showTagScores", String(next));
+      return next;
+    });
+  };
 
   // ゴミ箱移動の確認ダイアログの開閉状態を管理するState
   const [isTrashDialogOpen, setIsTrashDialogOpen] = useState(false);
@@ -865,6 +897,44 @@ export default function ImageViewer({
 
   const savedDateText = formatSavedDate(selectedImage.file_mtime);
 
+  // 画像のタグ一覧とAI確信度スコアを解析・ソートする
+  const sortedTagItems = useMemo(() => {
+    if (!selectedImage.tags_combined) return [];
+
+    let scoresMap: Record<string, number> = {};
+    if (selectedImage.parsed_tag_scores && typeof selectedImage.parsed_tag_scores === "object") {
+      scoresMap = selectedImage.parsed_tag_scores;
+    } else if (typeof selectedImage.tag_scores === "string" && selectedImage.tag_scores.trim()) {
+      try {
+        scoresMap = JSON.parse(selectedImage.tag_scores);
+      } catch {
+        scoresMap = {};
+      }
+    }
+
+    const rawTags = selectedImage.tags_combined
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const items = rawTags.map((tag) => {
+      const norm = tag.toLowerCase().replace(/_/g, " ");
+      const score = scoresMap[norm] ?? scoresMap[tag.toLowerCase()] ?? null;
+      return { tag, score };
+    });
+
+    if (tagSortMode === "abc") {
+      items.sort((a, b) => a.tag.localeCompare(b.tag));
+    } else if (tagSortMode === "score") {
+      items.sort((a, b) => {
+        const diff = (b.score ?? -1) - (a.score ?? -1);
+        return diff !== 0 ? diff : a.tag.localeCompare(b.tag);
+      });
+    }
+
+    return items;
+  }, [selectedImage.tags_combined, selectedImage.tag_scores, selectedImage.parsed_tag_scores, tagSortMode]);
+
   return (
     <div 
       className="fixed inset-0 z-50 touch-none overscroll-none"
@@ -1132,11 +1202,76 @@ export default function ImageViewer({
           
           <hr className="border-zinc-700/50 my-2" />
           
-          {/* タグ一覧 */}
-          <p className="text-xs text-zinc-500 mb-1 font-medium">タグ一覧</p>
-          <p className="text-sm text-zinc-200 leading-relaxed select-text">
-            {selectedImage.tags_combined ? selectedImage.tags_combined.replace(/,/g, ', ') : "タグなし"}
-          </p>
+          {/* タグ一覧ヘッダー＆ソート切り替えコントロール */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+            <p className="text-xs text-zinc-400 font-medium">
+              タグ一覧 {sortedTagItems.length > 0 && <span className="text-zinc-500">({sortedTagItems.length})</span>}
+            </p>
+
+            {sortedTagItems.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {/* ソート順切り替えタブ */}
+                <div className="flex items-center bg-zinc-800/90 p-0.5 rounded-lg border border-zinc-700/60">
+                  <button
+                    type="button"
+                    onClick={() => handleChangeTagSortMode("abc")}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                      tagSortMode === "abc"
+                        ? "bg-zinc-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    ABC順
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChangeTagSortMode("score")}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                      tagSortMode === "score"
+                        ? "bg-zinc-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    スコア順
+                  </button>
+                </div>
+
+                {/* スコア数値表示トグル */}
+                <button
+                  type="button"
+                  onClick={handleToggleTagScores}
+                  className={`px-2.5 py-1 text-xs rounded-lg border font-medium transition-colors cursor-pointer ${
+                    showTagScores
+                      ? "bg-blue-500/20 border-blue-500/50 text-blue-300"
+                      : "bg-zinc-800/90 border-zinc-700/60 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  数値
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* タグバッジ一覧 */}
+          {sortedTagItems.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5 select-text">
+              {sortedTagItems.map(({ tag, score }) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-xs text-zinc-200 leading-none"
+                >
+                  <span>{tag}</span>
+                  {showTagScores && score !== null && (
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {score.toFixed(2)}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">タグなし</p>
+          )}
         </div>
       </div>
 
