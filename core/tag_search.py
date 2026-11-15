@@ -57,50 +57,27 @@ MULTICOLOR_KEYWORDS = (
     "split-color",
 )
 
-# 周囲画像の仲間判定およびチャームポイント選出から除外する「ポーズ・行為・表情・身体部位・メタ」タグ
-POSE_ACT_META_TAGS = {
-    "1girl", "2girls", "3girls", "4girls", "5girls", "6+girls", "multiple girls",
-    "1boy", "2boys", "3boys", "multiple boys", "solo", "solo focus", "male focus",
-    "hetero", "yuri", "yaoi", "threesome", "ffm threesome", "mmf threesome", "group sex",
-    "clothed female nude male", "clothed male nude female", "clothed sex",
-    "comic", "2koma", "3koma", "4koma", "speech bubble", "thought bubble",
-    "monochrome", "greyscale", "spot color", "oekaki", "jaggy lines", "web address", "english text",
-    "censored", "uncensored", "mosaic censoring", "bar censor", "light censor", "convenient censoring",
-    "pov", "from behind", "from above", "from below", "from side", "dutch angle",
-    "upper body", "lower body", "cowboy shot", "full body", "portrait", "close-up",
-    "looking at viewer", "looking at another", "looking back", "looking up", "looking down", "looking away", "eye contact",
-    "simple background", "white background", "black background", "grey background", "transparent background",
-    "gradient background", "pattern background", "abstract background", "indoors", "outdoors",
-    "heart", "hearts", "sweat", "sweatdrop", "flying sweatdrops", "anger vein", "spoken anger vein", "motion lines", "speed lines", "sparkles", "blush",
-    "smile", "grin", "light smile", "evil smile", "seductive smile", "smirk", "frown", "angry", "annoyed", "embarrassed", "shy", "sad", "crying", "tears", "streaming tears",
-    "open mouth", "closed mouth", "parted lips", "wavy mouth", "dot mouth", "tongue", "tongue out", "saliva", "saliva trail", "drooling", "teeth",
-    "closed eyes", "one eye closed", "half-closed eyes", "narrowed eyes", "wide-eyed", "empty eyes", "rolling eyes", "cross-eyed", "ahegao", "torogao", "naughty face", "fucked silly",
-    "heart-shaped pupils", "symbol-shaped pupils", "slit pupils", "glowing eyes",
-    "v-shaped eyebrows", "furrowed brow", "raised eyebrow", "trembling", "heavy breathing", "spoken heart",
-    "standing", "sitting", "lying", "on back", "on stomach", "on side", "all fours", "kneeling", "squatting", "leaning forward", "bent over", "arched back",
-    "spread legs", "legs up", "legs apart", "knees up", "knees together feet apart", "crossed legs",
-    "arms up", "arm up", "arms behind back", "arms behind head", "crossed arms", "outstretched arms",
-    "hand on own face", "hand on own chest", "hand on own hip", "hand on another's head", "head rest", "arm support", "holding", "holding hands", "holding another's wrist",
-    "hug", "hug from behind", "sitting on lap", "sitting on person", "straddling", "upright straddle", "reverse upright straddle", "girl on top", "top-down bottom-up", "the pose",
-    "undressing", "clothes pull", "skirt lift", "shirt lift", "bra lift", "panties aside", "leotard aside", "clothing aside", "open clothes", "unbuttoned", "unzipped", "off shoulder", "single bare shoulder", "bare shoulders", "pulled by self",
-    "breasts", "small breasts", "medium breasts", "large breasts", "huge breasts", "gigantic breasts", "flat chest",
-    "cleavage", "sideboob", "underboob", "backboob", "breasts out", "breasts apart", "breasts squeezed together", "hanging breasts", "bouncing breasts", "breast envy", "one breast out",
-    "nipples", "puffy nipples", "inverted nipples", "areolae", "areola slip",
-    "navel", "covered navel", "stomach", "midriff", "collarbone", "back", "bare back", "ass", "buttocks", "hips", "wide hips", "thighs", "thick thighs", "thigh gap", "groin", "armpits", "soles", "toes", "feet", "barefoot", "feet up",
-    "nude", "completely nude", "topless", "bottomless", "no bra", "no panties", "underwear", "panties", "bra",
-    "pussy", "anus", "penis", "veiny penis", "veins", "testicles", "erection", "pubic hair", "female pubic hair", "male pubic hair",
-    "cum", "cum in pussy", "cum on body", "cum on breasts", "cum on face", "cum in mouth", "cum on stomach", "cum on ass", "cum drip", "overflow", "facial", "ejaculation", "pussy juice", "precum",
-    "sex", "vaginal", "anal", "oral", "fellatio", "irrumatio", "paizuri", "perpendicular paizuri", "cooperative paizuri",
-    "handjob", "footjob", "two-footed footjob", "fingering", "masturbation", "instant loss",
-    "doggystyle", "missionary", "cowgirl position", "squatting cowgirl position", "reverse cowgirl position", "standing sex", "sex from behind", "mating press", "suspended congress", "sandwiched", "spitroast",
-    "grabbing", "grabbing from behind", "grabbing own breast", "breast grab", "ass grab", "arm grab", "hair grab", "torso grab", "neck grab", "reach-around", "kiss", "french kiss", "after sex", "after vaginal",
-    "faceless", "faceless male", "bald", "fat", "fat man", "manly", "muscular", "muscular male", "dark-skinned male", "old man", "siblings",
+# 周囲画像の仲間判定およびチャームポイント選出から除外するカテゴリー・サブカテゴリー定義
+NON_CHARACTER_CATEGORIES = {
+    "meta",
+    "expression_pose",
 }
 
-# チャームポイント選出時に追加で除外する「背景・家具・基本髪長・大枠の汎用衣類」タグ
+NON_CHARACTER_SUB_CATEGORIES = {
+    "clothing_state",
+    "underwear",
+    "chest",
+    "body_part",
+    "physique",
+    "eye_state",
+    "effect",
+    "scene",
+}
+
+# チャームポイント選出時に追加で除外する「家具・基本髪長・大枠の汎用衣類」タグ
 SCENE_AND_GENERIC_TAGS = {
-    "tatami", "futon", "pillow", "pillow grab", "bed", "on bed", "bed sheet", "bedding",
-    "sliding doors", "shouji", "window", "curtains", "chair", "desk", "table", "couch", "sofa", "floor", "on floor", "wooden floor",
+    "tatami", "futon", "pillow", "bed", "bed sheet", "bedding",
+    "sliding doors", "shouji", "window", "curtains", "chair", "desk", "table", "couch", "sofa", "floor", "wooden floor",
     "long hair", "short hair", "very long hair", "medium hair", "bangs", "hair between eyes", "sidelocks", "blunt bangs", "crossed bangs", "parted bangs", "swept bangs",
     "long sleeves", "short sleeves", "wide sleeves", "sleeves past wrists", "skirt", "pleated skirt", "shirt", "white shirt", "dress", "jacket", "shoes", "gloves", "socks", "thighhighs", "jewelry", "hair ornament", "ribbon", "bow",
 }
@@ -135,8 +112,58 @@ class TagSearch:
         # 辞書ロード (10万語 + 手動修正)
         self.alias_map = self._load_all_aliases()
 
+        # タグカテゴリー辞書ロード (data/tag_categories.csv)
+        self.tag_categories = self._load_tag_categories()
+
         # DB内タグのオンメモリ集計
         self._build_tag_counts()
+
+    def _load_tag_categories(
+        self, path: str = "data/tag_categories.csv"
+    ) -> dict[str, tuple[str, str]]:
+        """
+        data/tag_categories.csv をロードして {スペース区切りタグ名: (category, sub_category)} の辞書を返す。
+        万が一ファイルが未生成の場合は scripts.download_assets.build_tag_categories() で自動生成する。
+        """
+        if not os.path.exists(path):
+            try:
+                from scripts.download_assets import build_tag_categories
+
+                build_tag_categories(output_path=path)
+            except Exception as e:
+                print(f"    [!] Failed to auto-build {path}: {e}")
+
+        categories: dict[str, tuple[str, str]] = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        t = row.get("tag")
+                        cat = row.get("category")
+                        sub_cat = row.get("sub_category")
+                        if not t or not cat or not sub_cat:
+                            continue
+                        norm_tag = t.strip().lower().replace("_", " ")
+                        categories[norm_tag] = (cat.strip(), sub_cat.strip())
+                print(f"    - Loaded {len(categories)} tag categories from {path}")
+            except Exception as e:
+                print(f"    [!] Failed to load {path}: {e}")
+        return categories
+
+    def _is_non_character_tag(self, norm_tag: str) -> bool:
+        """
+        指定タグ（スペース区切り小文字）がポーズ・行為・表情・身体部位・メタ等の
+        キャラ固有判定から除外すべきタグかどうかをカテゴリー辞書から判定する
+        """
+        cat_info = self.tag_categories.get(norm_tag)
+        if not cat_info:
+            return False
+        cat, sub_cat = cat_info
+        return (
+            cat in NON_CHARACTER_CATEGORIES
+            or sub_cat in NON_CHARACTER_SUB_CATEGORIES
+        )
 
     def _load_all_aliases(self):
         """10万語辞書と手動辞書を統合してロード"""
@@ -670,7 +697,9 @@ class TagSearch:
 
                 n_hairs = {t for t in n_tags if t in VALID_HAIR_COLORS}
                 hair_overlap = bool(t_hairs & n_hairs)
-                common = (t_tags & n_tags) - POSE_ACT_META_TAGS
+                common = {
+                    t for t in (t_tags & n_tags) if not self._is_non_character_tag(t)
+                }
                 score = sum(
                     self._get_tag_idf(t) ** 2
                     for t in common
@@ -764,7 +793,7 @@ class TagSearch:
             for t, cnt in tag_counter.items():
                 if cnt < min_charm_count:
                     continue
-                if t in POSE_ACT_META_TAGS or t in SCENE_AND_GENERIC_TAGS:
+                if self._is_non_character_tag(t) or t in SCENE_AND_GENERIC_TAGS:
                     continue
                 if _is_hair_color_tag(t) or t in VALID_EYE_COLORS:
                     continue
