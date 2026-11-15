@@ -415,10 +415,14 @@ class TagSearch:
             return final_query, {final_query: 1.0}
 
     def calculate_image_score_with_details(
-        self, image_tags_str, search_groups, parsed_tag_scores
+        self,
+        image_tags_str,
+        search_groups,
+        parsed_tag_scores,
+        optional_search_groups=None,
     ):
         total_score = 0.0
-        matched_details = []
+        matched_by_tag = {}
         if not image_tags_str:
             return 0.0, []
 
@@ -426,9 +430,13 @@ class TagSearch:
             t.strip().lower().replace("_", " ") for t in image_tags_str.split(",")
         }
 
-        for group_map in search_groups:
+        group_entries = [(g, False) for g in search_groups]
+        if optional_search_groups:
+            group_entries.extend((g, True) for g in optional_search_groups)
+
+        for group_map, is_optional in group_entries:
             group_max_score = 0.0
-            best_match_detail = None
+            group_matches = []
 
             for search_tag, sim_score in group_map.items():
                 norm_search_tag = search_tag.lower().replace("_", " ")
@@ -444,20 +452,33 @@ class TagSearch:
 
                     final_word_score = sim_weight * ai_weight * idf_weight
 
+                    detail = {
+                        "tag": norm_search_tag,
+                        "final": final_word_score,
+                        "sim": sim_weight,
+                        "ai": ai_weight,
+                        "idf": idf_weight,
+                        "is_optional": is_optional,
+                    }
+                    group_matches.append(detail)
                     if final_word_score > group_max_score:
                         group_max_score = final_word_score
-                        best_match_detail = {
-                            "tag": norm_search_tag,
-                            "final": final_word_score,
-                            "sim": sim_weight,
-                            "ai": ai_weight,
-                            "idf": idf_weight,
-                        }
 
-            if best_match_detail:
+            if group_matches:
                 total_score += group_max_score
-                matched_details.append(best_match_detail)
+                for detail in group_matches:
+                    tag_key = detail["tag"]
+                    prev = matched_by_tag.get(tag_key)
+                    if prev is None:
+                        matched_by_tag[tag_key] = detail
+                    else:
+                        # 必須ヒットと任意(?)ヒットが重複した場合は必須ヒット(is_optional=False)を優先
+                        if prev.get("is_optional", False) and not is_optional:
+                            matched_by_tag[tag_key] = detail
+                        elif prev.get("is_optional", False) == is_optional and detail["final"] > prev["final"]:
+                            matched_by_tag[tag_key] = detail
 
+        matched_details = list(matched_by_tag.values())
         return total_score, matched_details
 
     def search(self, user_query, trash_only=False):
@@ -607,7 +628,10 @@ class TagSearch:
             row["parsed_tag_scores"] = scores_dict
 
             score, matches = self.calculate_image_score_with_details(
-                row["tags_combined"], search_groups, row["parsed_tag_scores"]
+                row["tags_combined"],
+                required_search_groups,
+                row["parsed_tag_scores"],
+                optional_search_groups=optional_search_groups,
             )
 
             row["match_score"] = score

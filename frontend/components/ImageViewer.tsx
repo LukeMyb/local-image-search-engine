@@ -64,6 +64,15 @@ interface SearchResult {
   tags_combined?: string;
   tag_scores?: string;
   parsed_tag_scores?: Record<string, number>;
+  matched_tags?: {
+    tag: string;
+    is_style?: boolean;
+    is_optional?: boolean;
+    final?: number;
+    sim?: number;
+    ai?: number;
+    idf?: number;
+  }[];
   [key: string]: any; // 他のプロパティも許容
 }
 
@@ -969,6 +978,24 @@ export default function ImageViewer({
 
   const savedDateText = formatSavedDate(selectedImage.file_mtime);
 
+  // 現在の検索でヒットしたタグ名のマップ（正規化済みスペース区切り小文字 -> "required" | "optional"）
+  const matchedTagsMap = useMemo(() => {
+    const map = new Map<string, "required" | "optional">();
+    if (Array.isArray(selectedImage.matched_tags)) {
+      for (const m of selectedImage.matched_tags) {
+        if (m && typeof m.tag === "string" && !m.is_style) {
+          const normKey = m.tag.toLowerCase().replace(/_/g, " ").trim();
+          const type: "required" | "optional" = m.is_optional ? "optional" : "required";
+          // すでに required として登録されている場合は optional で上書きしない
+          if (map.get(normKey) !== "required") {
+            map.set(normKey, type);
+          }
+        }
+      }
+    }
+    return map;
+  }, [selectedImage.matched_tags]);
+
   // 画像のタグ一覧とAI確信度スコア・カテゴリー・出現件数を解析・ソートする
   const sortedTagItems = useMemo(() => {
     if (!selectedImage.tags_combined) return [];
@@ -996,7 +1023,8 @@ export default function ImageViewer({
       const category = catPair ? catPair[0] : "other";
       const subCategory = catPair ? catPair[1] : "object";
       const count = tagMetadata?.counts?.[norm] ?? null;
-      return { tag, norm, score, category, subCategory, count };
+      const matchType = matchedTagsMap.get(norm) ?? null;
+      return { tag, norm, score, category, subCategory, count, matchType };
     });
 
     if (tagSortMode === "abc") {
@@ -1016,7 +1044,17 @@ export default function ImageViewer({
     }
 
     return items;
-  }, [selectedImage.tags_combined, selectedImage.tag_scores, selectedImage.parsed_tag_scores, tagSortMode, tagMetadata]);
+  }, [selectedImage.tags_combined, selectedImage.tag_scores, selectedImage.parsed_tag_scores, tagSortMode, tagMetadata, matchedTagsMap]);
+
+  const { requiredMatchCount, optionalMatchCount } = useMemo(() => {
+    let required = 0;
+    let optional = 0;
+    for (const item of sortedTagItems) {
+      if (item.matchType === "required") required++;
+      else if (item.matchType === "optional") optional++;
+    }
+    return { requiredMatchCount: required, optionalMatchCount: optional };
+  }, [sortedTagItems]);
 
   // カテゴリー別表示用のグループ化データ
   const groupedTagSections = useMemo(() => {
@@ -1313,6 +1351,16 @@ export default function ImageViewer({
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
             <p className="text-xs text-zinc-400 font-medium">
               タグ一覧 {sortedTagItems.length > 0 && <span className="text-zinc-500">({sortedTagItems.length})</span>}
+              {requiredMatchCount > 0 && (
+                <span className="ml-2 text-emerald-400 font-medium">
+                  · 検索一致 {requiredMatchCount}
+                </span>
+              )}
+              {optionalMatchCount > 0 && (
+                <span className="ml-2 text-amber-400 font-medium">
+                  · ?一致 {optionalMatchCount}
+                </span>
+              )}
             </p>
 
             {sortedTagItems.length > 0 && (
@@ -1391,14 +1439,28 @@ export default function ImageViewer({
                       {section.label}
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {section.items.map(({ tag, score }) => (
+                      {section.items.map(({ tag, score, matchType }) => (
                         <span
                           key={tag}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-xs text-zinc-200 leading-none"
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs leading-none ${
+                            matchType === "required"
+                              ? "bg-emerald-500/20 border-emerald-400/70 text-emerald-200 font-medium shadow-sm"
+                              : matchType === "optional"
+                              ? "bg-amber-500/20 border-amber-400/70 text-amber-200 font-medium shadow-sm"
+                              : "bg-zinc-800/90 border-zinc-700/60 text-zinc-200"
+                          }`}
                         >
                           <span>{tag}</span>
                           {showTagScores && score !== null && (
-                            <span className="text-[10px] text-zinc-400 font-mono">
+                            <span
+                              className={`text-[10px] font-mono ${
+                                matchType === "required"
+                                  ? "text-emerald-300/90"
+                                  : matchType === "optional"
+                                  ? "text-amber-300/90"
+                                  : "text-zinc-400"
+                              }`}
+                            >
                               {score.toFixed(2)}
                             </span>
                           )}
@@ -1410,19 +1472,41 @@ export default function ImageViewer({
               </div>
             ) : (
               <div className="flex flex-wrap gap-1.5 select-text">
-                {sortedTagItems.map(({ tag, score, count }) => (
+                {sortedTagItems.map(({ tag, score, count, matchType }) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-xs text-zinc-200 leading-none"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs leading-none ${
+                      matchType === "required"
+                        ? "bg-emerald-500/20 border-emerald-400/70 text-emerald-200 font-medium shadow-sm"
+                        : matchType === "optional"
+                        ? "bg-amber-500/20 border-amber-400/70 text-amber-200 font-medium shadow-sm"
+                        : "bg-zinc-800/90 border-zinc-700/60 text-zinc-200"
+                    }`}
                   >
                     <span>{tag}</span>
                     {showTagScores && tagSortMode === "rarity" && count !== null && (
-                      <span className="text-[10px] text-amber-300/80 font-mono">
+                      <span
+                        className={`text-[10px] font-mono ${
+                          matchType === "required"
+                            ? "text-emerald-300/95"
+                            : matchType === "optional"
+                            ? "text-amber-200/95"
+                            : "text-amber-300/80"
+                        }`}
+                      >
                         {count}件
                       </span>
                     )}
                     {showTagScores && score !== null && (
-                      <span className="text-[10px] text-zinc-400 font-mono">
+                      <span
+                        className={`text-[10px] font-mono ${
+                          matchType === "required"
+                            ? "text-emerald-300/90"
+                            : matchType === "optional"
+                            ? "text-amber-300/90"
+                            : "text-zinc-400"
+                        }`}
+                      >
                         {score.toFixed(2)}
                       </span>
                     )}

@@ -113,6 +113,7 @@ def search(q: str = "", sort: str = "score", favorite_only: bool = False, trash_
     """
     if not q.strip():
         # クエリが空なら全件検索 (SQLでソート)
+        search_manager.last_matched_tags_map = {}
         cursor = search_manager.db.conn.cursor()
         deleted_flag = 1 if trash_only else 0
         query_sql = f"SELECT * FROM images WHERE is_deleted = {deleted_flag}"
@@ -135,6 +136,11 @@ def search(q: str = "", sort: str = "score", favorite_only: bool = False, trash_
             print(f"履歴の保存に失敗しました: {e}")
 
         results = search_manager.search(q, sort_order=sort, trash_only=trash_only)
+        search_manager.last_matched_tags_map = {
+            img["id"]: img.get("matched_tags", [])
+            for img in results
+            if img.get("matched_tags")
+        }
 
         # お気に入りのみフィルターがONの場合は絞り込む
         if favorite_only:
@@ -166,6 +172,11 @@ def get_images_batch(request: BatchImageRequest):
     """
     # SearchManagerが持っているdbインスタンスの新しいメソッドを呼び出す
     results = search_manager.db.get_images_by_ids(request.ids)
+    matched_map = getattr(search_manager, "last_matched_tags_map", {})
+    if matched_map:
+        for row in results:
+            if row["id"] in matched_map:
+                row["matched_tags"] = matched_map[row["id"]]
     return {"results": results}
 
 @app.post("/images/trash")
