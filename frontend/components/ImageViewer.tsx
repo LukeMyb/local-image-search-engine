@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { X, Heart, ChevronLeft, ChevronRight, Search, Trash2, RotateCcw, CornerUpRight } from "lucide-react";
+import { X, Heart, ChevronLeft, ChevronRight, Search, Trash2, RotateCcw, CornerUpRight, Check } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
 type TagSortMode = "category" | "abc" | "rarity" | "score";
@@ -184,6 +184,51 @@ export default function ImageViewer({
       return next;
     });
   };
+
+  // ワンタップでタグ名（アンダースコア形式）をクリップボードにコピーするStateとハンドラー
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCopyTag = useCallback(async (rawTag: string) => {
+    const formatted = rawTag.trim().replace(/\s+/g, "_");
+    let copied = false;
+
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(formatted);
+        copied = true;
+      } catch {
+        copied = false;
+      }
+    }
+
+    // スマホ等のLAN内HTTP接続（非セキュアコンテキスト）向けのフォールバック
+    if (!copied && typeof document !== "undefined") {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = formatted;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        textarea.style.pointerEvents = "none";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } catch {
+        // コピー失敗時は無視
+      }
+    }
+
+    setCopiedTag(rawTag);
+    if (copyTimerRef.current) {
+      clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = setTimeout(() => {
+      setCopiedTag(null);
+      copyTimerRef.current = null;
+    }, 1500);
+  }, []);
 
   // ゴミ箱移動の確認ダイアログの開閉状態を管理するState
   const [isTrashDialogOpen, setIsTrashDialogOpen] = useState(false);
@@ -375,6 +420,9 @@ export default function ImageViewer({
       if (tapTimerRef.current) {
         clearTimeout(tapTimerRef.current);
       }
+      if (copyTimerRef.current) {
+        clearTimeout(copyTimerRef.current);
+      }
     };
   }, [stopZoomAnimation]); // 初回マウント時のみ実行
 
@@ -383,6 +431,7 @@ export default function ImageViewer({
     stopZoomAnimation();
     setIsDetailOpen(false);
     setIsTrashDialogOpen(false);
+    setCopiedTag(null);
     setDragX(0);
     setSwipeDirection(null);
     updateZoomState(1, 0, 0);
@@ -1349,8 +1398,10 @@ export default function ImageViewer({
           
           {/* タグ一覧ヘッダー＆ソート切り替えコントロール */}
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-            <p className="text-xs text-zinc-400 font-medium">
-              タグ一覧 {sortedTagItems.length > 0 && <span className="text-zinc-500">({sortedTagItems.length})</span>}
+            <p className="text-xs text-zinc-400 font-medium flex flex-wrap items-center gap-y-1">
+              <span>
+                タグ一覧 {sortedTagItems.length > 0 && <span className="text-zinc-500">({sortedTagItems.length})</span>}
+              </span>
               {requiredMatchCount > 0 && (
                 <span className="ml-2 text-emerald-400 font-medium">
                   · 検索一致 {requiredMatchCount}
@@ -1359,6 +1410,11 @@ export default function ImageViewer({
               {optionalMatchCount > 0 && (
                 <span className="ml-2 text-amber-400 font-medium">
                   · ?一致 {optionalMatchCount}
+                </span>
+              )}
+              {copiedTag && (
+                <span className="ml-2 text-sky-300 font-mono text-[11px]">
+                  · ✓ {copiedTag.trim().replace(/\s+/g, "_")} をコピー
                 </span>
               )}
             </p>
@@ -1439,79 +1495,103 @@ export default function ImageViewer({
                       {section.label}
                     </span>
                     <div className="flex flex-wrap gap-1.5">
-                      {section.items.map(({ tag, score, matchType }) => (
-                        <span
-                          key={tag}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs leading-none ${
-                            matchType === "required"
-                              ? "bg-emerald-500/20 border-emerald-400/70 text-emerald-200 font-medium shadow-sm"
-                              : matchType === "optional"
-                              ? "bg-amber-500/20 border-amber-400/70 text-amber-200 font-medium shadow-sm"
-                              : "bg-zinc-800/90 border-zinc-700/60 text-zinc-200"
-                          }`}
-                        >
-                          <span>{tag}</span>
-                          {showTagScores && score !== null && (
-                            <span
-                              className={`text-[10px] font-mono ${
-                                matchType === "required"
-                                  ? "text-emerald-300/90"
-                                  : matchType === "optional"
-                                  ? "text-amber-300/90"
-                                  : "text-zinc-400"
-                              }`}
-                            >
-                              {score.toFixed(2)}
-                            </span>
-                          )}
-                        </span>
-                      ))}
+                      {section.items.map(({ tag, score, matchType }) => {
+                        const isCopied = copiedTag === tag;
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => handleCopyTag(tag)}
+                            title={`タップしてコピー (${tag.trim().replace(/\s+/g, "_")})`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs leading-none transition-all cursor-pointer active:scale-95 ${
+                              isCopied
+                                ? "bg-sky-500/25 border-sky-400 text-sky-200 font-medium shadow-sm"
+                                : matchType === "required"
+                                ? "bg-emerald-500/20 border-emerald-400/70 text-emerald-200 hover:bg-emerald-500/30 font-medium shadow-sm"
+                                : matchType === "optional"
+                                ? "bg-amber-500/20 border-amber-400/70 text-amber-200 hover:bg-amber-500/30 font-medium shadow-sm"
+                                : "bg-zinc-800/90 border-zinc-700/60 text-zinc-200 hover:bg-zinc-700/80 hover:border-zinc-600"
+                            }`}
+                          >
+                            {isCopied && <Check size={11} className="text-sky-300 shrink-0" />}
+                            <span>{tag}</span>
+                            {showTagScores && score !== null && (
+                              <span
+                                className={`text-[10px] font-mono ${
+                                  isCopied
+                                    ? "text-sky-300/90"
+                                    : matchType === "required"
+                                    ? "text-emerald-300/90"
+                                    : matchType === "optional"
+                                    ? "text-amber-300/90"
+                                    : "text-zinc-400"
+                                }`}
+                              >
+                                {score.toFixed(2)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="flex flex-wrap gap-1.5 select-text">
-                {sortedTagItems.map(({ tag, score, count, matchType }) => (
-                  <span
-                    key={tag}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs leading-none ${
-                      matchType === "required"
-                        ? "bg-emerald-500/20 border-emerald-400/70 text-emerald-200 font-medium shadow-sm"
-                        : matchType === "optional"
-                        ? "bg-amber-500/20 border-amber-400/70 text-amber-200 font-medium shadow-sm"
-                        : "bg-zinc-800/90 border-zinc-700/60 text-zinc-200"
-                    }`}
-                  >
-                    <span>{tag}</span>
-                    {showTagScores && tagSortMode === "rarity" && count !== null && (
-                      <span
-                        className={`text-[10px] font-mono ${
-                          matchType === "required"
-                            ? "text-emerald-300/95"
-                            : matchType === "optional"
-                            ? "text-amber-200/95"
-                            : "text-amber-300/80"
-                        }`}
-                      >
-                        {count}件
-                      </span>
-                    )}
-                    {showTagScores && score !== null && (
-                      <span
-                        className={`text-[10px] font-mono ${
-                          matchType === "required"
-                            ? "text-emerald-300/90"
-                            : matchType === "optional"
-                            ? "text-amber-300/90"
-                            : "text-zinc-400"
-                        }`}
-                      >
-                        {score.toFixed(2)}
-                      </span>
-                    )}
-                  </span>
-                ))}
+                {sortedTagItems.map(({ tag, score, count, matchType }) => {
+                  const isCopied = copiedTag === tag;
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => handleCopyTag(tag)}
+                      title={`タップしてコピー (${tag.trim().replace(/\s+/g, "_")})`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs leading-none transition-all cursor-pointer active:scale-95 ${
+                        isCopied
+                          ? "bg-sky-500/25 border-sky-400 text-sky-200 font-medium shadow-sm"
+                          : matchType === "required"
+                          ? "bg-emerald-500/20 border-emerald-400/70 text-emerald-200 hover:bg-emerald-500/30 font-medium shadow-sm"
+                          : matchType === "optional"
+                          ? "bg-amber-500/20 border-amber-400/70 text-amber-200 hover:bg-amber-500/30 font-medium shadow-sm"
+                          : "bg-zinc-800/90 border-zinc-700/60 text-zinc-200 hover:bg-zinc-700/80 hover:border-zinc-600"
+                      }`}
+                    >
+                      {isCopied && <Check size={11} className="text-sky-300 shrink-0" />}
+                      <span>{tag}</span>
+                      {showTagScores && tagSortMode === "rarity" && count !== null && (
+                        <span
+                          className={`text-[10px] font-mono ${
+                            isCopied
+                              ? "text-sky-300/95"
+                              : matchType === "required"
+                              ? "text-emerald-300/95"
+                              : matchType === "optional"
+                              ? "text-amber-200/95"
+                              : "text-amber-300/80"
+                          }`}
+                        >
+                          {count}件
+                        </span>
+                      )}
+                      {showTagScores && score !== null && (
+                        <span
+                          className={`text-[10px] font-mono ${
+                            isCopied
+                              ? "text-sky-300/90"
+                              : matchType === "required"
+                              ? "text-emerald-300/90"
+                              : matchType === "optional"
+                              ? "text-amber-300/90"
+                              : "text-zinc-400"
+                          }`}
+                        >
+                          {score.toFixed(2)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )
           ) : (
