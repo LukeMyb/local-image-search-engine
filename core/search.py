@@ -125,6 +125,13 @@ class SearchManager:
         # それ以外は純粋なタグ検索のサジェストに丸投げ
         return self.tag_searcher.get_suggestions(query_text, limit)
 
+    def build_similar_query(self, image_id: int, use_neighbors: bool = False) -> dict:
+        """指定された画像ID（および必要に応じ周囲±3枚の画像）から類似キャラ検索クエリを生成する"""
+        return self.tag_searcher.build_similar_query(
+            image_id=image_id, use_neighbors=use_neighbors
+        )
+
+
     def search(self, user_query, sort_order="score", trash_only=False):
         self.heavy_engine.touch()
         style_match = re.search(r"style:([^\s|]+)", user_query)

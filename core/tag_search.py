@@ -10,6 +10,110 @@ from core.database import ImageDatabase
 from core.heavy_worker import HeavyEngineManager
 
 
+# 類似画像検索（キャラ検索）で使用する髪色・目の色・除外タグ定義
+VALID_HAIR_COLORS = {
+    "blonde hair",
+    "brown hair",
+    "black hair",
+    "blue hair",
+    "purple hair",
+    "pink hair",
+    "white hair",
+    "red hair",
+    "grey hair",
+    "gray hair",
+    "green hair",
+    "silver hair",
+    "orange hair",
+    "aqua hair",
+    "light blue hair",
+    "light green hair",
+    "dark blue hair",
+    "dark brown hair",
+}
+
+VALID_EYE_COLORS = {
+    "blue eyes",
+    "red eyes",
+    "brown eyes",
+    "green eyes",
+    "purple eyes",
+    "yellow eyes",
+    "pink eyes",
+    "black eyes",
+    "aqua eyes",
+    "orange eyes",
+    "grey eyes",
+    "gray eyes",
+    "white eyes",
+    "multicolored eyes",
+}
+
+MULTICOLOR_KEYWORDS = (
+    "multicolored",
+    "two-tone",
+    "streaked",
+    "colored inner",
+    "split-color",
+)
+
+# 周囲画像の仲間判定およびチャームポイント選出から除外する「ポーズ・行為・表情・身体部位・メタ」タグ
+POSE_ACT_META_TAGS = {
+    "1girl", "2girls", "3girls", "4girls", "5girls", "6+girls", "multiple girls",
+    "1boy", "2boys", "3boys", "multiple boys", "solo", "solo focus", "male focus",
+    "hetero", "yuri", "yaoi", "threesome", "ffm threesome", "mmf threesome", "group sex",
+    "clothed female nude male", "clothed male nude female", "clothed sex",
+    "comic", "2koma", "3koma", "4koma", "speech bubble", "thought bubble",
+    "monochrome", "greyscale", "spot color", "oekaki", "jaggy lines", "web address", "english text",
+    "censored", "uncensored", "mosaic censoring", "bar censor", "light censor", "convenient censoring",
+    "pov", "from behind", "from above", "from below", "from side", "dutch angle",
+    "upper body", "lower body", "cowboy shot", "full body", "portrait", "close-up",
+    "looking at viewer", "looking at another", "looking back", "looking up", "looking down", "looking away", "eye contact",
+    "simple background", "white background", "black background", "grey background", "transparent background",
+    "gradient background", "pattern background", "abstract background", "indoors", "outdoors",
+    "heart", "hearts", "sweat", "sweatdrop", "flying sweatdrops", "anger vein", "spoken anger vein", "motion lines", "speed lines", "sparkles", "blush",
+    "smile", "grin", "light smile", "evil smile", "seductive smile", "smirk", "frown", "angry", "annoyed", "embarrassed", "shy", "sad", "crying", "tears", "streaming tears",
+    "open mouth", "closed mouth", "parted lips", "wavy mouth", "dot mouth", "tongue", "tongue out", "saliva", "saliva trail", "drooling", "teeth",
+    "closed eyes", "one eye closed", "half-closed eyes", "narrowed eyes", "wide-eyed", "empty eyes", "rolling eyes", "cross-eyed", "ahegao", "torogao", "naughty face", "fucked silly",
+    "heart-shaped pupils", "symbol-shaped pupils", "slit pupils", "glowing eyes",
+    "v-shaped eyebrows", "furrowed brow", "raised eyebrow", "trembling", "heavy breathing", "spoken heart",
+    "standing", "sitting", "lying", "on back", "on stomach", "on side", "all fours", "kneeling", "squatting", "leaning forward", "bent over", "arched back",
+    "spread legs", "legs up", "legs apart", "knees up", "knees together feet apart", "crossed legs",
+    "arms up", "arm up", "arms behind back", "arms behind head", "crossed arms", "outstretched arms",
+    "hand on own face", "hand on own chest", "hand on own hip", "hand on another's head", "head rest", "arm support", "holding", "holding hands", "holding another's wrist",
+    "hug", "hug from behind", "sitting on lap", "sitting on person", "straddling", "upright straddle", "reverse upright straddle", "girl on top", "top-down bottom-up", "the pose",
+    "undressing", "clothes pull", "skirt lift", "shirt lift", "bra lift", "panties aside", "leotard aside", "clothing aside", "open clothes", "unbuttoned", "unzipped", "off shoulder", "single bare shoulder", "bare shoulders", "pulled by self",
+    "breasts", "small breasts", "medium breasts", "large breasts", "huge breasts", "gigantic breasts", "flat chest",
+    "cleavage", "sideboob", "underboob", "backboob", "breasts out", "breasts apart", "breasts squeezed together", "hanging breasts", "bouncing breasts", "breast envy", "one breast out",
+    "nipples", "puffy nipples", "inverted nipples", "areolae", "areola slip",
+    "navel", "covered navel", "stomach", "midriff", "collarbone", "back", "bare back", "ass", "buttocks", "hips", "wide hips", "thighs", "thick thighs", "thigh gap", "groin", "armpits", "soles", "toes", "feet", "barefoot", "feet up",
+    "nude", "completely nude", "topless", "bottomless", "no bra", "no panties", "underwear", "panties", "bra",
+    "pussy", "anus", "penis", "veiny penis", "veins", "testicles", "erection", "pubic hair", "female pubic hair", "male pubic hair",
+    "cum", "cum in pussy", "cum on body", "cum on breasts", "cum on face", "cum in mouth", "cum on stomach", "cum on ass", "cum drip", "overflow", "facial", "ejaculation", "pussy juice", "precum",
+    "sex", "vaginal", "anal", "oral", "fellatio", "irrumatio", "paizuri", "perpendicular paizuri", "cooperative paizuri",
+    "handjob", "footjob", "two-footed footjob", "fingering", "masturbation", "instant loss",
+    "doggystyle", "missionary", "cowgirl position", "squatting cowgirl position", "reverse cowgirl position", "standing sex", "sex from behind", "mating press", "suspended congress", "sandwiched", "spitroast",
+    "grabbing", "grabbing from behind", "grabbing own breast", "breast grab", "ass grab", "arm grab", "hair grab", "torso grab", "neck grab", "reach-around", "kiss", "french kiss", "after sex", "after vaginal",
+    "faceless", "faceless male", "bald", "fat", "fat man", "manly", "muscular", "muscular male", "dark-skinned male", "old man", "siblings",
+}
+
+# チャームポイント選出時に追加で除外する「背景・家具・基本髪長・大枠の汎用衣類」タグ
+SCENE_AND_GENERIC_TAGS = {
+    "tatami", "futon", "pillow", "pillow grab", "bed", "on bed", "bed sheet", "bedding",
+    "sliding doors", "shouji", "window", "curtains", "chair", "desk", "table", "couch", "sofa", "floor", "on floor", "wooden floor",
+    "long hair", "short hair", "very long hair", "medium hair", "bangs", "hair between eyes", "sidelocks", "blunt bangs", "crossed bangs", "parted bangs", "swept bangs",
+    "long sleeves", "short sleeves", "wide sleeves", "sleeves past wrists", "skirt", "pleated skirt", "shirt", "white shirt", "dress", "jacket", "shoes", "gloves", "socks", "thighhighs", "jewelry", "hair ornament", "ribbon", "bow",
+}
+
+
+def _is_hair_color_tag(norm_tag: str) -> bool:
+    return norm_tag in VALID_HAIR_COLORS or (
+        norm_tag.endswith(" hair")
+        and any(k in norm_tag for k in MULTICOLOR_KEYWORDS)
+    )
+
+
+
 class TagSearch:
     """
     タグ検索エンジン（軽量モード・重量モード統合版）
@@ -488,3 +592,200 @@ class TagSearch:
         )
 
         return scored_results
+
+    def _get_tag_idf(self, norm_tag: str) -> float:
+        """DB全体における指定タグのレア度（IDF）を算出する"""
+        db_count = self.tag_counts.get(norm_tag, 0)
+        total_imgs = max(self.total_images, 1)
+        return math.log10(total_imgs / max(db_count, 10))
+
+    def build_similar_query(self, image_id: int, use_neighbors: bool = False) -> dict:
+        """
+        指定画像の類似キャラ検索用クエリを構築する。
+        use_neighbors=True の場合は前後±3枚の画像のタグを分析し、
+        1. 共通するレアタグの重み合計から同じセット（同キャラ）の周囲画像を特定（保存日時の時間差は不問）
+        2. 仲間内の髪色・目の色のブレをOR（|）で統合
+        3. 緩い論理積（多数決）からDB全体でレア度（IDF）が高い上位タグをチャームポイント（?加点タグ）として抽出
+        """
+        target = self.db.get_image_by_id(image_id)
+        if not target or not target.get("tags_combined"):
+            return {
+                "query": "",
+                "matched_neighbor_ids": [],
+                "charm_tags": [],
+            }
+
+        raw_target_tags = [
+            t.strip().lower().replace("_", " ")
+            for t in target["tags_combined"].split(",")
+            if t.strip()
+        ]
+        t_tags = set(raw_target_tags)
+        t_hairs = {t for t in t_tags if t in VALID_HAIR_COLORS}
+
+        matched_neighbors = []
+        if use_neighbors:
+            cursor = self.db.conn.cursor()
+            deleted_flag = int(target.get("is_deleted", 0))
+            t_mtime = target["file_mtime"]
+            t_id = target["id"]
+
+            # 並び順（file_mtime, id）において対象画像の前後3枚ずつ（計最大6枚）を取得
+            cursor.execute(
+                """
+                SELECT id, tags_combined
+                FROM images
+                WHERE is_deleted = ?
+                  AND (file_mtime < ? OR (file_mtime = ? AND id < ?))
+                ORDER BY file_mtime DESC, id DESC
+                LIMIT 3
+                """,
+                (deleted_flag, t_mtime, t_mtime, t_id),
+            )
+            older_neighbors = [dict(r) for r in cursor.fetchall()]
+
+            cursor.execute(
+                """
+                SELECT id, tags_combined
+                FROM images
+                WHERE is_deleted = ?
+                  AND (file_mtime > ? OR (file_mtime = ? AND id > ?))
+                ORDER BY file_mtime ASC, id ASC
+                LIMIT 3
+                """,
+                (deleted_flag, t_mtime, t_mtime, t_id),
+            )
+            newer_neighbors = [dict(r) for r in cursor.fetchall()]
+
+            candidates = list(reversed(older_neighbors)) + newer_neighbors
+            for n in candidates:
+                n_tags_str = n.get("tags_combined") or ""
+                n_tags = {
+                    t.strip().lower().replace("_", " ")
+                    for t in n_tags_str.split(",")
+                    if t.strip()
+                }
+                if not n_tags:
+                    continue
+
+                n_hairs = {t for t in n_tags if t in VALID_HAIR_COLORS}
+                hair_overlap = bool(t_hairs & n_hairs)
+                common = (t_tags & n_tags) - POSE_ACT_META_TAGS
+                score = sum(
+                    self._get_tag_idf(t) ** 2
+                    for t in common
+                    if self._get_tag_idf(t) >= 0.65
+                )
+                threshold = 3.2 if hair_overlap else 10.0
+                if score >= threshold:
+                    matched_neighbors.append((n["id"], round(score, 2), n_tags))
+
+        all_tag_sets = [t_tags] + [nt for _, _, nt in matched_neighbors]
+        group_size = len(all_tag_sets)
+
+        # --- 1. 髪色タグの抽出（対象画像＋仲間内で半数以上に出現した髪色を統合） ---
+        hair_tags_ordered = [t for t in raw_target_tags if _is_hair_color_tag(t)]
+        if matched_neighbors:
+            hair_counter = Counter()
+            for tag_set in all_tag_sets:
+                for t in tag_set:
+                    if _is_hair_color_tag(t):
+                        hair_counter[t] += 1
+            min_hair_count = max(2, math.ceil(group_size * 0.5))
+            for t, cnt in hair_counter.items():
+                if cnt >= min_hair_count and t not in hair_tags_ordered:
+                    hair_tags_ordered.append(t)
+
+        if not hair_tags_ordered:
+            return {
+                "query": "",
+                "matched_neighbor_ids": [m[0] for m in matched_neighbors],
+                "charm_tags": [],
+            }
+
+        multi_tags = [
+            t.replace(" ", "_")
+            for t in hair_tags_ordered
+            if any(k in t for k in MULTICOLOR_KEYWORDS)
+        ]
+        normal_tags = [
+            t.replace(" ", "_")
+            for t in hair_tags_ordered
+            if not any(k in t for k in MULTICOLOR_KEYWORDS)
+        ]
+
+        query_parts = []
+        if multi_tags:
+            query_parts.append("|".join(multi_tags))
+        if normal_tags:
+            if multi_tags:
+                query_parts.append(" ".join(normal_tags))
+            else:
+                query_parts.append("|".join(normal_tags))
+
+        # --- 2. 目の色タグの抽出（対象画像が目を閉じていても仲間から目の色を補完） ---
+        has_closed_eyes = "closed eyes" in t_tags
+        eye_tags_ordered = (
+            []
+            if has_closed_eyes
+            else [t for t in raw_target_tags if t in VALID_EYE_COLORS]
+        )
+        if matched_neighbors:
+            eye_counter = Counter()
+            open_eye_imgs = 0
+            for tag_set in all_tag_sets:
+                img_eyes = [t for t in tag_set if t in VALID_EYE_COLORS]
+                if img_eyes:
+                    open_eye_imgs += 1
+                    for t in img_eyes:
+                        eye_counter[t] += 1
+            min_eye_count = 1 if open_eye_imgs <= 1 else max(2, math.ceil(open_eye_imgs * 0.5))
+            for t, cnt in eye_counter.items():
+                if cnt >= min_eye_count and t not in eye_tags_ordered:
+                    eye_tags_ordered.append(t)
+
+        if eye_tags_ordered:
+            formatted_eyes = [t.replace(" ", "_") for t in eye_tags_ordered]
+            query_parts.append("|".join(["closed_eyes"] + formatted_eyes))
+        elif has_closed_eyes:
+            query_parts.append("closed_eyes")
+
+        # --- 3. チャームポイントの抽出（緩い論理積 × DB全体のIDF上位） ---
+        charm_tags = []
+        if matched_neighbors:
+            tag_counter = Counter()
+            for tag_set in all_tag_sets:
+                tag_counter.update(tag_set)
+
+            # 2〜3枚のときは完全一致（論理積）、4枚以上のときは1枚の抜けまで許容（多数決）
+            min_charm_count = group_size if group_size <= 3 else group_size - 1
+
+            charm_candidates = []
+            for t, cnt in tag_counter.items():
+                if cnt < min_charm_count:
+                    continue
+                if t in POSE_ACT_META_TAGS or t in SCENE_AND_GENERIC_TAGS:
+                    continue
+                if _is_hair_color_tag(t) or t in VALID_EYE_COLORS:
+                    continue
+                tag_idf = self._get_tag_idf(t)
+                if tag_idf < 0.85:
+                    continue
+                charm_candidates.append((t, cnt, tag_idf))
+
+            # 全画像一致（cnt == group_size）を最優先し、その中でレア度（IDF）が高い順にソート
+            charm_candidates.sort(
+                key=lambda item: (item[1] == group_size, item[2]),
+                reverse=True,
+            )
+            charm_tags = [item[0].replace(" ", "_") for item in charm_candidates[:3]]
+            for ct in charm_tags:
+                query_parts.append(f"?{ct}")
+
+        final_query = " ".join(query_parts).strip()
+        return {
+            "query": final_query,
+            "matched_neighbor_ids": [m[0] for m in matched_neighbors],
+            "charm_tags": charm_tags,
+        }
+

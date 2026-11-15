@@ -94,8 +94,7 @@ export default function Home() {
   // 検索バー右側のゴミ箱フィルターボタンを表示するかどうかのState（初期値はtrue）
   const [showTrashButton, setShowTrashButton] = useState(true);
 
-  // 類似画像検索時に周囲（保存日時が近い）の画像のタグも参照するかどうかのState（実験的機能・初期値はfalse）
-  // TODO: 現時点では設定値の保持のみで、executeSearchSimilar 側のロジックは未実装
+  // 類似画像検索時に周囲（前後±3枚）の画像のタグも参照するかどうかのState（実験的機能・初期値はfalse）
   const [useNeighborsForSimilar, setUseNeighborsForSimilar] = useState(false);
 
   // お気に入りフィルターのON/OFF状態を管理するState
@@ -518,11 +517,43 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedImage, isDrawerOpen, isSaveDialogOpen, isSettingsOpen, reloadGrid]);
 
-  // 類似画像検索（同じ髪色・目の色の検索）を実行する関数
-  const executeSearchSimilar = useCallback((image: any) => {
+  // 類似画像検索（同じ髪色・目の色＋設定ON時は周囲画像からチャームポイント抽出）を実行する関数
+  const executeSearchSimilar = useCallback(async (image: any) => {
     if (!image || !image.tags_combined) {
       alert("この画像にはタグ情報がありません。");
       return;
+    }
+
+    // 「周囲の画像を参照」がONの場合はバックエンドで前後±3枚の共通レアタグ・色ブレ補完を含めたクエリを生成
+    if (useNeighborsForSimilar && image.id) {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/similar-query/${image.id}?use_neighbors=true`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.query) {
+            alert("この画像には髪色のタグがありません。");
+            return;
+          }
+          setQuery(data.query);
+          setSelectedImage(null);
+          updateRandomSortState(false, null);
+          handleSearch(
+            data.query,
+            "score",
+            undefined,
+            undefined,
+            isFavoriteFilter,
+            null,
+            isTrashFilter
+          );
+          return;
+        }
+      } catch (error) {
+        console.error("周囲画像を参照した類似検索クエリ生成エラー:", error);
+        // エラー時は下の単一画像ロジックへフォールバック
+      }
     }
 
     // 色に関する明確な髪色タグの辞書（配列）
@@ -626,7 +657,7 @@ export default function Home() {
       updateRandomSortState(false, null);
       handleSearch(newQuery, "score", undefined, undefined, isFavoriteFilter, null, isTrashFilter);
     }
-  }, [handleSearch, isFavoriteFilter, isTrashFilter, updateRandomSortState]);
+  }, [handleSearch, isFavoriteFilter, isTrashFilter, updateRandomSortState, useNeighborsForSimilar]);
 
   // 検索窓をリセットし、ソート順を新着順にして現在の画像の位置へスクロール移動する関数
   const executeJumpToImage = useCallback((image: SearchResult) => {

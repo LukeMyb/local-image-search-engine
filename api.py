@@ -197,6 +197,19 @@ def suggest(q: str):
     return {"query": q, "suggestions": suggestions}
 
 
+@app.get("/similar-query/{image_id}")
+def get_similar_query(image_id: int, use_neighbors: bool = False):
+    """
+    指定された画像IDから類似キャラ検索用のクエリを生成して返す。
+    use_neighbors=True の場合は周囲（前後±3枚）の画像のタグも分析し、
+    チャームポイント（共通する高IDFタグ）や髪色・目の色のブレを補完したクエリを返す。
+    """
+    return search_manager.build_similar_query(
+        image_id=image_id, use_neighbors=use_neighbors
+    )
+
+
+
 @app.post("/favorite/{image_id}")
 def toggle_favorite(image_id: int):
     """
