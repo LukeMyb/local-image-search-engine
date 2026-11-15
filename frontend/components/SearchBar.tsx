@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Search, X, Menu, BookmarkPlus, BookmarkCheck, Trash2, Heart } from "lucide-react";
+import { Search, X, Undo2, Menu, BookmarkPlus, BookmarkCheck, Trash2, Heart } from "lucide-react";
 
 // サジェストの型定義
 interface Suggestion {
@@ -65,6 +65,15 @@ export default function SearchBar({
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [styleToDelete, setStyleToDelete] = useState<Suggestion | null>(null);
+  // ×ボタンで一括削除した直前のクエリを保持するState（Undo用）
+  const [clearedQuery, setClearedQuery] = useState("");
+
+  // 新しい文字が入力されたり外部からクエリがセットされたら、Undo用の保持クエリを破棄する
+  useEffect(() => {
+    if (query) {
+      setClearedQuery("");
+    }
+  }, [query]);
 
   // フォーカス時は入力内容に合わせて検索窓を複数行に自動展開し、非フォーカス時は1行(48px)に戻す
   const adjustTextareaHeight = useCallback(() => {
@@ -214,8 +223,8 @@ export default function SearchBar({
               }`}
             />
 
-            {/* 文字が入力されている時だけ表示されるクリアボタン */}
-            {query && (
+            {/* 文字が入力されている時はクリア(×)ボタン、×で消した後は同じ位置に元に戻す(Undo)ボタンを表示 */}
+            {query ? (
               <button
                 type="button"
                 // タップ時にフォーカスが外れる（キーボードが閉じる）のを防ぐ
@@ -225,15 +234,36 @@ export default function SearchBar({
                     clearTimeout(blurTimerRef.current);
                     blurTimerRef.current = null;
                   }
+                  setClearedQuery(query);
                   setQuery("");
                   setIsFocused(true);
                   inputRef.current?.focus();
                 }}
+                title="入力をクリア"
                 className="absolute right-2 top-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
               >
                 <X size={16} />
               </button>
-            )}
+            ) : clearedQuery ? (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (blurTimerRef.current) {
+                    clearTimeout(blurTimerRef.current);
+                    blurTimerRef.current = null;
+                  }
+                  setQuery(clearedQuery);
+                  setClearedQuery("");
+                  setIsFocused(true);
+                  inputRef.current?.focus();
+                }}
+                title={`元に戻す (${clearedQuery})`}
+                className="absolute right-2 top-2 p-2 text-zinc-400 hover:text-white rounded-full transition-colors flex items-center justify-center"
+              >
+                <Undo2 size={16} />
+              </button>
+            ) : null}
 
             {/* サジェストのドロップダウンUI */}
             {isSuggestOpen && suggestions.length > 0 && (
