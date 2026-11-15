@@ -2,7 +2,57 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { X, Heart, ChevronLeft, ChevronRight, Search, Trash2, RotateCcw, CornerUpRight } from "lucide-react";
 import { API_BASE_URL } from "../lib/config";
 
-type TagSortMode = "abc" | "score";
+type TagSortMode = "category" | "abc" | "rarity" | "score";
+
+interface TagMetadata {
+  categories: Record<string, [string, string]>;
+  counts: Record<string, number>;
+  total_images: number;
+}
+
+let cachedTagMetadata: TagMetadata | null = null;
+
+const TAG_CATEGORY_CONFIG: {
+  id: string;
+  label: string;
+  subOrder: string[];
+}[] = [
+  {
+    id: "character",
+    label: "キャラ・特徴",
+    subOrder: ["character_name", "trait"],
+  },
+  {
+    id: "hair_eyes",
+    label: "髪・目",
+    subOrder: ["hair_color", "hair_style", "eye_color", "eye_state"],
+  },
+  {
+    id: "clothing",
+    label: "衣装・装飾",
+    subOrder: ["outfit", "top", "bottom", "underwear", "legwear", "accessory", "clothing_state"],
+  },
+  {
+    id: "body",
+    label: "体型・部位",
+    subOrder: ["chest", "physique", "skin", "body_part"],
+  },
+  {
+    id: "expression_pose",
+    label: "表情・ポーズ・行為",
+    subOrder: ["expression", "gaze", "pose", "action"],
+  },
+  {
+    id: "other",
+    label: "小物・背景・エフェクト",
+    subOrder: ["object", "scene", "effect"],
+  },
+  {
+    id: "meta",
+    label: "人数・構図・メタ",
+    subOrder: ["count", "composition", "background", "meta", "rating"],
+  },
+];
 
 // 検索結果のデータ構造を定義
 interface SearchResult {
@@ -80,9 +130,11 @@ export default function ImageViewer({
   const [tagSortMode, setTagSortMode] = useState<TagSortMode>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("tagSortMode");
-      if (saved === "abc" || saved === "score") return saved;
+      if (saved === "category" || saved === "abc" || saved === "rarity" || saved === "score") {
+        return saved;
+      }
     }
-    return "abc";
+    return "category";
   });
   const [showTagScores, setShowTagScores] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -90,6 +142,26 @@ export default function ImageViewer({
     }
     return false;
   });
+  const [tagMetadata, setTagMetadata] = useState<TagMetadata | null>(cachedTagMetadata);
+
+  useEffect(() => {
+    if (cachedTagMetadata) return;
+    let isMounted = true;
+    fetch(`${API_BASE_URL}/tag-metadata`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: TagMetadata | null) => {
+        if (data && data.categories) {
+          cachedTagMetadata = data;
+          if (isMounted) setTagMetadata(data);
+        }
+      })
+      .catch(() => {
+        // メタデータ取得失敗時はフォールバックで動作継続
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleChangeTagSortMode = (mode: TagSortMode) => {
     setTagSortMode(mode);
@@ -897,7 +969,7 @@ export default function ImageViewer({
 
   const savedDateText = formatSavedDate(selectedImage.file_mtime);
 
-  // 画像のタグ一覧とAI確信度スコアを解析・ソートする
+  // 画像のタグ一覧とAI確信度スコア・カテゴリー・出現件数を解析・ソートする
   const sortedTagItems = useMemo(() => {
     if (!selectedImage.tags_combined) return [];
 
@@ -920,7 +992,11 @@ export default function ImageViewer({
     const items = rawTags.map((tag) => {
       const norm = tag.toLowerCase().replace(/_/g, " ");
       const score = scoresMap[norm] ?? scoresMap[tag.toLowerCase()] ?? null;
-      return { tag, score };
+      const catPair = tagMetadata?.categories?.[norm];
+      const category = catPair ? catPair[0] : "other";
+      const subCategory = catPair ? catPair[1] : "object";
+      const count = tagMetadata?.counts?.[norm] ?? null;
+      return { tag, norm, score, category, subCategory, count };
     });
 
     if (tagSortMode === "abc") {
@@ -930,10 +1006,41 @@ export default function ImageViewer({
         const diff = (b.score ?? -1) - (a.score ?? -1);
         return diff !== 0 ? diff : a.tag.localeCompare(b.tag);
       });
+    } else if (tagSortMode === "rarity") {
+      items.sort((a, b) => {
+        const countDiff = (a.count ?? Number.MAX_SAFE_INTEGER) - (b.count ?? Number.MAX_SAFE_INTEGER);
+        if (countDiff !== 0) return countDiff;
+        const scoreDiff = (b.score ?? -1) - (a.score ?? -1);
+        return scoreDiff !== 0 ? scoreDiff : a.tag.localeCompare(b.tag);
+      });
     }
 
     return items;
-  }, [selectedImage.tags_combined, selectedImage.tag_scores, selectedImage.parsed_tag_scores, tagSortMode]);
+  }, [selectedImage.tags_combined, selectedImage.tag_scores, selectedImage.parsed_tag_scores, tagSortMode, tagMetadata]);
+
+  // カテゴリー別表示用のグループ化データ
+  const groupedTagSections = useMemo(() => {
+    if (tagSortMode !== "category" || sortedTagItems.length === 0) return [];
+
+    return TAG_CATEGORY_CONFIG.map((catConfig) => {
+      const sectionItems = sortedTagItems
+        .filter((item) => item.category === catConfig.id)
+        .sort((a, b) => {
+          const idxA = catConfig.subOrder.indexOf(a.subCategory);
+          const idxB = catConfig.subOrder.indexOf(b.subCategory);
+          const orderA = idxA === -1 ? 999 : idxA;
+          const orderB = idxB === -1 ? 999 : idxB;
+          if (orderA !== orderB) return orderA - orderB;
+          return a.tag.localeCompare(b.tag);
+        });
+
+      return {
+        id: catConfig.id,
+        label: catConfig.label,
+        items: sectionItems,
+      };
+    }).filter((section) => section.items.length > 0);
+  }, [sortedTagItems, tagSortMode]);
 
   return (
     <div 
@@ -1209,9 +1316,20 @@ export default function ImageViewer({
             </p>
 
             {sortedTagItems.length > 0 && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {/* ソート順切り替えタブ */}
                 <div className="flex items-center bg-zinc-800/90 p-0.5 rounded-lg border border-zinc-700/60">
+                  <button
+                    type="button"
+                    onClick={() => handleChangeTagSortMode("category")}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                      tagSortMode === "category"
+                        ? "bg-zinc-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    カテゴリ別
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleChangeTagSortMode("abc")}
@@ -1222,6 +1340,17 @@ export default function ImageViewer({
                     }`}
                   >
                     ABC順
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChangeTagSortMode("rarity")}
+                    className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors cursor-pointer ${
+                      tagSortMode === "rarity"
+                        ? "bg-zinc-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    レア度順
                   </button>
                   <button
                     type="button"
@@ -1236,7 +1365,7 @@ export default function ImageViewer({
                   </button>
                 </div>
 
-                {/* スコア数値表示トグル */}
+                {/* スコア・件数数値表示トグル */}
                 <button
                   type="button"
                   onClick={handleToggleTagScores}
@@ -1254,21 +1383,53 @@ export default function ImageViewer({
 
           {/* タグバッジ一覧 */}
           {sortedTagItems.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5 select-text">
-              {sortedTagItems.map(({ tag, score }) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-xs text-zinc-200 leading-none"
-                >
-                  <span>{tag}</span>
-                  {showTagScores && score !== null && (
-                    <span className="text-[10px] text-zinc-400 font-mono">
-                      {score.toFixed(2)}
+            tagSortMode === "category" ? (
+              <div className="flex flex-col gap-3 select-text">
+                {groupedTagSections.map((section) => (
+                  <div key={section.id} className="flex flex-col gap-1.5">
+                    <span className="text-[11px] font-medium text-zinc-400 tracking-wide">
+                      {section.label}
                     </span>
-                  )}
-                </span>
-              ))}
-            </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {section.items.map(({ tag, score }) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-xs text-zinc-200 leading-none"
+                        >
+                          <span>{tag}</span>
+                          {showTagScores && score !== null && (
+                            <span className="text-[10px] text-zinc-400 font-mono">
+                              {score.toFixed(2)}
+                            </span>
+                          )}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5 select-text">
+                {sortedTagItems.map(({ tag, score, count }) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-800/90 border border-zinc-700/60 text-xs text-zinc-200 leading-none"
+                  >
+                    <span>{tag}</span>
+                    {showTagScores && tagSortMode === "rarity" && count !== null && (
+                      <span className="text-[10px] text-amber-300/80 font-mono">
+                        {count}件
+                      </span>
+                    )}
+                    {showTagScores && score !== null && (
+                      <span className="text-[10px] text-zinc-400 font-mono">
+                        {score.toFixed(2)}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )
           ) : (
             <p className="text-sm text-zinc-500">タグなし</p>
           )}

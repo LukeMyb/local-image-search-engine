@@ -209,6 +209,14 @@ def get_similar_query(image_id: int, use_neighbors: bool = False):
     )
 
 
+@app.get("/tag-metadata")
+def get_tag_metadata():
+    """
+    タグのカテゴリー辞書（大分類・小分類）およびDB内の各タグの出現件数を返す
+    """
+    return search_manager.get_tag_metadata()
+
+
 
 @app.post("/favorite/{image_id}")
 def toggle_favorite(image_id: int):

@@ -131,6 +131,14 @@ class SearchManager:
             image_id=image_id, use_neighbors=use_neighbors
         )
 
+    def get_tag_metadata(self) -> dict:
+        """タグのカテゴリー辞書とDB内の出現件数・総画像数を返す"""
+        return {
+            "categories": self.tag_searcher.tag_categories,
+            "counts": self.tag_searcher.tag_counts,
+            "total_images": self.tag_searcher.total_images,
+        }
+
 
     def search(self, user_query, sort_order="score", trash_only=False):
         self.heavy_engine.touch()
