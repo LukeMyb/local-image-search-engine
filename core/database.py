@@ -4,6 +4,7 @@ import shutil
 import json
 from pathlib import Path
 import numpy as np
+from core.text_utils import normalize_kana
 
 class ImageDatabase:
     def __init__(self, db_path="data/db/index.db"):
@@ -281,15 +282,21 @@ class ImageDatabase:
         self.conn.commit()
 
     def get_bookmarks(self, filter_text=""):
-        """ブックマーク一覧の取得（フィルターの有無でソート順を動的に変更）"""
+        """ブックマーク一覧の取得（フィルターの有無でソート順を動的に変更、ひらがな・カタカナを同一視）"""
         cursor = self.conn.cursor()
         if not filter_text:
             # フィルター空欄：直近で使ったもの（履歴順）
             cursor.execute('SELECT * FROM user_saved_queries ORDER BY last_used_at DESC')
-        else:
-            # フィルター入力あり：探しやすさ重視（名前順）
-            cursor.execute('SELECT * FROM user_saved_queries WHERE name LIKE ? ORDER BY name ASC', (f'%{filter_text}%',))
-        return [dict(row) for row in cursor.fetchall()]
+            return [dict(row) for row in cursor.fetchall()]
+
+        # フィルター入力あり：探しやすさ重視（名前順）
+        cursor.execute('SELECT * FROM user_saved_queries ORDER BY name ASC')
+        norm_filter = normalize_kana(filter_text)
+        return [
+            dict(row)
+            for row in cursor.fetchall()
+            if norm_filter in normalize_kana(row['name'])
+        ]
 
     def update_bookmark_usage(self, bookmark_id):
         """ブックマーク使用時に呼び出し、使用時刻を最新に更新する"""
@@ -352,6 +359,23 @@ class ImageDatabase:
         cursor = self.conn.cursor()
         cursor.execute('SELECT id, name, last_used_at FROM style_tags ORDER BY last_used_at DESC')
         return [dict(row) for row in cursor.fetchall()]
+
+    def resolve_style_name(self, name: str) -> str:
+        """
+        指定された絵柄タグ名をDB上の正式名に解決する（完全一致優先、なければひらがな・カタカナ・大文字小文字を同一視して照合）
+        """
+        cursor = self.conn.cursor()
+        cursor.execute('SELECT name FROM style_tags WHERE name = ?', (name,))
+        row = cursor.fetchone()
+        if row:
+            return row['name']
+
+        norm_target = normalize_kana(name)
+        cursor.execute('SELECT name FROM style_tags')
+        for r in cursor.fetchall():
+            if normalize_kana(r['name']) == norm_target:
+                return r['name']
+        return name
 
     def delete_style_tag(self, style_id):
         """絵柄タグの削除"""
@@ -469,12 +493,26 @@ class ImageDatabase:
 
     # ----- 翻訳キャッシュ関連メソッド -----
 
-    # 翻訳キャッシュ取得
+    # 翻訳キャッシュ取得（完全一致 -> ひらがな・カタカナ正規化一致）
     def get_cached_translation(self, jp_text):
         cursor = self.conn.cursor()
         cursor.execute("SELECT en_text FROM translation_cache WHERE jp_text = ?", (jp_text,))
         row = cursor.fetchone()
-        return row['en_text'] if row else None
+        if row:
+            return row['en_text']
+
+        norm_target = normalize_kana(jp_text)
+        if norm_target != jp_text:
+            cursor.execute("SELECT en_text FROM translation_cache WHERE jp_text = ?", (norm_target,))
+            row = cursor.fetchone()
+            if row:
+                return row['en_text']
+
+        cursor.execute("SELECT jp_text, en_text FROM translation_cache")
+        for r in cursor.fetchall():
+            if normalize_kana(r['jp_text']) == norm_target:
+                return r['en_text']
+        return None
 
     # 翻訳キャッシュ保存
     def save_translation_to_cache(self, jp_text, en_text):

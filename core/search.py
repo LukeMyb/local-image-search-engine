@@ -3,6 +3,7 @@ from fastapi import HTTPException
 from core.tag_search import TagSearch
 from core.database import ImageDatabase
 from core.heavy_worker import HeavyEngineManager
+from core.text_utils import normalize_kana
 
 
 class SearchManager:
@@ -106,11 +107,11 @@ class SearchManager:
         if current_word.lower().startswith("style:"):
             styles = self.db.get_all_styles()
             candidates = []
-            prefix = current_word.lower()
+            prefix = normalize_kana(current_word)
 
             for s in styles:
                 style_name = s["name"]
-                if style_name.lower().startswith(prefix):
+                if normalize_kana(style_name).startswith(prefix):
                     candidates.append(
                         {
                             "id": s["id"],  # DBから削除するためのID
@@ -164,8 +165,9 @@ class SearchManager:
 
         # 絵柄検索の実行
         if style_match:
-            style_name = style_match.group(0)
-            user_query = user_query.replace(style_name, "").strip()
+            raw_style_name = style_match.group(0)
+            style_name = self.db.resolve_style_name(raw_style_name)
+            user_query = user_query.replace(raw_style_name, "").strip()
 
             if self.heavy_engine.is_heavy_ready:
                 print(f"\n{'='*60}")

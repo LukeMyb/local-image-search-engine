@@ -8,6 +8,7 @@ from typing import Optional
 
 from core.database import ImageDatabase
 from core.heavy_worker import HeavyEngineManager
+from core.text_utils import normalize_kana
 
 
 # 類似画像検索（キャラ検索）で使用する髪色・目の色・除外タグ定義
@@ -111,6 +112,13 @@ class TagSearch:
 
         # 辞書ロード (10万語 + 手動修正)
         self.alias_map = self._load_all_aliases()
+        self.normalized_alias_map = {
+            normalize_kana(alias): actual for alias, actual in self.alias_map.items()
+        }
+        self.alias_entries = [
+            (alias, normalize_kana(alias), actual, actual.replace("_", " "))
+            for alias, actual in self.alias_map.items()
+        ]
 
         # タグカテゴリー辞書ロード (data/tag_categories.csv)
         self.tag_categories = self._load_tag_categories()
@@ -271,6 +279,8 @@ class TagSearch:
         if not prefix:
             return []
         prefix_under = prefix.replace(" ", "_")
+        norm_prefix = normalize_kana(prefix)
+        norm_prefix_under = norm_prefix.replace(" ", "_")
         full_base_query = base_query + or_prefix + modifier_prefix
 
         candidates = []
@@ -278,7 +288,14 @@ class TagSearch:
         # 1. 実際のタグ（DBに存在するタグ）からの検索
         for tag, count in self.tag_counts.items():
             underscored_tag = tag.replace(" ", "_")
-            if prefix in tag or prefix_under in underscored_tag:
+            matched = prefix in tag or prefix_under in underscored_tag
+            if not matched and not tag.isascii():
+                norm_tag = normalize_kana(tag)
+                matched = (
+                    norm_prefix in norm_tag
+                    or norm_prefix_under in norm_tag.replace(" ", "_")
+                )
+            if matched:
                 candidates.append(
                     {
                         "display": f"{underscored_tag} ({count}件)",
@@ -287,10 +304,9 @@ class TagSearch:
                     }
                 )
 
-        # 2. 俗語（Alias辞書）からの検索
-        for alias, actual in self.alias_map.items():
-            norm_actual = actual.replace("_", " ")
-            if (prefix_under in alias) and norm_actual in self.tag_counts:
+        # 2. 俗語（Alias辞書）からの検索（ひらがな・カタカナを同一視）
+        for alias, norm_alias, actual, norm_actual in self.alias_entries:
+            if (prefix_under in alias or norm_prefix_under in norm_alias) and norm_actual in self.tag_counts:
                 count = self.tag_counts[norm_actual]
                 candidates.append(
                     {
@@ -318,10 +334,14 @@ class TagSearch:
         戻り値: (変換後のタグ名, ヒットしたかどうか)
         """
         key = word.strip().lower().replace(" ", "_")
+        norm_key = normalize_kana(key).replace(" ", "_")
 
-        # 1. Alias辞書を最優先
-        if key in self.alias_map:
-            actual_tag = self.alias_map[key]
+        # 1. Alias辞書を最優先（完全一致 -> ひらがな/カタカナ正規化一致）
+        actual_tag = self.alias_map.get(key)
+        if actual_tag is None:
+            actual_tag = self.normalized_alias_map.get(norm_key)
+
+        if actual_tag is not None:
             if actual_tag.replace("_", " ") in self.tag_counts or actual_tag in self.tag_counts:
                 return actual_tag, True
             return actual_tag, False

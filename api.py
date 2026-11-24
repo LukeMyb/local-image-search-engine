@@ -130,7 +130,7 @@ def search(q: str = "", sort: str = "score", favorite_only: bool = False, trash_
             # 絵柄タグが使われた場合、そのタグの使用時刻も最新に更新する
             style_match = re.search(r'style:([^\s|]+)', q)
             if style_match:
-                style_name = style_match.group(0) # "style:xxx" の形を抽出
+                style_name = search_manager.db.resolve_style_name(style_match.group(0)) # "style:xxx" の形を抽出・解決
                 search_manager.db.update_style_usage(style_name)
         except Exception as e:
             print(f"履歴の保存に失敗しました: {e}")

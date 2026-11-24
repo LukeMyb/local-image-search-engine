@@ -7,6 +7,7 @@ import torchvision.transforms as transforms
 from torchvision.models import vgg16, VGG16_Weights
 from PIL import Image
 from core.database import ImageDatabase
+from core.text_utils import normalize_kana
 
 class StyleSearcher:
     def __init__(self, db: ImageDatabase, index_path="data/faiss/style.index", device=None):
@@ -129,10 +130,11 @@ class StyleSearcher:
         """絵柄名(style:xxx)のサジェスト候補をDBから取得する"""
         styles = self.db.get_all_styles()
         candidates = []
+        norm_prefix = normalize_kana(prefix)
         
         for s in styles:
             style_name = s['name']
-            if style_name.lower().startswith(prefix):
+            if normalize_kana(style_name).startswith(norm_prefix):
                 candidates.append({
                     "id": s['id'],           # DBから削除するためのID
                     "is_style": True,        # ゴミ箱ボタンを表示するかどうかのフラグ
