@@ -138,6 +138,15 @@ class ImageDatabase:
         ''')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_jp_text ON translation_cache(jp_text)')
 
+        # 重量モードのタグ展開結果（CLIPベクトル検索・前方一致で展開された {tag: score}）キャッシュ用テーブル
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tag_expansion_cache (
+                query_key TEXT PRIMARY KEY,
+                tags_json TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # アプリ設定保存用のKey-Valueテーブル
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS app_settings (
@@ -518,6 +527,52 @@ class ImageDatabase:
     def save_translation_to_cache(self, jp_text, en_text):
         cursor = self.conn.cursor()
         cursor.execute("INSERT OR REPLACE INTO translation_cache (jp_text, en_text) VALUES (?, ?)", (jp_text, en_text))
+        self.conn.commit()
+
+    # ----- タグ展開結果キャッシュ関連メソッド -----
+
+    def get_cached_tag_expansion(self, query_text: str) -> dict[str, float] | None:
+        """
+        重量モードで展開されたタグマップ {tag: score} をキャッシュから取得する。
+        ひらがな・カタカナ・大文字小文字の違いを吸収して照合する。
+        """
+        norm_key = normalize_kana(query_text.strip()).replace(" ", "_")
+        if not norm_key:
+            return None
+
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT tags_json FROM tag_expansion_cache WHERE query_key = ?",
+            (norm_key,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        try:
+            data = json.loads(row["tags_json"])
+            if isinstance(data, dict) and data:
+                return {str(k): float(v) for k, v in data.items()}
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return None
+        return None
+
+    def save_tag_expansion_to_cache(self, query_text: str, tags_map: dict[str, float]):
+        """重量モードで展開されたタグマップ {tag: score} をDBに保存する"""
+        if not query_text or not tags_map:
+            return
+        norm_key = normalize_kana(query_text.strip()).replace(" ", "_")
+        if not norm_key:
+            return
+        tags_json = json.dumps(tags_map, ensure_ascii=False)
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO tag_expansion_cache (query_key, tags_json, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            """,
+            (norm_key, tags_json),
+        )
         self.conn.commit()
 
     # ----- アプリ設定（Key-Value）関連メソッド -----

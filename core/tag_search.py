@@ -352,6 +352,59 @@ class TagSearch:
 
         return key, False
 
+    def _light_expand_tags(self, candidate_word: str) -> dict[str, float]:
+        """
+        軽量モード時のオンメモリフォールバック展開。
+        tag_expansion_cache に未登録の単語でも、DB内の実タグ集合(self.tag_counts)から
+        括弧付き前方一致・スペース有無の揺れ・米英スペル揺れを吸収して一致するタグを返す。
+        """
+        if not candidate_word:
+            return {}
+
+        base = candidate_word.strip().lower().replace("_", " ")
+        base = re.sub(r"\s+", " ", base)
+        if not base:
+            return {}
+
+        # 米英スペル揺れの候補を生成
+        variants = [base]
+        spell_pairs = (
+            ("gray", "grey"),
+            ("grey", "gray"),
+            ("color", "colour"),
+            ("colour", "color"),
+        )
+        for src, dst in spell_pairs:
+            if src in base:
+                alt = base.replace(src, dst)
+                if alt not in variants:
+                    variants.append(alt)
+
+        matched: dict[str, float] = {}
+        for variant in variants:
+            # 1. 完全一致
+            if variant in self.tag_counts:
+                matched[variant.replace(" ", "_")] = 1.0
+
+            # 2. 括弧付き前方一致（重量モードの f"{norm_final}_(" と同等の展開: 例 yuuka -> yuuka (blue archive)）
+            paren_prefix = f"{variant} ("
+            for tag in self.tag_counts:
+                if tag.startswith(paren_prefix):
+                    matched[tag.replace(" ", "_")] = 1.0
+
+            # 3. スペース有無の揺れ吸収（例: "hair clip" -> "hairclip", "side locks" -> "sidelocks"）
+            if not matched:
+                compact_variant = variant.replace(" ", "")
+                if compact_variant:
+                    for tag in self.tag_counts:
+                        if tag.replace(" ", "") == compact_variant:
+                            matched[tag.replace(" ", "_")] = 1.0
+
+            if matched:
+                break
+
+        return matched
+
     @property
     def _is_heavy(self) -> bool:
         return self.heavy_engine is not None and self.heavy_engine.is_heavy_ready
@@ -364,9 +417,52 @@ class TagSearch:
             print(f"  ├─ [Direct/Alias Hit]: {word} -> {english_word}")
             return english_word, {english_word: 1.0}
 
+        # 軽量モード時: まず重量モードで保存済みのタグ展開キャッシュ（CLIP/前方一致結果）を確認
+        if not self._is_heavy:
+            cached_expansion = self.db.get_cached_tag_expansion(word)
+            if cached_expansion:
+                print(
+                    f"  ├─ [Expansion Cache Hit]: {word} -> {len(cached_expansion)} tags"
+                )
+                return english_word, cached_expansion
+
         # Alias辞書にはあったがDB内に直接そのタグが0件だった場合（すでに英語タグ名は確定済み）
         if english_word != norm_word:
             if not self._is_heavy:
+                cached_expansion = self.db.get_cached_tag_expansion(english_word)
+                if cached_expansion:
+                    print(
+                        f"  ├─ [Alias -> Expansion Cache Hit]: {word} ({english_word}) -> {len(cached_expansion)} tags"
+                    )
+                    return english_word, cached_expansion
+
+                light_expanded = self._light_expand_tags(english_word)
+                if light_expanded:
+                    print(
+                        f"  ├─ [Alias -> Light Fallback]: {word} ({english_word}) -> {list(light_expanded.keys())}"
+                    )
+                    return english_word, light_expanded
+
+                # Alias先がDBに0件の場合、翻訳キャッシュに別訳があればそちらもフォールバック確認（例: レム -> Rem -> rem_(re:zero)）
+                cached_en = self.db.get_cached_translation(word)
+                if cached_en:
+                    alias_en, found_en = self._check_alias_or_list(cached_en)
+                    if found_en:
+                        print(f"  ├─ [Translation Cache Fallback]: {word} -> {alias_en}")
+                        return alias_en, {alias_en: 1.0}
+                    cached_en_exp = self.db.get_cached_tag_expansion(cached_en)
+                    if cached_en_exp:
+                        print(
+                            f"  ├─ [Translation -> Expansion Cache Hit]: {word} ({cached_en}) -> {len(cached_en_exp)} tags"
+                        )
+                        return cached_en, cached_en_exp
+                    light_en = self._light_expand_tags(cached_en)
+                    if light_en:
+                        print(
+                            f"  ├─ [Translation -> Light Fallback]: {word} ({cached_en}) -> {list(light_en.keys())}"
+                        )
+                        return cached_en, light_en
+
                 return english_word, {english_word: 1.0}
             final_query = english_word
             print(f"  ├─ [Alias -> Vector Search]: {word} -> {final_query}")
@@ -379,11 +475,29 @@ class TagSearch:
                 if found:
                     return english_word, {english_word: 1.0}
                 if not self._is_heavy:
+                    cached_en_exp = self.db.get_cached_tag_expansion(cached_en)
+                    if cached_en_exp:
+                        print(
+                            f"  ├─ [Cache -> Expansion Cache Hit]: {word} ({cached_en}) -> {len(cached_en_exp)} tags"
+                        )
+                        return cached_en, cached_en_exp
+                    light_en = self._light_expand_tags(cached_en)
+                    if light_en:
+                        print(
+                            f"  ├─ [Cache -> Light Fallback]: {word} ({cached_en}) -> {list(light_en.keys())}"
+                        )
+                        return cached_en, light_en
                     return cached_en, {cached_en: 1.0}
                 final_query = cached_en
             else:
-                # 軽量モード時は外部翻訳・CLIP検索を行わずそのまま返す
+                # 軽量モード時は外部翻訳・CLIP検索を行わず、オンメモリ展開を試みて返す
                 if not self._is_heavy:
+                    light_word = self._light_expand_tags(word)
+                    if light_word:
+                        print(
+                            f"  ├─ [Light Fallback]: {word} -> {list(light_word.keys())}"
+                        )
+                        return word, light_word
                     print(f"  ├─ [Not Found]: '{word}' (Used as is in light mode)")
                     return word, {word: 1.0}
 
@@ -429,6 +543,10 @@ class TagSearch:
             found_tags_map = self.heavy_engine.vector_search_tags(
                 final_query=final_query, english_word=english_word, top_k=top_k
             )
+            if found_tags_map:
+                self.db.save_tag_expansion_to_cache(word, found_tags_map)
+                if final_query and normalize_kana(final_query) != normalize_kana(word):
+                    self.db.save_tag_expansion_to_cache(final_query, found_tags_map)
             return final_query, found_tags_map
         except Exception as e:
             print(f"  [!] Vector Search Error: {e}")
